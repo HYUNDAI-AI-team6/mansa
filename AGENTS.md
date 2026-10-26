@@ -2,7 +2,7 @@
 
 > 이 파일은 **모든 코딩 에이전트**(Claude Code·Cursor·Codex·Aider·Gemini CLI 등)에 적용되는 공통 규칙이다.
 > 자동 검사 기능이 설치되어 있지 않아도 아래 규칙을 지킨다.
-> Python 개발 시에는 같은 폴더의 [Python 개발 가이드](dev-stack-python.md)를 먼저 읽고 적용한다.
+> Python 개발 시에는 같은 폴더의 [Python 개발 가이드](docs/dev-stack-python.md)를 먼저 읽고 적용한다.
 
 ---
 
@@ -101,7 +101,7 @@
 ## 7. Python 개발과 기능별 규칙
 
 - Python 코드와 노트북을 작성·수정·검토하기 전에
-  [dev-stack-python.md](dev-stack-python.md)를 읽고 해당 작업에 적용한다.
+  [docs/dev-stack-python.md](docs/dev-stack-python.md)를 읽고 해당 작업에 적용한다.
 - Python 버전, uv 사용, `.venv`, `pyproject.toml`, `uv.lock`, 코드 스타일과 테스트 방법은
   개발 가이드의 기준을 따른다. 세부 규칙을 이 파일에 중복 작성하지 않는다.
 - AI 도구의 작업 방식은 이 파일을, Python 개발 방법은 개발 가이드를 기준으로 한다.
@@ -125,4 +125,4 @@
 ---
 
 에이전트 작업 규칙을 바꿀 때는 이 파일을, Python 개발 세부 규칙을 바꿀 때는
-[dev-stack-python.md](dev-stack-python.md)를 수정한다.
+[docs/dev-stack-python.md](docs/dev-stack-python.md)를 수정한다.
