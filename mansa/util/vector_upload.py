@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from typing import Literal
 
-from util.server_connection import get_secure_client, get_tech_client
+from mansa.util.server_connection import get_secure_client, get_tech_client
 
 DocType = Literal["tech", "secure"]
 
