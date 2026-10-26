@@ -31,12 +31,13 @@
 }
 .login::before,
 .login::after {
-  background: var(--brand-weak);
+  /* 연파랑(#EEF2FF)에 브랜드 파랑 2% 섞음 */
+  background: color-mix(in srgb, var(--brand) 2%, var(--brand-weak));
   z-index: 0;
 }
 .login-row::before,
 .login-row::after {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.12); /* 흰색 16% → 12% */
   z-index: -1;
   opacity: 0;
 }
