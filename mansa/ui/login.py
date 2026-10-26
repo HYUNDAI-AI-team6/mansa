@@ -1,4 +1,8 @@
-"""로그인 화면: 기본은 사용자 로그인, 버튼으로 관리자 로그인(파란 바탕·좌우 반전)으로 바꾼다."""
+"""로그인 화면: 기본은 사용자 로그인, 버튼으로 관리자 로그인(파란 바탕·좌우 반전)으로 바꾼다.
+
+두 카드와 두 소개를 한 화면에 겹쳐 두고, 바꾸기 버튼은 서버를 거치지 않고(JS)
+#login 에 admin 클래스만 붙였다 뗀다. 움직임과 색 변화는 assets/login.css 가 맡는다.
+"""
 
 from dataclasses import dataclass
 from html import escape
@@ -53,11 +57,15 @@ CARD = {
 }
 
 
+# 바꾸기 버튼: 관리자 모드로 가면 True, 사용자 모드로 돌아오면 False
+SWITCH_JS = "() => {{ document.getElementById('login')?.classList.toggle('admin', {admin}); }}"
+RESET_JS = SWITCH_JS.format(admin="false")
+
+
 @dataclass
 class LoginForm:
-    """로그인 화면 하나(사용자 또는 관리자)의 입력·버튼."""
+    """로그인 카드 하나(사용자 또는 관리자)의 입력·버튼."""
 
-    view: gr.Column
     user_id: gr.Textbox
     password: gr.Textbox
     error: gr.HTML
@@ -78,7 +86,7 @@ def intro_html(role: str) -> str:
         for name, text in data["features"]
     )
     return (
-        '<div class="login-intro">'
+        f'<div class="login-intro {role}">'
         f'<span class="mode-pill">{icons.svg(pill_icon, tone, 16)}{escape(pill_text)}</span>'
         f'<div class="lockup">{logo}MANSA</div>'
         f"<h1>{data['headline']}</h1>"
@@ -89,9 +97,9 @@ def intro_html(role: str) -> str:
 
 
 def _card(role: str) -> LoginForm:
-    """로그인 카드(입력칸·버튼)를 만든다. 호출한 위치(gr.Row 안)에 그려진다."""
+    """로그인 카드(입력칸·버튼)를 만든다. 호출한 위치(카드 자리 Column 안)에 그려진다."""
     title, sub, id_label, id_hint, submit, switch, help_text = CARD[role]
-    with gr.Column(elem_classes=["login-card"]) as card:
+    with gr.Column(elem_classes=["login-card", f"{role}-card"]):
         gr.HTML(f'<h2>{escape(title)}</h2><p class="sub">{escape(sub)}</p>', padding=False)
         with gr.Column(elem_classes=["fields"]):
             user_id = gr.Textbox(
@@ -109,31 +117,24 @@ def _card(role: str) -> LoginForm:
         gr.HTML('<div class="or-divider">또는</div>', padding=False)
         switch_btn = gr.Button(switch, elem_classes=["btn-secondary"])
         gr.HTML(f'<p class="help">{escape(help_text)}</p>', padding=False)
-    return LoginForm(card, user_id, password, error, submit_btn, switch_btn)
+    return LoginForm(user_id, password, error, submit_btn, switch_btn)
 
 
-def build() -> tuple[LoginForm, LoginForm]:
-    """사용자 로그인과 관리자 로그인 화면을 만들고 서로 바꾸는 버튼을 연결한다.
+def build() -> tuple[gr.Column, LoginForm, LoginForm]:
+    """로그인 화면(사용자·관리자 카드 겹침)을 만들고 서로 바꾸는 버튼을 연결한다.
 
     로그인 성공 처리는 화면 전환이 필요해 app.py 에서 연결한다.
     """
-    with gr.Column(elem_classes=["login"]) as user_view:
+    with gr.Column(elem_classes=["login"], elem_id="login") as view:
         with gr.Row(elem_classes=["login-row"]):
-            gr.HTML(intro_html("user"), padding=False)
-            user_form = _card("user")
-    with gr.Column(elem_classes=["login", "admin"], visible=False) as admin_view:
-        with gr.Row(elem_classes=["login-row"]):
-            admin_form = _card("admin")
-            gr.HTML(intro_html("admin"), padding=False)
-    user_form.view, admin_form.view = user_view, admin_view
-
-    user_form.switch.click(
-        lambda: (gr.Column(visible=False), gr.Column(visible=True)), None, [user_view, admin_view]
-    )
-    admin_form.switch.click(
-        lambda: (gr.Column(visible=True), gr.Column(visible=False)), None, [user_view, admin_view]
-    )
-    return user_form, admin_form
+            stack = f'<div class="intro-stack">{intro_html("user")}{intro_html("admin")}</div>'
+            gr.HTML(stack, padding=False, elem_classes=["intro-stage"])
+            with gr.Column(elem_classes=["card-stage"]):
+                user_form = _card("user")
+                admin_form = _card("admin")
+    user_form.switch.click(None, js=SWITCH_JS.format(admin="true"))
+    admin_form.switch.click(None, js=SWITCH_JS.format(admin="false"))
+    return view, user_form, admin_form
 
 
 def error_html(message: str) -> str:

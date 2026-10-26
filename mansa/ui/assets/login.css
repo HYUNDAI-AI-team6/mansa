@@ -1,11 +1,22 @@
-/* 로그인: 사용자(기본) / 관리자(파란 바탕, 좌우 반전) */
-/* ---------- 로그인 ---------- */
+/* 로그인: 사용자(기본) ↔ 관리자(파란 바탕, 좌우 반전)
+   화면 하나에 두 카드·두 소개를 겹쳐 두고, #login 에 admin 클래스를 붙이면
+   카드·소개가 미끄러지듯 자리를 바꾸고 바탕색·원 장식이 함께 바뀐다. */
+:root {
+  --login-move: 0.7s cubic-bezier(0.65, 0, 0.35, 1);
+  --login-fade-out: 0.22s ease;
+  --login-fade-in: 0.3s ease 0.42s; /* 카드와 소개가 서로 지나간 뒤에 나타난다 */
+}
+
+/* ---------- 바탕 + 원 장식 ---------- */
 .login {
   min-height: 100vh;
   background: var(--page);
   position: relative;
   overflow: hidden;
-  justify-content: center !important;
+  transition: background-color 0.6s ease;
+}
+.login.admin {
+  background: var(--brand);
 }
 .login::before,
 .login::after {
@@ -14,31 +25,109 @@
   border-radius: 50%;
   background: var(--brand-weak);
   z-index: 0;
+  transition:
+    left var(--login-move),
+    background-color 0.6s ease;
 }
 .login::before {
   width: 720px;
   height: 720px;
-  left: -240px;
   top: 560px;
+  left: -240px;
 }
 .login::after {
   width: 460px;
   height: 460px;
-  right: -200px;
   top: -200px;
+  left: calc(100% - 260px);
 }
+.login.admin::before {
+  left: calc(100% - 480px);
+  background: rgba(255, 255, 255, 0.16);
+}
+.login.admin::after {
+  left: -200px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* ---------- 자리: 사용자 = 소개 왼쪽·카드 오른쪽, 관리자 = 반대 ---------- */
 .login-row {
   position: relative;
   z-index: 1;
-  gap: 0 !important;
-  padding: 0 160px !important;
-  justify-content: space-between !important;
-  align-items: center !important;
   min-height: 100vh;
-  flex-wrap: nowrap !important;
+  display: block !important;
 }
+/* gr.HTML 의 elem_classes 는 바깥 .block 과 안쪽 .prose 에 모두 붙어서 .block 으로 한정한다 */
+.block.intro-stage,
+.card-stage {
+  position: absolute !important;
+  top: 50%;
+  transform: translateY(-50%);
+  transition: left var(--login-move);
+}
+.block.intro-stage {
+  left: 160px;
+  width: 560px !important;
+}
+.card-stage {
+  left: calc(100% - 600px);
+  width: 440px !important;
+  min-width: 440px !important;
+  display: grid !important;
+}
+.login.admin .block.intro-stage {
+  left: 720px;
+}
+.login.admin .card-stage {
+  left: 160px;
+}
+
+/* 겹쳐 둔 두 카드·두 소개 중 지금 모드의 것만 보인다 (나머지는 흐려지며 숨김) */
+.intro-stack {
+  display: grid;
+}
+.intro-stack > .login-intro,
+.card-stage > .login-card {
+  grid-area: 1 / 1;
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity var(--login-fade-in),
+    visibility 0s;
+}
+.login-intro.admin,
+.card-stage > .admin-card,
+.login.admin .login-intro.user,
+.login.admin .card-stage > .user-card {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--login-fade-out),
+    visibility 0s linear 0.22s;
+}
+.login.admin .login-intro.admin,
+.login.admin .card-stage > .admin-card {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity var(--login-fade-in),
+    visibility 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login,
+  .login::before,
+  .login::after,
+  .intro-stage,
+  .card-stage,
+  .login-intro,
+  .login-card {
+    transition: none !important;
+  }
+}
+
+/* ---------- 소개 ---------- */
 .login-intro {
-  max-width: 560px;
   display: flex;
   flex-direction: column;
   gap: 32px;
@@ -102,11 +191,12 @@
   align-items: center;
   justify-content: center;
 }
+
+/* ---------- 카드 ---------- */
 .login-card {
   width: 440px !important;
   max-width: 440px !important;
   min-width: 440px !important;
-  flex: 0 0 440px !important;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 24px;
@@ -158,78 +248,60 @@
   color: #b91c1c;
   font-size: 13px;
 }
-/* 관리자 로그인: 파란 바탕 + 색 반전 + 좌우 반전 */
-.login.admin {
-  background: var(--brand);
-}
-.login.admin::before,
-.login.admin::after {
-  background: rgba(255, 255, 255, 0.16);
-}
-.login.admin::before {
-  left: auto;
-  right: -240px;
-}
-.login.admin::after {
-  right: auto;
-  left: -200px;
-}
-.login.admin .mode-pill {
+
+/* ---------- 관리자 소개·카드: 파란 바탕 위 흰색 ---------- */
+.login-intro.admin .mode-pill {
   background: rgba(255, 255, 255, 0.16);
   color: #fff;
 }
-.login.admin .lockup,
-.login.admin .login-intro h1,
-.login.admin .feature {
+.login-intro.admin .lockup,
+.login-intro.admin h1,
+.login-intro.admin .feature {
   color: #fff;
 }
-.login.admin .login-intro p {
+.login-intro.admin p {
   color: rgba(255, 255, 255, 0.78);
 }
-.login.admin .feature .tile {
+.login-intro.admin .feature .tile {
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.2);
 }
-.login.admin .login-card {
+.admin-card {
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.2);
 }
-.login.admin .login-card h2 {
+.admin-card h2 {
   color: #fff;
 }
-.login.admin .login-card .sub,
-.login.admin .field label > span,
-.login.admin .field [data-testid="block-info"] {
+.admin-card .sub,
+.admin-card .field label > span,
+.admin-card .field [data-testid="block-info"] {
   color: rgba(255, 255, 255, 0.78) !important;
 }
-.login.admin .field input {
+.admin-card .field input {
   background: var(--brand) !important;
   border-color: rgba(255, 255, 255, 0.2) !important;
   color: #fff !important;
 }
-.login.admin .field input::placeholder {
+.admin-card .field input::placeholder {
   color: rgba(255, 255, 255, 0.6) !important;
 }
-.login.admin button.btn-primary {
+.gradio-container .admin-card button.btn-primary {
   background: #fff !important;
   color: var(--brand) !important;
 }
-.gradio-container .login.admin button.btn-secondary {
+.gradio-container .admin-card button.btn-secondary {
   background: transparent !important;
   border-color: rgba(255, 255, 255, 0.36) !important;
   color: #fff !important;
 }
-.login.admin .or-divider {
+.admin-card .or-divider {
   color: rgba(255, 255, 255, 0.6);
 }
-.login.admin .or-divider::before,
-.login.admin .or-divider::after {
+.admin-card .or-divider::before,
+.admin-card .or-divider::after {
   background: rgba(255, 255, 255, 0.2);
 }
-.login.admin .help {
+.admin-card .help {
   color: rgba(255, 255, 255, 0.6);
-}
-.login.admin .login-row {
-  justify-content: flex-start !important;
-  gap: 120px !important;
 }

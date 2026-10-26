@@ -115,12 +115,11 @@ def _wire_nav(shell: Shell, user: gr.State) -> None:
 def _layout(role: str | None) -> tuple:
     """로그인 상태에 맞는 큰 틀 보이기/숨기기 값.
 
-    순서: 사용자 로그인, 관리자 로그인, 앱 틀, 사용자 메뉴바, 관리자 메뉴바.
-    role 이 None 이면 로그아웃 상태(사용자 로그인 화면)다.
+    순서: 로그인 화면, 앱 틀, 사용자 메뉴바, 관리자 메뉴바.
+    role 이 None 이면 로그아웃 상태(로그인 화면)다.
     """
     return (
         gr.Column(visible=role is None),
-        gr.Column(visible=False),
         gr.Row(visible=role is not None),
         gr.Column(visible=role == "user"),
         gr.Column(visible=role == "admin"),
@@ -150,19 +149,33 @@ def _wire_login(
             event.then(home.reset, None, home.reset_outputs)
 
 
+def _wire_logout(
+    shell: Shell, user: gr.State, layout_outputs: list, forms: list[login.LoginForm]
+) -> None:
+    """로그아웃: 사용자 로그인 모드로 되돌리고, 입력했던 아이디·비밀번호를 지운다."""
+    fields = [box for form in forms for box in (form.user_id, form.password)]
+
+    def logout() -> tuple:
+        """로그인 화면을 다시 보여 주는 값."""
+        return (None, *_layout(None), *[""] * len(fields))
+
+    for button in shell.logouts:
+        event = button.click(None, js=login.RESET_JS)
+        event.then(logout, None, [user, *layout_outputs, *fields])
+
+
 def main():
     """화면을 만들고 이벤트를 연결한 뒤 앱을 실행한다."""
     with gr.Blocks(title="MANSA", fill_width=True) as demo:
         user = gr.State(None)
-        user_form, admin_form = login.build()
+        login_view, user_form, admin_form = login.build()
         shell = _build_shell()
-        layout_outputs = [user_form.view, admin_form.view, shell.view, *shell.sides.values()]
+        layout_outputs = [login_view, shell.view, *shell.sides.values()]
 
         _wire_nav(shell, user)
         _wire_login("user", user_form, shell, user, layout_outputs)
         _wire_login("admin", admin_form, shell, user, layout_outputs)
-        for button in shell.logouts:
-            button.click(lambda: (None, *_layout(None)), None, [user, *layout_outputs])
+        _wire_logout(shell, user, layout_outputs, [user_form, admin_form])
 
     demo.launch(theme=theme.build_theme(), css=theme.build_css(), head=FONT_HEAD)
 
