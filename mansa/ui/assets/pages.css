@@ -250,12 +250,38 @@
 }
 
 /* ---------- 고객센터 ---------- */
-.support-main {
-  min-height: calc(100vh - 96px - 68px);
-  gap: 16px !important;
+/* ---------- 채팅 화면(기술 Q&A 대화 · 고객센터): 화면 높이에 맞추고 영역별 스크롤 ---------- */
+/* 화면 높이 - 머리글(96) - 본문 위아래 여백(28 + 40) */
+.chat-layout {
+  height: calc(100vh - 165px);
+  min-height: 420px;
+  align-items: stretch !important;
 }
-.support-main .chat-input {
-  margin-top: auto !important;
+.chat-layout > .content {
+  height: 100%;
+  min-height: 0;
+  gap: 16px !important;
+  flex-wrap: nowrap !important;
+}
+.page .column > .column.chat-scroll {
+  flex: 1 1 0 !important;
+  flex-wrap: nowrap !important;
+  min-height: 0;
+  overflow-y: auto;
+  gap: 16px !important;
+  padding-right: 6px !important;
+  scrollbar-gutter: stable;
+}
+.chat-layout .chat-input {
+  flex: none !important;
+  margin-top: 0 !important;
+}
+.chat-layout > .side-scroll {
+  flex-wrap: nowrap !important;
+  max-height: 100%;
+  overflow-y: auto;
+  align-self: flex-start;
+  scrollbar-gutter: stable;
 }
 .s-msgs {
   display: flex;
@@ -715,4 +741,11 @@
   white-space: nowrap;
   min-width: max-content !important;
   padding: 0 14px !important;
+}
+/* 오른쪽 창 안 카드가 눌려 사라지지 않고, 넘치면 창이 스크롤되게 */
+.chat-layout > .side-scroll > * {
+  flex-shrink: 0 !important;
+}
+.page .column > .column.chat-scroll > * {
+  flex-shrink: 0 !important;
 }

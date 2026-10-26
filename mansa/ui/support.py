@@ -143,7 +143,7 @@ def _pick_faq(state: dict, evt: gr.SelectData) -> tuple:
 def build() -> None:
     """고객센터 화면을 만들고 이벤트를 연결한다."""
     state = gr.State(_new_state())
-    with gr.Row(elem_classes=["body-row"]):
+    with gr.Row(elem_classes=["body-row", "chat-layout"]):
         with gr.Column(elem_classes=["content", "support-main"]):
             with gr.Row(elem_classes=["toolbar"]):
                 status = gr.HTML(status_html(False), padding=False, scale=1)
@@ -160,7 +160,8 @@ def build() -> None:
                     visible=False,
                     min_width=0,
                 )
-            msgs = ui.click_list(messages_html(_new_state()))
+            with gr.Column(elem_classes=["chat-scroll"]):
+                msgs = ui.click_list(messages_html(_new_state()), scroll_bottom=True)
             with gr.Row(elem_classes=["chat-input"]):
                 text = gr.Textbox(
                     placeholder=PLACEHOLDER[False],
@@ -171,7 +172,7 @@ def build() -> None:
                     elem_classes=["chat-text"],
                 )
                 send = gr.Button("", elem_classes=["send-btn"], scale=0, min_width=40)
-        with gr.Column(elem_classes=["right-panel"]):
+        with gr.Column(elem_classes=["right-panel", "side-scroll"]):
             faq = ui.click_list(faq_html())
 
     outs = [state, msgs, status, connect, new, end, text]

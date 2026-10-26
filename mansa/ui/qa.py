@@ -260,6 +260,7 @@ def _ask(question: str, model: str, state: dict) -> tuple:
         state["pending"] = {"q": question.strip()}
     elif result["type"] == "answer":
         state["turns"].append({"q": question.strip(), "kind": "answer", "answer": result["answer"]})
+        state["model"] = result["answer"].model  # 이어지는 질문도 같은 모델로 찾는다
     else:
         state["turns"].append({"q": question.strip(), "kind": "no_answer"})
     return _render(state)
@@ -375,12 +376,13 @@ def _build_conv(test_mode: bool) -> dict:
     """대화 화면(U2·U3): 질문·답변 목록, 되묻기 카드, 만족 버튼, 이어서 질문, 오른쪽 근거."""
     c = {}
     with gr.Column(visible=False, elem_classes=["qa-conv"]) as c["view"]:
-        with gr.Row(elem_classes=["body-row"]):
+        with gr.Row(elem_classes=["body-row", "chat-layout"]):
             with gr.Column(elem_classes=["content", "conv"]):
                 if test_mode:
                     gr.HTML(ui.tag("테스트 질문은 질문 기록에 남지 않아요"), padding=False)
-                c["turns"] = gr.HTML(padding=False)
-                _clarify_card(c)
+                with gr.Column(elem_classes=["chat-scroll"]):
+                    c["turns"] = ui.chat_html()
+                    _clarify_card(c)
                 with gr.Row(elem_classes=["chat-input"]):
                     c["follow"] = gr.Textbox(
                         placeholder="이어서 질문하기",
@@ -391,7 +393,7 @@ def _build_conv(test_mode: bool) -> dict:
                         elem_classes=["chat-text"],
                     )
                     c["send"] = gr.Button("", elem_classes=["send-btn"], scale=0, min_width=40)
-            with gr.Column(elem_classes=["right-panel", "wide"]):
+            with gr.Column(elem_classes=["right-panel", "wide", "side-scroll"]):
                 _source_panel(c)
                 c["rules"] = gr.HTML(rules_html(), visible=False, padding=False)
     return c

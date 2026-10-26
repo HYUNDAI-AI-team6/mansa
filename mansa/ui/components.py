@@ -65,12 +65,28 @@ CLICK_JS = """element.addEventListener('click', (e) => {
 });"""
 
 
-def click_list(value: str = "", **kwargs) -> gr.HTML:
+# 내용이 바뀌면 둘러싼 .chat-scroll 을 맨 아래로 내린다 (새 메시지가 보이게).
+SCROLL_JS = """const toBottom = () => setTimeout(() => {
+  const box = element.closest('.chat-scroll');
+  if (box) box.scrollTop = box.scrollHeight;
+}, 60);
+watch('value', toBottom);
+toBottom();"""
+
+
+def click_list(value: str = "", scroll_bottom: bool = False, **kwargs) -> gr.HTML:
     """줄을 누를 수 있는 목록 HTML.
 
     누른 줄 번호는 gr.SelectData.index, 버튼 종류(data-v)는 gr.SelectData.value 로 받는다.
+    scroll_bottom=True 이면 내용이 바뀔 때 대화 영역을 맨 아래로 내린다.
     """
-    return gr.HTML(value, js_on_load=CLICK_JS, padding=False, **kwargs)
+    js = CLICK_JS + ("\n" + SCROLL_JS if scroll_bottom else "")
+    return gr.HTML(value, js_on_load=js, padding=False, **kwargs)
+
+
+def chat_html(value: str = "", **kwargs) -> gr.HTML:
+    """대화 내용 HTML. 내용이 바뀌면 대화 영역을 맨 아래로 내린다."""
+    return gr.HTML(value, js_on_load=SCROLL_JS, padding=False, **kwargs)
 
 
 def chip_radio(choices: list, value=None, **kwargs) -> gr.Radio:
