@@ -16,7 +16,6 @@ INTRO = {
     "user": {
         "pill": ("user", "사용자 로그인"),
         "headline": "매뉴얼을 물으면<br>안전이 따라옵니다",
-        "desc": "부서마다 흩어진 매뉴얼·안전 문서·검사 데이터를 한 번에 찾아 드려요.",
         "features": [
             ("chat", "매뉴얼·사양 질문에 출처와 함께 답해요"),
             ("shield", "작업에 맞는 안전 요건을 함께 보여 줘요"),
@@ -26,7 +25,6 @@ INTRO = {
     "admin": {
         "pill": ("shield", "관리자 로그인"),
         "headline": "문서와 기준정보를<br>한 곳에서 관리해요",
-        "desc": "문서를 올리면 추출 → 청킹 → 색인까지 자동으로 처리돼요.",
         "features": [
             ("folder", "문서 업로드와 처리 상태를 한눈에 확인해요"),
             ("database", "모델·부품 기준정보를 관리해요"),
@@ -90,7 +88,7 @@ def intro_html(role: str) -> str:
         f'<span class="mode-pill">{icons.svg(pill_icon, tone, 16)}{escape(pill_text)}</span>'
         f'<div class="lockup">{logo}MANSA</div>'
         f"<h1>{data['headline']}</h1>"
-        f"<p>{escape(data['desc'])}</p>"
+        '<div class="intro-gap"></div>'  # Figma: 설명 문구 자리는 비워 두고 간격만 남김
         f'<div class="features">{features}</div>'
         "</div>"
     )

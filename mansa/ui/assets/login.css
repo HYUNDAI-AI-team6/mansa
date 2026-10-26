@@ -187,11 +187,8 @@
   margin: 0;
   color: var(--text);
 }
-.login-intro p {
-  font-size: 15px;
-  line-height: 24px;
-  color: var(--text2);
-  margin: 0;
+.intro-gap {
+  height: 24px;
 }
 .features {
   display: flex;
@@ -283,9 +280,6 @@
 .login-intro.admin h1,
 .login-intro.admin .feature {
   color: #fff;
-}
-.login-intro.admin p {
-  color: rgba(255, 255, 255, 0.78);
 }
 .login-intro.admin .feature .tile {
   background: rgba(255, 255, 255, 0.1);
