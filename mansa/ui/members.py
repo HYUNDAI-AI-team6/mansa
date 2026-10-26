@@ -65,10 +65,9 @@ def table(members: list[dict], role: str = "전체", dept: str = "", status: str
             continue
         if status not in ("", state):
             continue
-        cells = _row(i, m)
+        rows.append(_row(i, m))
         if not m["active"]:
-            cells[0] = cells[0].replace("<span>", '<span class="dim">', 1)
-        rows.append(cells)
+            rows[-1].append("off")  # 줄 class (table_html 이 붙인다)
     html = ui.table_html(COLUMNS, rows, "조건에 맞는 회원이 없어요")
     return f'<div class="member-table">{html}</div>'
 

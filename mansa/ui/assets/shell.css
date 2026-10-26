@@ -162,3 +162,14 @@
   width: 400px !important;
   min-width: 400px !important;
 }
+
+/* 머리글(메뉴 제목 줄)은 스크롤해도 위에 고정 (gr.HTML 바깥 .block 에 건다) */
+.block.header-block {
+  position: sticky !important;
+  top: 0;
+  z-index: 5;
+}
+/* Gradio 바깥 틀의 overflow:hidden 은 sticky 를 막아서, 잘라내기만 하는 clip 으로 바꾼다 */
+.gradio-container {
+  overflow: clip !important;
+}

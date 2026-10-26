@@ -88,7 +88,7 @@ def _build_shell(store: gr.State, user: gr.State) -> Shell:
         side_user, nav_user, logout_user = _build_sidebar("user")
         side_admin, nav_admin, logout_admin = _build_sidebar("admin")
         with gr.Column(elem_id="main"):
-            header = gr.HTML(padding=False)
+            header = gr.HTML(padding=False, elem_classes=["header-block"])
             pages, resettable = {}, {}
             for page in PAGES:
                 with gr.Column(visible=False, elem_classes=["page"]) as pages[page.key]:

@@ -9,9 +9,35 @@
   padding: 0 12px 0 14px !important;
   box-shadow: none !important;
 }
+/* 드롭다운 안쪽 여백: 글자 왼쪽 14px, 화살표 오른쪽 14px 로 맞춘다 */
 .select .wrap-inner,
-.select .secondary-wrap {
+.select .secondary-wrap,
+.model-select .wrap-inner,
+.model-select .secondary-wrap {
   height: 100%;
+  padding: 0 !important;
+}
+.select .wrap,
+.model-select .wrap {
+  padding: 0 14px !important;
+}
+.select input,
+.model-select input {
+  margin: 0 !important;
+}
+.select .icon-wrap,
+.model-select .icon-wrap {
+  width: 16px !important;
+  margin: 0 !important;
+  right: 0 !important;
+}
+.select input,
+.model-select input {
+  padding-right: 24px !important;
+}
+.select .icon-wrap svg,
+.model-select .icon-wrap svg {
+  width: 16px !important;
 }
 .select input {
   color: var(--text3) !important;
@@ -695,7 +721,8 @@
 .member-table .who em {
   font-size: 12px;
 }
-.member-table .dim {
+/* 비활성 회원: Figma 처럼 줄 전체를 흐리게 (관리 버튼은 또렷하게) */
+.member-table .tr.off > span:not(:last-child) {
   opacity: 0.45;
 }
 .mini-btn {

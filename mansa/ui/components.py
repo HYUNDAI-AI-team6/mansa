@@ -141,18 +141,24 @@ def search_box(placeholder: str, classes: list[str] | None = None, **kwargs) -> 
 def table_html(columns: list[tuple[str, str]], rows: list[list[str]], empty: str = "") -> str:
     """표 HTML. columns 는 (제목, 너비) 목록, rows 는 이미 escape 된 칸 HTML 목록이다.
 
+    줄에 칸이 하나 더 있으면 그 값은 줄 class 로 붙는다 (예: 비활성 회원 "off").
+
     너비는 CSS grid 값(예: "1fr", "120px")이다. 행이 없으면 empty 문구를 보여 준다.
     """
     grid = " ".join(width for _, width in columns)
     head = "".join(f"<span>{escape(name)}</span>" for name, _ in columns)
-    body = "".join(
-        f'<div class="tr" style="grid-template-columns:{grid}">{"".join(cells)}</div>'
-        for cells in rows
-    )
+    body = "".join(_tr(grid, cells, len(columns)) for cells in rows)
     if not rows and empty:
         body = f'<div class="empty">{escape(empty)}</div>'
     header = f'<div class="th" style="grid-template-columns:{grid}">{head}</div>'
     return f'<div class="tbl">{header}{body}</div>'
+
+
+def _tr(grid: str, cells: list[str], count: int) -> str:
+    """표 한 줄. 칸 수보다 하나 더 있으면 마지막 값은 줄 class 다 (예: 비활성 회원 "off")."""
+    extra = f" {cells[count]}" if len(cells) > count else ""
+    body = "".join(cells[:count])
+    return f'<div class="tr{extra}" style="grid-template-columns:{grid}">{body}</div>'
 
 
 def cell(html: str) -> str:
