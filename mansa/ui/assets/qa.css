@@ -3,7 +3,7 @@
 /* 질문 카드: 흰 카드 없이 연파랑 카드 하나 (테두리는 일반 카드와 같음) */
 .question-panel {
   background: #f5f7ff;
-  border: 1px solid var(--border);
+  border: 1px solid var(--card-border);
   border-radius: 20px;
   padding: 24px !important;
   gap: 16px !important;
