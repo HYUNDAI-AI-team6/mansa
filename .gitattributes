@@ -1,0 +1,9 @@
+## Mac Window 줄바꿈 형식 달라짐 방지 
+* text=auto
+
+*.py text eol=lf
+*.toml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
