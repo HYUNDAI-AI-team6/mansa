@@ -300,7 +300,7 @@ def _build_ask(test_mode: bool) -> dict:
             with gr.Column(elem_classes=["content"]):
                 caption = "모델을 고르면 더 정확하게 찾아요"
                 if test_mode:
-                    caption += " · 테스트 질문은 질문 기록에 남지 않아요"
+                    caption = "테스트 질문은 질문 기록에 남지 않아요"
                 gr.HTML(ui.section_title("질문하기", caption), padding=False)
                 _question_card(c)
                 if not test_mode:
@@ -337,28 +337,27 @@ def _model_row(c: dict) -> None:
 
 
 def _question_card(c: dict) -> None:
-    """모델 선택 + 질문 입력 + 예시 질문 + 질문하기 버튼 카드."""
-    with gr.Column(elem_classes=["card", "question-card"]):
-        with gr.Column(elem_classes=["question-panel"]):
-            _model_row(c)
-            with gr.Column(elem_classes=["question-box"]):
-                c["text"] = gr.Textbox(
-                    placeholder="예: [모델 A] 메인 로프 점검할 때 기준이 뭐야?",
-                    lines=2,
-                    max_lines=5,
-                    show_label=False,
-                    container=False,
-                    elem_classes=["q-text"],
+    """모델 선택 + 질문 입력 + 예시 질문 + 질문하기 버튼 카드(연파랑 카드 하나)."""
+    with gr.Column(elem_classes=["question-panel"]):
+        _model_row(c)
+        with gr.Column(elem_classes=["question-box"]):
+            c["text"] = gr.Textbox(
+                placeholder="예: [모델 A] 메인 로프 점검할 때 기준이 뭐야?",
+                lines=2,
+                max_lines=5,
+                show_label=False,
+                container=False,
+                elem_classes=["q-text"],
+            )
+            with gr.Row(elem_classes=["q-actions"]):
+                c["examples"] = [
+                    gr.Button(t, elem_classes=["chip"], scale=0, min_width=0)
+                    for t in mock.EXAMPLE_QUESTIONS
+                ]
+                gr.HTML("", padding=False, scale=1)
+                c["ask"] = gr.Button(
+                    "질문하기", elem_classes=["btn-primary"], scale=0, min_width=110
                 )
-                with gr.Row(elem_classes=["q-actions"]):
-                    c["examples"] = [
-                        gr.Button(t, elem_classes=["chip"], scale=0, min_width=0)
-                        for t in mock.EXAMPLE_QUESTIONS
-                    ]
-                    gr.HTML("", padding=False, scale=1)
-                    c["ask"] = gr.Button(
-                        "질문하기", elem_classes=["btn-primary"], scale=0, min_width=110
-                    )
 
 
 def _build_conv(test_mode: bool) -> dict:

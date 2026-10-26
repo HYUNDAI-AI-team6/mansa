@@ -1,13 +1,11 @@
 /* 기술 Q&A: 질문 전(U1), 대화(U2·U3), 근거 창 */
 /* ---------- 기술 Q&A: 질문 전 ---------- */
-.question-card {
-  padding: 24px !important;
-}
+/* 질문 카드: 흰 카드 없이 연파랑 카드 하나 (테두리는 일반 카드와 같음) */
 .question-panel {
   background: #f5f7ff;
-  border: 1px solid #e3e9fe;
-  border-radius: 16px;
-  padding: 20px !important;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 24px !important;
   gap: 16px !important;
 }
 .model-row {
