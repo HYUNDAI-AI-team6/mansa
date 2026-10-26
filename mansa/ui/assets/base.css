@@ -171,3 +171,26 @@ footer {
   font-size: 13px;
   color: var(--text3);
 }
+
+/* ---------- 알림(토스트) 제목을 한국어로 ---------- */
+/* Gradio 6.30 은 알림 묶음 제목을 Info/Warning 으로 고정해 보여 줘서 글자만 바꿔 그린다 */
+.toast-title {
+  font-size: 0 !important;
+}
+.toast-title::before {
+  font-size: 14px;
+}
+.toast-title.info::before {
+  content: "안내";
+}
+.toast-title.warning::before {
+  content: "확인해 주세요";
+}
+.toast-title.error::before {
+  content: "오류";
+}
+
+/* HTML 조각 안 아이콘이 flex 안에서 줄어들어 사라지지 않게 한다 */
+.gradio-container .prose svg {
+  flex-shrink: 0;
+}

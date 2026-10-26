@@ -5,9 +5,22 @@ from dataclasses import dataclass
 import gradio as gr
 
 from ui import components as ui
-from ui import login, navigation, qa, theme
+from ui import (
+    doc_view,
+    documents,
+    evaluation,
+    history,
+    login,
+    master,
+    members,
+    navigation,
+    qa,
+    support,
+    theme,
+    upload,
+)
 from ui import mock_data as mock
-from ui.navigation import HOME, PAGE_BY_KEY, PAGES, Page
+from ui.navigation import HOME, PAGE_BY_KEY, PAGES
 
 FONT_HEAD = (
     '<link rel="preconnect" href="https://fonts.googleapis.com">'
@@ -26,32 +39,32 @@ class Shell:
     logouts: list[gr.Button]
     header: gr.HTML
     pages: dict[str, gr.Column]
-    resettable: dict[str, qa.QAView]
+    resettable: dict  # key -> PageView / QAView (메뉴로 들어올 때 다시 그릴 화면)
 
     def nav_outputs(self) -> list:
         """메뉴를 바꿀 때 다시 그리는 부분: 머리글, 화면들, 메뉴 버튼들."""
         return [self.header, *self.pages.values(), *self.navs.values()]
 
 
-def _pending(page: Page) -> None:
-    """아직 붙이지 않은 화면 자리. 다음 단계에서 화면 파일로 바꾼다."""
-    gr.HTML(
-        f'<div class="card"><h3>{page.label}</h3><p>이 화면은 다음 단계에서 붙여요.</p></div>',
-        padding=False,
-    )
-
-
-def _build_page(page: Page) -> qa.QAView | None:
+def _build_page(key: str, store: gr.State, user: gr.State):
     """메뉴 key 에 맞는 화면 파일의 build() 를 부른다.
 
-    메뉴로 다시 들어올 때 처음 상태로 되돌릴 화면이면 그 객체를 돌려준다.
+    메뉴로 다시 들어올 때 다시 그릴 화면이면 그 정보(PageView/QAView)를 돌려준다.
+    store 는 로그인 세션의 목데이터(문서·부서·회원), user 는 로그인한 계정이다.
     """
-    if page.key == "qa":
-        return qa.build()
-    if page.key == "question_test":
-        return qa.build(test_mode=True)
-    _pending(page)
-    return None
+    builders = {
+        "qa": lambda: qa.build(),
+        "history": lambda: history.build(),
+        "doc_view": lambda: doc_view.build(store),
+        "support": lambda: support.build(),
+        "documents": lambda: documents.build(store),
+        "upload": lambda: upload.build(store),
+        "master": lambda: master.build(store),
+        "evaluation": lambda: evaluation.build(),
+        "question_test": lambda: qa.build(test_mode=True),
+        "members": lambda: members.build(store, user),
+    }
+    return builders[key]()
 
 
 def _build_sidebar(role: str) -> tuple[gr.Column, dict, gr.Button]:
@@ -69,7 +82,7 @@ def _build_sidebar(role: str) -> tuple[gr.Column, dict, gr.Button]:
     return column, buttons, logout
 
 
-def _build_shell() -> Shell:
+def _build_shell(store: gr.State, user: gr.State) -> Shell:
     """메뉴바와 모든 화면을 만든다. 처음에는 숨겨 두고 로그인하면 보인다."""
     with gr.Row(elem_id="shell", visible=False) as view:
         side_user, nav_user, logout_user = _build_sidebar("user")
@@ -79,7 +92,7 @@ def _build_shell() -> Shell:
             pages, resettable = {}, {}
             for page in PAGES:
                 with gr.Column(visible=False, elem_classes=["page"]) as pages[page.key]:
-                    built = _build_page(page)
+                    built = _build_page(page.key, store, user)
                 if built is not None:
                     resettable[page.key] = built
     sides = {"user": side_user, "admin": side_admin}
@@ -102,14 +115,40 @@ def _show(key: str, user: dict | None, nav_keys: list[str]) -> tuple:
     return (header, *pages, *navs)
 
 
+def _then_reset(event, view) -> None:
+    """화면을 바꾼 다음 그 화면을 처음 상태로 다시 그린다."""
+    if view is not None:
+        event.then(view.reset, view.reset_inputs or None, view.reset_outputs)
+
+
 def _wire_nav(shell: Shell, user: gr.State) -> None:
     """메뉴 버튼을 누르면 그 화면으로 바꾸고, 필요하면 화면을 처음 상태로 되돌린다."""
     nav_keys = list(shell.navs)
     for key, button in shell.navs.items():
         event = button.click(lambda u, k=key: _show(k, u, nav_keys), user, shell.nav_outputs())
-        if key in shell.resettable:
-            view = shell.resettable[key]
-            event.then(view.reset, None, view.reset_outputs)
+        _then_reset(event, shell.resettable.get(key))
+
+
+def _wire_links(shell: Shell, user: gr.State) -> None:
+    """화면 안에서 다른 화면으로 가는 버튼을 연결한다.
+
+    문서 관리의 '문서 업로드' → 문서 업로드, 질문 기록의 대화 → 기술 Q&A 에서 그 대화 열기.
+    """
+    nav_keys = list(shell.navs)
+    upload_btn = shell.resettable["documents"].links["upload"]
+    event = upload_btn.click(lambda u: _show("upload", u, nav_keys), user, shell.nav_outputs())
+    _then_reset(event, shell.resettable["upload"])
+
+    picked = gr.State(0)
+    qa_view = shell.resettable["qa"]
+
+    def open_chat(u: dict, evt: gr.SelectData) -> tuple:
+        """질문 기록에서 고른 대화 번호를 기억하고 기술 Q&A 화면으로 간다."""
+        return (*_show("qa", u, nav_keys), evt.index)
+
+    rows = shell.resettable["history"].links["open"]
+    event = rows.select(open_chat, user, [*shell.nav_outputs(), picked])
+    event.then(qa_view.open_history, picked, qa_view.reset_outputs)
 
 
 def _layout(role: str | None) -> tuple:
@@ -144,38 +183,44 @@ def _wire_login(
 
     home = shell.resettable.get(HOME[role])
     for trigger in (form.submit.click, form.password.submit):
-        event = trigger(handle, [form.user_id, form.password], outputs)
-        if home is not None:
-            event.then(home.reset, None, home.reset_outputs)
+        _then_reset(trigger(handle, [form.user_id, form.password], outputs), home)
 
 
 def _wire_logout(
-    shell: Shell, user: gr.State, layout_outputs: list, forms: list[login.LoginForm]
+    shell: Shell,
+    states: list[gr.State],
+    layout_outputs: list,
+    forms: list[login.LoginForm],
 ) -> None:
-    """로그아웃: 사용자 로그인 모드로 되돌리고, 입력했던 아이디·비밀번호를 지운다."""
+    """로그아웃: 사용자 로그인 모드로 되돌리고, 입력했던 아이디·비밀번호와 목데이터를 지운다.
+
+    states 는 [로그인 계정, 세션 목데이터] 순서다.
+    """
     fields = [box for form in forms for box in (form.user_id, form.password)]
 
     def logout() -> tuple:
         """로그인 화면을 다시 보여 주는 값."""
-        return (None, *_layout(None), *[""] * len(fields))
+        return (None, mock.new_store(), *_layout(None), *[""] * len(fields))
 
     for button in shell.logouts:
         event = button.click(None, js=login.RESET_JS)
-        event.then(logout, None, [user, *layout_outputs, *fields])
+        event.then(logout, None, [*states, *layout_outputs, *fields])
 
 
 def main():
     """화면을 만들고 이벤트를 연결한 뒤 앱을 실행한다."""
     with gr.Blocks(title="MANSA", fill_width=True) as demo:
         user = gr.State(None)
+        store = gr.State(mock.new_store())
         login_view, user_form, admin_form = login.build()
-        shell = _build_shell()
+        shell = _build_shell(store, user)
         layout_outputs = [login_view, shell.view, *shell.sides.values()]
 
         _wire_nav(shell, user)
+        _wire_links(shell, user)
         _wire_login("user", user_form, shell, user, layout_outputs)
         _wire_login("admin", admin_form, shell, user, layout_outputs)
-        _wire_logout(shell, user, layout_outputs, [user_form, admin_form])
+        _wire_logout(shell, [user, store], layout_outputs, [user_form, admin_form])
 
     demo.launch(theme=theme.build_theme(), css=theme.build_css(), head=FONT_HEAD)
 

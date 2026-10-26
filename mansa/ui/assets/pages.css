@@ -1,0 +1,718 @@
+/* 나머지 화면: 질문 기록 · 문서 조회 · 고객센터 · 문서 관리 · 문서 업로드 · 기준정보 · 평가 · 회원 관리 */
+
+/* ---------- 공통: 드롭다운 · 검색 · 줄 배치 ---------- */
+.select .wrap {
+  background: #fff !important;
+  border: 1px solid var(--border-strong) !important;
+  border-radius: 12px !important;
+  height: 44px;
+  padding: 0 12px 0 14px !important;
+  box-shadow: none !important;
+}
+.select .wrap-inner,
+.select .secondary-wrap {
+  height: 100%;
+}
+.select input {
+  color: var(--text3) !important;
+  font-size: 14px !important;
+  padding-left: 0 !important;
+}
+.select.filled input {
+  color: var(--text) !important;
+}
+.select ul.options {
+  border: 1px solid var(--border) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.08) !important;
+  padding: 6px !important;
+}
+.select ul.options li {
+  border-radius: 8px;
+  font-size: 14px;
+}
+.search input {
+  background: #fff var(--icon-search) no-repeat 14px center / 18px !important;
+  border: 1px solid var(--border-strong) !important;
+  border-radius: 12px !important;
+  height: 44px;
+  padding: 0 14px 0 40px !important;
+  box-shadow: none !important;
+}
+/* 화면 세로 방향 Column 안 요소가 높이를 늘리지 않게 한다 (Gradio 기본은 flex-grow 1) */
+.page .column > .column,
+.page .column > .block,
+.page .column > .row,
+.page > .column,
+.page > .block,
+.page > .row {
+  flex-grow: 0 !important;
+}
+.w-320,
+.w-280 {
+  flex: none !important;
+  margin-left: 0 !important;
+  align-self: flex-start;
+}
+.w-320 {
+  width: 320px !important;
+  max-width: 320px !important;
+}
+.w-280 {
+  width: 280px !important;
+  max-width: 280px !important;
+}
+.toolbar .chip-radio {
+  flex: none !important;
+  min-width: 0 !important;
+  width: auto !important;
+}
+.toolbar .chip-radio .wrap {
+  flex-wrap: nowrap !important;
+}
+.toolbar,
+.section-row,
+.card-head-row,
+.form-actions,
+.id-row {
+  align-items: center !important;
+  gap: 8px !important;
+  flex-wrap: nowrap !important;
+}
+.form-actions {
+  justify-content: flex-end !important;
+}
+.grow-col {
+  flex: 1 1 auto !important;
+  min-width: 0;
+}
+.card {
+  gap: 16px !important;
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.card-head .title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+}
+.card-head .cap,
+.cap {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text3);
+}
+.gradio-container button.full {
+  width: 100% !important;
+}
+.gradio-container button.soft-btn {
+  background: var(--brand-weak) !important;
+  color: var(--brand) !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  font-weight: 600;
+  box-shadow: none !important;
+}
+.empty {
+  padding: 32px 0;
+  text-align: center;
+  font-size: 14px;
+  color: var(--text3);
+}
+
+/* ---------- 표 ---------- */
+.tbl {
+  display: flex;
+  flex-direction: column;
+}
+.tbl .th,
+.tbl .tr {
+  display: grid;
+  align-items: center;
+  column-gap: 12px;
+  padding: 0 16px;
+}
+.tbl .th {
+  background: var(--subtle);
+  border-radius: 10px;
+  height: 36px;
+  font-size: 12px;
+  color: var(--text2);
+}
+.tbl .tr {
+  min-height: 60px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  color: var(--text);
+}
+.tbl .tr > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.tbl b {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tbl em {
+  font-style: normal;
+  font-size: 13px;
+  color: var(--text2);
+}
+.pdf {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: #fdecec;
+  color: #b91c1c;
+  font-size: 10px;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+.icon-btn:hover {
+  background: var(--subtle);
+}
+
+/* ---------- 질문 기록 ---------- */
+.hist-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.hist-row {
+  font-weight: 400;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 16px 18px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: var(--subtle);
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+}
+.hist-row:hover {
+  background: #f5f7ff;
+  border-color: #c9d4fd;
+}
+.hist-row .time {
+  width: 40px;
+  font-size: 13px;
+  color: var(--text3);
+}
+.hist-row .body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hist-row b {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+}
+.hist-row .meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hist-row em {
+  font-style: normal;
+  font-size: 13px;
+  color: var(--text3);
+  margin-left: 4px;
+}
+
+/* ---------- 고객센터 ---------- */
+.support-main {
+  min-height: calc(100vh - 96px - 68px);
+  gap: 16px !important;
+}
+.support-main .chat-input {
+  margin-top: auto !important;
+}
+.s-msgs {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.s-msgs .bot-row,
+.s-msgs .user-msg {
+  margin: 0;
+}
+.bot-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 75%;
+}
+.bot-col .who {
+  font-size: 12px;
+  color: var(--text2);
+}
+.s-bubble {
+  background: #fff;
+  border: 1px solid var(--card-border);
+  border-radius: 4px 18px 18px 18px;
+  padding: 12px 18px;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--text);
+}
+.s-bubble ol {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.s-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.s-chip {
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text);
+  cursor: pointer;
+}
+.s-chip:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.sys-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text3);
+}
+.sys-line::before,
+.sys-line::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.admin-avatar {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  background: #f3e8ff;
+  color: #7e22ce;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+}
+.faq .list-row {
+  padding: 14px 44px 14px 16px;
+}
+
+/* ---------- 문서 관리 ---------- */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+.stat {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start;
+  gap: 14px !important;
+}
+.stat > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.stat .label {
+  font-size: 13px;
+  color: var(--text2);
+}
+.stat b {
+  font-size: 32px;
+  line-height: 40px;
+  font-weight: 700;
+  color: var(--text);
+}
+.stat .desc {
+  font-size: 12px;
+  color: var(--text3);
+}
+.tile {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tile.blue {
+  background: #eaf0ff;
+}
+.tile.orange {
+  background: #fff1e6;
+}
+.tile.red {
+  background: #fdecec;
+}
+
+/* ---------- 문서 업로드 ---------- */
+.upload-card {
+  gap: 12px !important;
+}
+.step {
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+.drop-wrap {
+  position: relative;
+}
+.dropzone,
+.dropzone .wrap,
+.dropzone button {
+  min-height: 184px !important;
+  height: 184px !important;
+}
+.dropzone {
+  border: 1.5px dashed var(--border-strong) !important;
+  border-radius: 16px !important;
+  background: var(--subtle) !important;
+  overflow: hidden;
+}
+.dropzone:hover {
+  border-color: var(--brand) !important;
+  background: #f5f7ff !important;
+}
+/* gr.File 기본 안내 문구는 감추고 그 위에 Figma 안내(drop-face)를 겹쳐 그린다 */
+.dropzone [data-testid="upload-text"] {
+  opacity: 0 !important;
+}
+.block.drop-overlay {
+  position: absolute !important;
+  inset: 0;
+  pointer-events: none;
+}
+.drop-face {
+  height: 184px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.drop-face b {
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.drop-face span {
+  font-size: 12px;
+  color: var(--text3);
+}
+.drop-face .fake-btn {
+  margin-top: 8px;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 14px;
+}
+.file-row b {
+  flex: 1;
+  font-weight: 500;
+}
+.file-row .size {
+  font-size: 12px;
+  color: var(--text3);
+}
+.type-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.type-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #fff;
+  font-family: inherit;
+  cursor: pointer;
+}
+.type-card .tile {
+  margin-bottom: 6px;
+}
+.type-card b {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.type-card span {
+  font-size: 12px;
+  color: var(--text3);
+}
+.type-card.on {
+  background: #f5f7ff;
+  border: 1.5px solid var(--brand);
+}
+
+/* ---------- 기준정보 ---------- */
+.master-top {
+  align-items: stretch !important;
+}
+.dept-card {
+  flex: 0 0 400px !important;
+  max-width: 400px;
+}
+.dept-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dept-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: var(--subtle);
+}
+.dept-row .body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dept-row b {
+  font-size: 14px;
+  font-weight: 500;
+}
+.dept-row .body span,
+.dept-row em {
+  font-size: 12px;
+  font-style: normal;
+  color: var(--text3);
+}
+.letter {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  background: #eaf0ff;
+  color: #2f54eb;
+}
+.letter.orange {
+  background: #fff1e6;
+  color: #c2410c;
+}
+.letter.teal {
+  background: #e6f7f5;
+  color: #0f766e;
+}
+.letter.gray {
+  background: #f1f2f4;
+  color: #4b5563;
+}
+.inline-form {
+  gap: 8px !important;
+  padding: 14px !important;
+  border: 1px dashed var(--border-strong);
+  border-radius: 14px;
+}
+.model-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.tag-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.syn-card .title .cap {
+  margin-left: 4px;
+}
+
+/* ---------- 평가 ---------- */
+.run-card {
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+}
+.run-info .title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 700;
+}
+.run-info p {
+  margin: 8px 0 12px;
+  font-size: 14px;
+  color: var(--text2);
+}
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+.metric {
+  display: flex;
+  flex-direction: column;
+  padding: 20px !important;
+  gap: 4px !important;
+}
+.metric .label {
+  font-size: 13px;
+  color: var(--text2);
+}
+.metric b {
+  font-size: 34px;
+  line-height: 42px;
+  font-weight: 500;
+}
+.metric .goal {
+  font-size: 12px;
+  color: var(--text3);
+}
+.card-head .count {
+  color: var(--brand);
+  margin-left: 4px;
+}
+.kv-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text2);
+}
+.kv-row b {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* ---------- 회원 관리 ---------- */
+.member-table .letter {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  font-size: 12px;
+}
+.member-table .who {
+  display: flex;
+  flex-direction: column;
+}
+.member-table .who em {
+  font-size: 12px;
+}
+.member-table .dim {
+  opacity: 0.45;
+}
+.mini-btn {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+}
+.mini-btn:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.member-form {
+  gap: 8px !important;
+}
+.form-title {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 700;
+}
+.f-label {
+  display: block;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text2);
+}
+.note {
+  margin: 4px 0 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text3);
+}
+
+/* 작은 버튼은 글자 길이만큼만 넓어지고 줄바꿈하지 않는다 */
+.gradio-container button.sm-btn {
+  white-space: nowrap;
+  min-width: max-content !important;
+  padding: 0 14px !important;
+}

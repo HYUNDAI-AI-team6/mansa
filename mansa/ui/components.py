@@ -57,13 +57,132 @@ def icon(name: str, color: str = TEXT2, size: int = 20) -> str:
     return icons.svg(name, color, size)
 
 
-# 목록 HTML 안에서 data-i 가 붙은 줄을 누르면 .select 이벤트로 그 번호를 보낸다.
+# 목록 HTML 안에서 data-i 가 붙은 줄(버튼)을 누르면 .select 이벤트로 번호를 보낸다.
+# data-v 가 있으면 value 로 함께 보낸다 (예: "edit", "toggle" 처럼 어떤 버튼인지 구분).
 CLICK_JS = """element.addEventListener('click', (e) => {
   const row = e.target.closest('[data-i]');
-  if (row) trigger('select', {index: Number(row.dataset.i), value: row.dataset.i});
+  if (row) trigger('select', {index: Number(row.dataset.i), value: row.dataset.v || ''});
 });"""
 
 
 def click_list(value: str = "", **kwargs) -> gr.HTML:
-    """줄을 누를 수 있는 목록 HTML. 누른 줄 번호는 .select 의 gr.SelectData.index 로 받는다."""
+    """줄을 누를 수 있는 목록 HTML.
+
+    누른 줄 번호는 gr.SelectData.index, 버튼 종류(data-v)는 gr.SelectData.value 로 받는다.
+    """
     return gr.HTML(value, js_on_load=CLICK_JS, padding=False, **kwargs)
+
+
+def chip_radio(choices: list, value=None, **kwargs) -> gr.Radio:
+    """알약 모양 버튼으로 보이는 하나 고르기. value 가 없으면 첫 항목을 고른다."""
+    first = choices[0][1] if isinstance(choices[0], tuple) else choices[0]
+    return gr.Radio(
+        choices,
+        value=first if value is None else value,
+        show_label=False,
+        container=False,
+        elem_classes=["chip-radio"],
+        **kwargs,
+    )
+
+
+def select_box(
+    choices: list[str],
+    placeholder: str,
+    value: str = "",
+    classes: list[str] | None = None,
+    **kwargs,
+) -> gr.Dropdown:
+    """흰 드롭다운. 아무것도 고르지 않은 값("")은 placeholder 문구로 흐리게 보인다.
+
+    classes 로 너비 등 class 를 더한다.
+    """
+    base = ["select", *(classes or [])]
+    box = gr.Dropdown(
+        [(placeholder, "")] + [(c, c) for c in choices],
+        value=value,
+        show_label=False,
+        container=False,
+        elem_classes=base + (["filled"] if value else []),
+        **kwargs,
+    )
+    box.change(lambda v: gr.Dropdown(elem_classes=base + (["filled"] if v else [])), box, box)
+    return box
+
+
+def search_box(placeholder: str, classes: list[str] | None = None, **kwargs) -> gr.Textbox:
+    """돋보기 아이콘이 붙은 검색 입력칸. classes 로 너비 등 class 를 더한다."""
+    return gr.Textbox(
+        placeholder=placeholder,
+        show_label=False,
+        container=False,
+        max_lines=1,
+        elem_classes=["search", *(classes or [])],
+        **kwargs,
+    )
+
+
+def table_html(columns: list[tuple[str, str]], rows: list[list[str]], empty: str = "") -> str:
+    """표 HTML. columns 는 (제목, 너비) 목록, rows 는 이미 escape 된 칸 HTML 목록이다.
+
+    너비는 CSS grid 값(예: "1fr", "120px")이다. 행이 없으면 empty 문구를 보여 준다.
+    """
+    grid = " ".join(width for _, width in columns)
+    head = "".join(f"<span>{escape(name)}</span>" for name, _ in columns)
+    body = "".join(
+        f'<div class="tr" style="grid-template-columns:{grid}">{"".join(cells)}</div>'
+        for cells in rows
+    )
+    if not rows and empty:
+        body = f'<div class="empty">{escape(empty)}</div>'
+    header = f'<div class="th" style="grid-template-columns:{grid}">{head}</div>'
+    return f'<div class="tbl">{header}{body}</div>'
+
+
+def cell(html: str) -> str:
+    """표 칸 하나. html 은 이미 escape 된 값이어야 한다."""
+    return f"<span>{html}</span>"
+
+
+def pdf_badge() -> str:
+    """문서 이름 앞에 붙는 PDF 표시."""
+    return '<span class="pdf">PDF</span>'
+
+
+DEPT_TAG = {"유지보수팀": "blue", "안전팀": "orange", "검사·품질팀": "teal"}
+TYPE_TAG = {"기술 문서": "blue", "안전 문서": "orange"}
+STATUS_TAG = {"완료": "green", "처리 중": "blue", "실패": "red"}
+
+
+def dept_tag(dept: str) -> str:
+    """부서 태그 (부서마다 색이 정해져 있고, 새 부서는 회색)."""
+    return tag(dept, DEPT_TAG.get(dept, "gray"))
+
+
+def notify(message: str) -> None:
+    """오른쪽 위 안내 알림 (몇 초 뒤 사라짐)."""
+    gr.Info(message, title="안내", duration=4)
+
+
+def warn(message: str) -> None:
+    """오른쪽 위 확인 요청 알림 (입력이 빠졌거나 할 수 없는 동작일 때)."""
+    gr.Warning(message, title="확인해 주세요", duration=5)
+
+
+def text_input(placeholder: str, password: bool = False, **kwargs) -> gr.Textbox:
+    """제목 없이 안내 문구만 있는 한 줄 입력칸."""
+    return gr.Textbox(
+        placeholder=placeholder,
+        type="password" if password else "text",
+        show_label=False,
+        container=False,
+        max_lines=1,
+        elem_classes=["field"],
+        **kwargs,
+    )
+
+
+def small_button(label: str, primary: bool = False, **kwargs) -> gr.Button:
+    """글자 길이만큼만 넓은 작은 버튼 (파란 버튼 또는 흰 버튼)."""
+    kind = "btn-primary" if primary else "btn-secondary"
+    return gr.Button(label, elem_classes=[kind, "sm-btn"], scale=0, min_width=0, **kwargs)

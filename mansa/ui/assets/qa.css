@@ -426,8 +426,18 @@
   min-width: 0 !important;
   flex: 0 0 auto !important;
 }
+/* 동그라미는 안 보이게 하되 키보드로 고를 수 있게 남겨 둔다 */
+.chip-radio label {
+  position: relative;
+}
 .chip-radio label input {
-  display: none !important;
+  position: absolute !important;
+  opacity: 0 !important;
+  pointer-events: none;
+}
+.chip-radio label:has(input:focus-visible) {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 .chip-radio label.selected,
 .chip-radio label:has(input:checked) {

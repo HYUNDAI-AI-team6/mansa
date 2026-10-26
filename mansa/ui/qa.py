@@ -26,13 +26,24 @@ RULES = [
 
 @dataclass
 class QAView:
-    """기술 Q&A 화면 바깥(app.py)에서 쓰는 부분: 메뉴로 들어올 때 질문 전 화면으로 되돌리기."""
+    """기술 Q&A 화면 바깥(app.py)에서 쓰는 부분.
+
+    reset: 메뉴로 들어올 때 질문 전 화면으로 되돌리기.
+    open_history: 질문 기록에서 고른 지난 대화를 열기.
+    """
 
     reset_outputs: list = field(default_factory=list)
+    reset_inputs: list = field(default_factory=list)
+    links: dict = field(default_factory=dict)
 
     def reset(self) -> tuple:
         """대화를 비우고 모델 선택까지 처음으로 돌린 질문 전 화면 값을 돌려준다."""
         return (*_render(_empty_state()), "")
+
+    def open_history(self, index: int) -> tuple:
+        """질문 기록 index 번 대화를 펼쳐 대화 화면으로 보여 준다."""
+        state = {"turns": mock.history_turns(index), "pending": None, "model": ""}
+        return (*_render(state), "")
 
 
 # ------------------------------------------------------------------ HTML 조각
@@ -386,13 +397,6 @@ def _build_conv(test_mode: bool) -> dict:
     return c
 
 
-def _chip_radio(choices: list[str]) -> gr.Radio:
-    """알약 모양 버튼으로 보이는 하나 고르기(첫 항목이 기본 선택)."""
-    return gr.Radio(
-        choices, value=choices[0], show_label=False, container=False, elem_classes=["chip-radio"]
-    )
-
-
 def _clarify_card(c: dict) -> None:
     """되묻기 카드(U3): 모델·부위 후보를 골라 이어서 찾는다."""
     with gr.Row(visible=False, elem_classes=["bot-row", "clarify-row"]) as c["clarify"]:
@@ -404,9 +408,9 @@ def _clarify_card(c: dict) -> None:
                 '<span class="label">설비 모델</span>',
                 padding=False,
             )
-            c["clar_model"] = _chip_radio(mock.MODELS)
+            c["clar_model"] = ui.chip_radio(mock.MODELS)
             gr.HTML('<span class="label">부위</span>', padding=False)
-            c["clar_part"] = _chip_radio(mock.CLARIFY_PARTS)
+            c["clar_part"] = ui.chip_radio(mock.CLARIFY_PARTS)
             with gr.Row(elem_classes=["clarify-actions"]):
                 c["cont"] = gr.Button(
                     "선택하고 계속", elem_classes=["btn-primary", "sm-btn"], scale=0, min_width=0

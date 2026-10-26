@@ -4,6 +4,7 @@ features/ 기능이 붙기 전까지 화면이 이 값을 사용한다.
 각 함수의 docstring에 나중에 바꿔 끼울 기능 함수 자리를 적어 둔다.
 """
 
+import copy
 from dataclasses import dataclass, field
 
 MODELS = ["[모델 A]", "[모델 B]", "[모델 C]"]
@@ -178,3 +179,343 @@ def _model_in(text: str) -> str:
 def mock_answer_for(question: str, model: str) -> Answer:
     """되묻기에서 모델을 고른 뒤 바로 답변을 만든다."""
     return _sample_answer(question, model)
+
+
+# ---------------------------------------------------------------- 질문 기록
+HISTORY = [
+    {
+        "day": "오늘",
+        "time": "10:24",
+        "title": "[모델 A] 메인 로프 교체 기준",
+        "model": "[모델 A]",
+        "task": "메인 로프 교체",
+        "count": 3,
+    },
+    {
+        "day": "오늘",
+        "time": "10:11",
+        "title": "권상기 브레이크 갭 측정 방법",
+        "model": "[모델 A]",
+        "task": "브레이크 점검",
+        "count": 2,
+    },
+    {
+        "day": "오늘",
+        "time": "09:58",
+        "title": "비상정지장치 작동 시험 순서",
+        "model": "[모델 B]",
+        "task": "비상정지장치 시험",
+        "count": 4,
+    },
+    {
+        "day": "오늘",
+        "time": "09:40",
+        "title": "도어 센서 감도 조정 값",
+        "model": "[모델 A]",
+        "task": "도어 센서 조정",
+        "count": 1,
+    },
+    {
+        "day": "오늘",
+        "time": "09:32",
+        "title": "피트 작업 전 확인할 것",
+        "model": "",
+        "task": "피트 점검",
+        "count": 2,
+    },
+    {
+        "day": "오늘",
+        "time": "09:15",
+        "title": "주로프 소선 파단 허용 개수",
+        "model": "",
+        "task": "메인 로프 점검",
+        "count": 1,
+    },
+    {
+        "day": "10/23",
+        "time": "10/23",
+        "title": "카 도어 클로저 교체 순서",
+        "model": "[모델 B]",
+        "task": "도어 점검",
+        "count": 2,
+    },
+    {
+        "day": "10/22",
+        "time": "10/22",
+        "title": "기계실 환기 기준",
+        "model": "",
+        "task": "기계실 점검",
+        "count": 1,
+    },
+]
+
+FOLLOW_UPS = ["교체 주기도 알려줘", "측정할 때 필요한 공구는?", "작업 전 안전 확인 사항은?"]
+
+
+def history_turns(index: int) -> list[dict]:
+    """질문 기록 한 건을 기술 Q&A 대화(turns)로 펼친다.
+
+    모델 없이 시작한 대화는 되묻기를 거쳐 [모델 A] 로 답한 것으로 보여 준다.
+    features 의 대화 기록 조회 함수가 생기면 이 함수 자리를 바꾼다.
+    """
+    item = HISTORY[index]
+    turns = []
+    model = item["model"]
+    if not model:
+        turns.append({"q": item["title"], "kind": "clarify"})
+        model = MODELS[0]
+    turns.append(
+        {"q": item["title"], "kind": "answer", "answer": _sample_answer(item["title"], model)}
+    )
+    for question in FOLLOW_UPS[: item["count"] - 1]:
+        turns.append({"q": question, "kind": "answer", "answer": _sample_answer(question, model)})
+    return turns
+
+
+# ---------------------------------------------------------------- 문서 · 기준정보 · 회원
+DOCUMENTS = [
+    {
+        "title": "[모델 A] 유지보수 매뉴얼",
+        "type": "기술 문서",
+        "dept": "유지보수팀",
+        "status": "완료",
+        "date": "10/21",
+    },
+    {
+        "title": "[모델 A] 사양서",
+        "type": "기술 문서",
+        "dept": "유지보수팀",
+        "status": "완료",
+        "date": "10/21",
+    },
+    {
+        "title": "산업안전보건기준에 관한 규칙 (발췌)",
+        "type": "안전 문서",
+        "dept": "안전팀",
+        "status": "완료",
+        "date": "10/22",
+    },
+    {
+        "title": "KOSHA GUIDE [번호] 승강기 작업",
+        "type": "안전 문서",
+        "dept": "안전팀",
+        "status": "처리 중",
+        "date": "10/23",
+    },
+    {
+        "title": "사내 승강기 작업 안전규정 (스캔본)",
+        "type": "안전 문서",
+        "dept": "안전팀",
+        "status": "실패",
+        "date": "10/23",
+    },
+    {
+        "title": "[모델 B] 유지보수 매뉴얼",
+        "type": "기술 문서",
+        "dept": "유지보수팀",
+        "status": "처리 중",
+        "date": "10/23",
+    },
+]
+
+DOC_TYPES = {"기술 문서": "매뉴얼 · 사양서", "안전 문서": "법규 · 지침 · 사내 규정"}
+
+DEPT_INFO = [
+    {"name": "유지보수팀", "desc": "매뉴얼 · 사양서 관리"},
+    {"name": "안전팀", "desc": "법규 · 지침 · 사내 규정"},
+    {"name": "검사·품질팀", "desc": "검사 절차서 · 체크리스트"},
+]
+
+MODEL_SPECS = [
+    {
+        "id": "M-001",
+        "name": "[모델 A]",
+        "maker": "[제조사]",
+        "speed": "[값] m/min",
+        "load": "[값] kg",
+        "use": "승객용",
+        "docs": 3,
+    },
+    {
+        "id": "M-002",
+        "name": "[모델 B]",
+        "maker": "[제조사]",
+        "speed": "[값] m/min",
+        "load": "[값] kg",
+        "use": "화물용",
+        "docs": 2,
+    },
+    {
+        "id": "M-003",
+        "name": "[모델 C]",
+        "maker": "[제조사]",
+        "speed": "[값] m/min",
+        "load": "[값] kg",
+        "use": "승객용",
+        "docs": 0,
+    },
+]
+
+RELATIONS = [
+    {"work": "메인 로프 점검", "places": ["카 상부", "기계실"], "hazards": ["추락", "끼임"]},
+    {"work": "브레이크 라이닝 교체", "places": ["기계실"], "hazards": ["끼임", "감전"]},
+    {"work": "도어 센서 조정", "places": ["승강장", "카 상부"], "hazards": ["추락", "끼임"]},
+    {"work": "비상정지장치 시험", "places": ["피트", "카 상부"], "hazards": ["추락", "낙하"]},
+    {"work": "권상기 급유", "places": ["기계실"], "hazards": ["끼임"]},
+]
+
+TAXONOMY = {
+    "부위": ["메인 로프", "브레이크 라이닝", "도어 센서", "비상정지장치", "권상기"],
+    "작업": [r["work"] for r in RELATIONS],
+    "작업 위치": ["카 상부", "기계실", "승강장", "피트"],
+    "위험 유형": ["추락", "끼임", "감전", "낙하"],
+}
+
+SYNONYMS = [
+    ("와이어로프", "메인 로프"),
+    ("권상기", "트랙션 머신"),
+    ("카", "승강기 칸"),
+    ("가버너", "조속기"),
+    ("브레이크 슈", "브레이크 라이닝"),
+]
+
+MEMBERS = [
+    {
+        "name": "이OO",
+        "id": "admin01",
+        "dept": "안전팀",
+        "role": "관리자",
+        "active": True,
+        "date": "10/20",
+    },
+    {
+        "name": "박OO",
+        "id": "user01",
+        "dept": "유지보수팀",
+        "role": "사용자",
+        "active": True,
+        "date": "10/21",
+    },
+    {
+        "name": "김OO",
+        "id": "user02",
+        "dept": "유지보수팀",
+        "role": "사용자",
+        "active": True,
+        "date": "10/21",
+    },
+    {
+        "name": "최OO",
+        "id": "user03",
+        "dept": "검사·품질팀",
+        "role": "사용자",
+        "active": True,
+        "date": "10/22",
+    },
+    {
+        "name": "정OO",
+        "id": "user04",
+        "dept": "유지보수팀",
+        "role": "사용자",
+        "active": False,
+        "date": "10/22",
+    },
+]
+
+
+def new_store() -> dict:
+    """로그인한 사람마다 따로 쓰는 목데이터 묶음(문서·부서·회원).
+
+    화면에서 추가·삭제해도 다른 사람 화면에는 영향이 없다. DB 가 붙으면 없어진다.
+    """
+    return copy.deepcopy({"docs": DOCUMENTS, "depts": DEPT_INFO, "members": MEMBERS})
+
+
+# ---------------------------------------------------------------- 평가
+EVAL_SET = {
+    "title": "기술 Q&A 테스트셋",
+    "desc": "30문항 · 정답 수치·정답 근거 포함",
+    "last_run": "10/29 16:20",
+}
+EVAL_METRICS = ["검색 적중률", "수치 정확도", "출처 정확도", "과잉 첨부율", "표현 일관성"]
+EVAL_FAILURES = [
+    {
+        "q": "비상정지장치 시험 순서",
+        "flow": "L2",
+        "cause": "검색",
+        "detail": "5.6절 → 5.2절을 찾음",
+    },
+    {"q": "[모델 B] 정격하중", "flow": "L3", "cause": "조회", "detail": "[값] kg → 미등록 안내"},
+    {"q": "브레이크 갭 기준값", "flow": "L2", "cause": "생성", "detail": "근거 수치와 단위 불일치"},
+]
+EVAL_LATENCY = [
+    ("기술 Q&A 평균 지연", "[값]초"),
+    ("기술 Q&A 평균 토큰", "[값]"),
+    ("고객센터 평균 지연", "[값]초"),
+    ("고객센터 평균 토큰", "[값]"),
+]
+
+
+# ---------------------------------------------------------------- 고객센터
+SUPPORT_GREETING = "안녕하세요. MANSA 사용법을 물어보세요. 해결이 안 되면 관리자와 연결해 드려요."
+SUPPORT_CHIPS = ["문서는 어떻게 올려요?", "질문 기록은 어디서 봐요?", "답변이 이상할 때는?"]
+SUPPORT_FAQ = [
+    ("문서 업로드 방법", "문서는 어떻게 올려요?"),
+    ("모델을 고르지 않으면 어떻게 돼요?", "모델을 고르지 않으면 어떻게 돼요?"),
+    ("질문 기록은 어디서 봐요?", "질문 기록은 어디서 봐요?"),
+    ("안전 요건 안내 문구의 뜻", "안전 요건 안내 문구는 무슨 뜻이에요?"),
+]
+ADMIN_NAME = "김안전"
+TECH_WORDS = ("[모델", "정격", "로프", "브레이크", "도어", "점검", "교체", "사양", "비상정지")
+
+_SUPPORT_RULES = [
+    (
+        ("업로드", "올려", "올리"),
+        [
+            "관리자 메뉴에서 문서 업로드로 들어갑니다.",
+            "PDF를 고르고 문서 유형과 소속 부서를 정합니다.",
+            "업로드를 누르면 추출 → 청킹 → 색인까지 자동으로 처리돼요.",
+        ],
+    ),
+    (
+        ("질문 기록",),
+        "왼쪽 메뉴의 질문 기록에서 지난 기술 Q&A 대화를 다시 볼 수 있어요. "
+        "항목을 누르면 그때 대화가 그대로 열려요.",
+    ),
+    (
+        ("모델을 고르지", "모델 안"),
+        "모델을 고르지 않아도 질문할 수 있어요. "
+        "답을 찾는 데 모델이 필요하면 후보를 보여 드리고 다시 물어봐요.",
+    ),
+    (
+        ("안전 요건",),
+        "③ 안전 요건은 AI가 문서에서 찾은 참고 정보예요. "
+        "실제 작업 전 최종 판단은 안전관리자 확인이 필요해요.",
+    ),
+    (
+        ("이상",),
+        "근거 원문 창에서 출처를 먼저 확인해 주세요. 그래도 이상하면 "
+        "위의 관리자 연결을 눌러 알려 주세요.",
+    ),
+]
+
+
+def mock_support(question: str) -> dict:
+    """고객센터 질문에 대한 예시 답변.
+
+    결과: {"steps": [...]} 또는 {"text": "..."}. 장비·모델 질문은 기술 Q&A 로 안내한다.
+    features 의 고객센터(L3) 처리 함수가 생기면 이 함수 자리를 바꾼다.
+    """
+    text = question.strip()
+    for words, answer in _SUPPORT_RULES:
+        if any(w in text for w in words):
+            return {"steps": answer} if isinstance(answer, list) else {"text": answer}
+    if any(w in text for w in TECH_WORDS):
+        return {
+            "text": "장비·모델·작업에 관한 질문은 기술 Q&A에서 물어봐 주세요. "
+            "문서 근거와 함께 더 정확하게 답해 드려요."
+        }
+    return {
+        "text": "가이드에서 답을 찾지 못했어요. 위의 관리자 연결을 누르면 "
+        "관리자와 직접 이야기할 수 있어요."
+    }

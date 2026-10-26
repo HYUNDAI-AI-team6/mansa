@@ -17,7 +17,7 @@ TEXT3 = "#9CA3AF"
 WHITE_SOFT = "rgba(255,255,255,0.78)"
 
 ASSETS = Path(__file__).parent / "assets"
-CSS_FILES = ["base.css", "shell.css", "login.css", "qa.css"]
+CSS_FILES = ["base.css", "shell.css", "login.css", "qa.css", "pages.css"]
 
 TAG_COLORS = {
     "blue": ("#EAF0FF", "#2F54EB"),
@@ -68,7 +68,8 @@ def _nav_icon_css() -> str:
         ]
     rules.append(_icon_rule(".send-btn", icons.svg("send", "#FFFFFF")))
     chevron = icons.data_uri(icons.svg("chevron-right", TEXT3))
-    rules.append(f":root{{--icon-chevron:{chevron}}}")
+    search = icons.data_uri(icons.svg("search", TEXT3, 18))
+    rules.append(f":root{{--icon-chevron:{chevron};--icon-search:{search}}}")
     return "\n".join(rules)
 
 
