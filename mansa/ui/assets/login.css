@@ -1,0 +1,235 @@
+/* 로그인: 사용자(기본) / 관리자(파란 바탕, 좌우 반전) */
+/* ---------- 로그인 ---------- */
+.login {
+  min-height: 100vh;
+  background: var(--page);
+  position: relative;
+  overflow: hidden;
+  justify-content: center !important;
+}
+.login::before,
+.login::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  background: var(--brand-weak);
+  z-index: 0;
+}
+.login::before {
+  width: 720px;
+  height: 720px;
+  left: -240px;
+  top: 560px;
+}
+.login::after {
+  width: 460px;
+  height: 460px;
+  right: -200px;
+  top: -200px;
+}
+.login-row {
+  position: relative;
+  z-index: 1;
+  gap: 0 !important;
+  padding: 0 160px !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  min-height: 100vh;
+  flex-wrap: nowrap !important;
+}
+.login-intro {
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+.mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--brand-weak);
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 500;
+  width: max-content;
+}
+.lockup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: Outfit, var(--font);
+  font-weight: 700;
+  font-size: 26px;
+  color: var(--text);
+}
+.login-intro h1 {
+  font-size: 36px;
+  line-height: 48px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--text);
+}
+.login-intro p {
+  font-size: 15px;
+  line-height: 24px;
+  color: var(--text2);
+  margin: 0;
+}
+.features {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.feature {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+}
+.feature .tile {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.login-card {
+  width: 440px !important;
+  max-width: 440px !important;
+  min-width: 440px !important;
+  flex: 0 0 440px !important;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  padding: 40px !important;
+  gap: 24px !important;
+}
+.login-card h2 {
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text);
+}
+.login-card .sub {
+  font-size: 14px;
+  color: var(--text2);
+  margin: 6px 0 0;
+}
+.login-card .fields {
+  gap: 16px !important;
+}
+.or-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text3);
+  font-size: 13px;
+}
+.or-divider::before,
+.or-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.help {
+  font-size: 13px;
+  color: var(--text3);
+  text-align: center;
+  margin: 0;
+}
+.error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fdecec;
+  color: #b91c1c;
+  font-size: 13px;
+}
+/* 관리자 로그인: 파란 바탕 + 색 반전 + 좌우 반전 */
+.login.admin {
+  background: var(--brand);
+}
+.login.admin::before,
+.login.admin::after {
+  background: rgba(255, 255, 255, 0.16);
+}
+.login.admin::before {
+  left: auto;
+  right: -240px;
+}
+.login.admin::after {
+  right: auto;
+  left: -200px;
+}
+.login.admin .mode-pill {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+.login.admin .lockup,
+.login.admin .login-intro h1,
+.login.admin .feature {
+  color: #fff;
+}
+.login.admin .login-intro p {
+  color: rgba(255, 255, 255, 0.78);
+}
+.login.admin .feature .tile {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.login.admin .login-card {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.login.admin .login-card h2 {
+  color: #fff;
+}
+.login.admin .login-card .sub,
+.login.admin .field label > span,
+.login.admin .field [data-testid="block-info"] {
+  color: rgba(255, 255, 255, 0.78) !important;
+}
+.login.admin .field input {
+  background: var(--brand) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: #fff !important;
+}
+.login.admin .field input::placeholder {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+.login.admin button.btn-primary {
+  background: #fff !important;
+  color: var(--brand) !important;
+}
+.gradio-container .login.admin button.btn-secondary {
+  background: transparent !important;
+  border-color: rgba(255, 255, 255, 0.36) !important;
+  color: #fff !important;
+}
+.login.admin .or-divider {
+  color: rgba(255, 255, 255, 0.6);
+}
+.login.admin .or-divider::before,
+.login.admin .or-divider::after {
+  background: rgba(255, 255, 255, 0.2);
+}
+.login.admin .help {
+  color: rgba(255, 255, 255, 0.6);
+}
+.login.admin .login-row {
+  justify-content: flex-start !important;
+  gap: 120px !important;
+}

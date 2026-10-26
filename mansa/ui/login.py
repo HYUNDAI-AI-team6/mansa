@@ -1,0 +1,141 @@
+"""로그인 화면: 기본은 사용자 로그인, 버튼으로 관리자 로그인(파란 바탕·좌우 반전)으로 바꾼다."""
+
+from dataclasses import dataclass
+from html import escape
+
+import gradio as gr
+
+from ui import icons
+from ui.theme import BRAND
+
+INTRO = {
+    "user": {
+        "pill": ("user", "사용자 로그인"),
+        "headline": "매뉴얼을 물으면<br>안전이 따라옵니다",
+        "desc": "부서마다 흩어진 매뉴얼·안전 문서·검사 데이터를 한 번에 찾아 드려요.",
+        "features": [
+            ("chat", "매뉴얼·사양 질문에 출처와 함께 답해요"),
+            ("shield", "작업에 맞는 안전 요건을 함께 보여 줘요"),
+            ("headset", "사용법과 등록 모델은 고객센터에서 안내해요"),
+        ],
+    },
+    "admin": {
+        "pill": ("shield", "관리자 로그인"),
+        "headline": "문서와 기준정보를<br>한 곳에서 관리해요",
+        "desc": "문서를 올리면 추출 → 청킹 → 색인까지 자동으로 처리돼요.",
+        "features": [
+            ("folder", "문서 업로드와 처리 상태를 한눈에 확인해요"),
+            ("database", "모델·부품 기준정보를 관리해요"),
+            ("chart", "질문 테스트와 성능 평가를 실행해요"),
+        ],
+    },
+}
+
+CARD = {
+    "user": (
+        "로그인",
+        "사번과 비밀번호를 입력하세요",
+        "아이디",
+        "사번 또는 아이디",
+        "로그인",
+        "관리자 계정으로 로그인",
+        "계정이 없으면 관리자에게 문의하세요",
+    ),
+    "admin": (
+        "관리자 로그인",
+        "관리자 권한이 있는 계정만 들어갈 수 있어요",
+        "관리자 아이디",
+        "관리자 아이디",
+        "관리자 로그인",
+        "사용자 로그인으로 돌아가기",
+        "관리자 계정은 미리 등록된 계정만 쓸 수 있어요",
+    ),
+}
+
+
+@dataclass
+class LoginForm:
+    """로그인 화면 하나(사용자 또는 관리자)의 입력·버튼."""
+
+    view: gr.Column
+    user_id: gr.Textbox
+    password: gr.Textbox
+    error: gr.HTML
+    submit: gr.Button
+    switch: gr.Button
+
+
+def intro_html(role: str) -> str:
+    """로그인 화면 왼쪽(관리자는 오른쪽) 소개 영역을 만든다."""
+    data = INTRO[role]
+    admin = role == "admin"
+    tone = "#FFFFFF" if admin else BRAND
+    pill_icon, pill_text = data["pill"]
+    logo = icons.logo(40, "#FFFFFF", "rgba(255,255,255,0.5)") if admin else icons.logo(40)
+    features = "".join(
+        f'<div class="feature"><span class="tile">{icons.svg(name, tone, 20)}</span>'
+        f"{escape(text)}</div>"
+        for name, text in data["features"]
+    )
+    return (
+        '<div class="login-intro">'
+        f'<span class="mode-pill">{icons.svg(pill_icon, tone, 16)}{escape(pill_text)}</span>'
+        f'<div class="lockup">{logo}MANSA</div>'
+        f"<h1>{data['headline']}</h1>"
+        f"<p>{escape(data['desc'])}</p>"
+        f'<div class="features">{features}</div>'
+        "</div>"
+    )
+
+
+def _card(role: str) -> LoginForm:
+    """로그인 카드(입력칸·버튼)를 만든다. 호출한 위치(gr.Row 안)에 그려진다."""
+    title, sub, id_label, id_hint, submit, switch, help_text = CARD[role]
+    with gr.Column(elem_classes=["login-card"]) as card:
+        gr.HTML(f'<h2>{escape(title)}</h2><p class="sub">{escape(sub)}</p>', padding=False)
+        with gr.Column(elem_classes=["fields"]):
+            user_id = gr.Textbox(
+                label=id_label, placeholder=id_hint, elem_classes=["field"], max_lines=1
+            )
+            password = gr.Textbox(
+                label="비밀번호",
+                placeholder="비밀번호를 입력하세요",
+                type="password",
+                elem_classes=["field"],
+                max_lines=1,
+            )
+        error = gr.HTML(visible=False, padding=False)
+        submit_btn = gr.Button(submit, elem_classes=["btn-primary"])
+        gr.HTML('<div class="or-divider">또는</div>', padding=False)
+        switch_btn = gr.Button(switch, elem_classes=["btn-secondary"])
+        gr.HTML(f'<p class="help">{escape(help_text)}</p>', padding=False)
+    return LoginForm(card, user_id, password, error, submit_btn, switch_btn)
+
+
+def build() -> tuple[LoginForm, LoginForm]:
+    """사용자 로그인과 관리자 로그인 화면을 만들고 서로 바꾸는 버튼을 연결한다.
+
+    로그인 성공 처리는 화면 전환이 필요해 app.py 에서 연결한다.
+    """
+    with gr.Column(elem_classes=["login"]) as user_view:
+        with gr.Row(elem_classes=["login-row"]):
+            gr.HTML(intro_html("user"), padding=False)
+            user_form = _card("user")
+    with gr.Column(elem_classes=["login", "admin"], visible=False) as admin_view:
+        with gr.Row(elem_classes=["login-row"]):
+            admin_form = _card("admin")
+            gr.HTML(intro_html("admin"), padding=False)
+    user_form.view, admin_form.view = user_view, admin_view
+
+    user_form.switch.click(
+        lambda: (gr.Column(visible=False), gr.Column(visible=True)), None, [user_view, admin_view]
+    )
+    admin_form.switch.click(
+        lambda: (gr.Column(visible=True), gr.Column(visible=False)), None, [user_view, admin_view]
+    )
+    return user_form, admin_form
+
+
+def error_html(message: str) -> str:
+    """로그인 실패 안내 상자를 만든다."""
+    return f'<div class="error">{icons.svg("alert", "#B91C1C", 18)}{escape(message)}</div>'
