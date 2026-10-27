@@ -17,7 +17,7 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
-from features.evaluation.models import (
+from features.dashboard.evaluation.models import (
     LATENCY_UNITS,
     METRIC_NAMES,
     AnswerRecord,
@@ -29,7 +29,7 @@ from features.evaluation.models import (
 logger = logging.getLogger(__name__)
 
 # 저장소 루트의 eval/. 실행 위치(cwd)와 상관없이 이 파일 기준으로 계산한다.
-EVAL_ROOT = Path(__file__).resolve().parents[3] / "eval"
+EVAL_ROOT = Path(__file__).resolve().parents[4] / "eval"
 TESTSET_PATH = EVAL_ROOT / "testsets" / "tech_qa.json"
 SAVE_DIR = EVAL_ROOT / "save"
 

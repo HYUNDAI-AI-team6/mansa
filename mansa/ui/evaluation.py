@@ -7,13 +7,13 @@ from html import escape
 
 import gradio as gr
 
-from features.evaluation import storage
-from features.evaluation.answerer import CodexAnswerer
-from features.evaluation.codex_cli import CodexError, find_codex
-from features.evaluation.judge import CodexJudge
-from features.evaluation.models import LATENCY_UNITS, METRIC_NAMES, EvalReport, Progress
-from features.evaluation.runner import run_evaluation
-from features.evaluation.testset import TestSetError, load_testset
+from features.dashboard.evaluation import storage
+from features.dashboard.evaluation.answerer import CodexAnswerer
+from features.dashboard.evaluation.codex_cli import CodexError, find_codex
+from features.dashboard.evaluation.judge import CodexJudge
+from features.dashboard.evaluation.models import LATENCY_UNITS, METRIC_NAMES, EvalReport, Progress
+from features.dashboard.evaluation.runner import run_evaluation
+from features.dashboard.evaluation.testset import TestSetError, load_testset
 from ui import components as ui
 from ui.page import PageView
 

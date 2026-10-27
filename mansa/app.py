@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import gradio as gr
 
-from features.evaluation.storage import SAVE_DIR
+from features.dashboard.evaluation.storage import SAVE_DIR
 from ui import components as ui
 from ui import (
     doc_view,

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any, get_args
 
-from features.evaluation.models import TestCase, TestSet, Workflow
+from features.dashboard.evaluation.models import TestCase, TestSet, Workflow
 
 _REQUIRED = ("id", "question", "workflow", "expected_numbers", "expected_sources")
 

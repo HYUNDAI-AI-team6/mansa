@@ -2,7 +2,7 @@
 
 관리자 화면의 **평가(A4)** 기능 설명이다. 테스트셋 문항을 Q&A 응답기에 보내 답변을 받고,
 그 답변을 채점해 지표·실패 사례·지연·토큰을 화면과 파일로 보여 준다.
-코드는 `mansa/features/evaluation/`에 있고, 화면은 `mansa/ui/evaluation.py`다.
+코드는 `mansa/features/dashboard/evaluation/`에 있고, 화면은 `mansa/ui/evaluation.py`다.
 
 > 현재 응답기와 채점 LLM은 **임시로 OpenAI Codex CLI**를 쓴다. 실제 Q&A 파이프라인(LLM·RAG)이 완성되면
 > 응답기만 교체한다. 교체 방법은 [응답기 교체](#응답기-교체) 참고.
@@ -158,12 +158,12 @@ LLM 오류는 실패 사례가 아니라 아래 LLM 오류 목록에 나온다.
 
 ```powershell
 cd mansa
-uv run python -c "from pathlib import Path; from features.evaluation.runner import rescore; from features.evaluation.judge import CodexJudge; print(list(rescore(Path('../eval/save/<run_id>_answers.json'), CodexJudge()))[-1].metrics)"
+uv run python -c "from pathlib import Path; from features.dashboard.evaluation.runner import rescore; from features.dashboard.evaluation.judge import CodexJudge; print(list(rescore(Path('../eval/save/<run_id>_answers.json'), CodexJudge()))[-1].metrics)"
 ```
 
 ## 응답기 교체
 
-응답기는 아래 형태만 맞추면 된다(`features/evaluation/answerer.py`의 `Answerer`).
+응답기는 아래 형태만 맞추면 된다(`features/dashboard/evaluation/answerer.py`의 `Answerer`).
 
 ```python
 class Answerer(Protocol):

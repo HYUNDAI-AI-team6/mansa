@@ -4,8 +4,8 @@ import json
 from collections.abc import Callable
 from typing import Protocol
 
-from features.evaluation.codex_cli import CodexError, CodexResult, run_codex
-from features.evaluation.models import AnswerRecord, Judgement, TestCase
+from features.dashboard.evaluation.codex_cli import CodexError, CodexResult, run_codex
+from features.dashboard.evaluation.models import AnswerRecord, Judgement, TestCase
 
 JUDGE_PROMPT = """너는 승강기 기술 Q&A 답변을 채점하는 평가자다. 파일을 읽거나 명령을 실행하지 마라.
 아래 [답변]이 [질문]과 [정답 수치]에 비추어 용어와 단위 표기가 일관되고 정확한지 판정해라.

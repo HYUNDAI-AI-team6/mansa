@@ -4,7 +4,7 @@ import re
 import unicodedata
 from statistics import mean
 
-from features.evaluation.models import (
+from features.dashboard.evaluation.models import (
     AnswerRecord,
     CaseScore,
     Failure,

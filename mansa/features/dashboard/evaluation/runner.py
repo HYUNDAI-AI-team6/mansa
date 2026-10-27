@@ -4,11 +4,11 @@ from collections.abc import Callable, Generator, Iterator
 from datetime import datetime
 from pathlib import Path
 
-from features.evaluation import scoring, storage
-from features.evaluation.answerer import Answerer
-from features.evaluation.judge import Judge
-from features.evaluation.models import AnswerRecord, EvalReport, Progress, TestSet
-from features.evaluation.testset import load_testset
+from features.dashboard.evaluation import scoring, storage
+from features.dashboard.evaluation.answerer import Answerer
+from features.dashboard.evaluation.judge import Judge
+from features.dashboard.evaluation.models import AnswerRecord, EvalReport, Progress, TestSet
+from features.dashboard.evaluation.testset import load_testset
 
 Clock = Callable[[], datetime]
 
