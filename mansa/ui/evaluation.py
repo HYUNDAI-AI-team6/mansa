@@ -24,8 +24,18 @@ from ui.page import PageView
 
 logger = logging.getLogger(__name__)
 
-FAIL_COLUMNS = [("질문", "1.4fr"), ("워크플로", "80px"), ("원인", "64px"), ("기대 → 실제", "1fr")]
+FAIL_COLUMNS = [
+    ("질문", "1.4fr"),
+    ("워크플로", "80px"),
+    ("원인", "64px"),
+    ("기대 → 실제", "1fr"),
+]
 LLM_ERROR_COLUMNS = [("질문", "1.4fr"), ("단계", "64px"), ("사유", "1fr")]
+NUMBER_NOTE_COLUMNS = [
+    ("질문", "1.4fr"),
+    ("판정", "72px"),
+    ("정답 수치 → 근거 원문", "1fr"),
+]
 FLOW_TAG = {"L2": "blue", "L3": "purple"}
 CAUSE_TAG = {"검색": "red", "조회": "orange", "생성": "red"}
 
@@ -74,29 +84,23 @@ def run_card_html(
     )
 
 
-def _goal(name: str) -> str:
-    """지표 카드 아래 목표 문구."""
-    if name in LOWER_IS_BETTER:
-        return f"목표 {LOWER_IS_BETTER[name]}% 이하"
-    return f"목표 {TARGET_PERCENT}% 이상"
-
-
 def metrics_html(report: EvalReport | None = None) -> str:
     """지표 카드 5개. 결과가 없으면 [값] 자리표시를 보여 준다."""
+
     def value(name: str) -> str:
         """지표 하나의 표시 값."""
         return storage.format_metric(report.metrics.get(name)) if report else "[값]%"
 
     cards = "".join(
         f'<div class="card metric"><span class="label">{escape(name)}</span>'
-        f'<b>{escape(value(name))}</b><span class="goal">{escape(_goal(name))}</span></div>'
+        f"<b>{escape(value(name))}</b></div>"
         for name in METRIC_NAMES
     )
     return f'<div class="metrics">{cards}</div>'
 
 
 def failures_html(report: EvalReport | None = None) -> str:
-    """실패 사례 카드. LLM 오류가 있으면 그 아래에 LLM 오류 카드를 붙인다."""
+    """실패 사례 카드. LLM 오류·수치 LLM 판정 기록이 있으면 그 아래에 카드를 붙인다."""
     failures = report.failures if report else []
     rows = [
         [
@@ -113,8 +117,8 @@ def failures_html(report: EvalReport | None = None) -> str:
         f'<span class="count">{len(failures)}건</span></div></div>'
     )
     card = f'<div class="card fail-card">{head}{ui.table_html(FAIL_COLUMNS, rows, empty)}</div>'
-    errors = llm_errors_html(report)
-    return f'<div class="fail-stack">{card}{errors}</div>' if errors else card
+    extra = llm_errors_html(report) + number_notes_html(report)
+    return f'<div class="fail-stack">{card}{extra}</div>' if extra else card
 
 
 def llm_errors_html(report: EvalReport | None) -> str:
@@ -140,11 +144,37 @@ def llm_errors_html(report: EvalReport | None) -> str:
     return f'<div class="card fail-card">{head}{ui.table_html(LLM_ERROR_COLUMNS, rows)}</div>'
 
 
+def number_notes_html(report: EvalReport | None) -> str:
+    """수치 정확도를 규칙과 채점 LLM이 다르게 본 기록 카드. 기록이 없으면 빈 문자열이다.
+
+    LLM 통과는 지표에서 통과로 셌고, LLM 이견은 규칙 판정(통과)을 따랐다. 사람이 확인할 대상이다.
+    """
+    notes = report.number_notes if report else []
+    if not notes:
+        return ""
+    rows = [
+        [
+            ui.cell(f"<b>{escape(n.question)}</b>"),
+            ui.cell(ui.tag(n.kind, "gray")),
+            ui.cell(f"<em>{escape(n.expected)} → {escape(n.quote or '없음')}</em>"),
+        ]
+        for n in notes
+    ]
+    head = (
+        '<div class="card-head"><div class="title">수치 LLM 판정'
+        f'<span class="count">{len(notes)}건</span></div></div>'
+    )
+    return f'<div class="card fail-card">{head}{ui.table_html(NUMBER_NOTE_COLUMNS, rows)}</div>'
+
+
 def latency_html(report: EvalReport | None = None) -> str:
     """지연·토큰 목록. 결과가 없으면 [값] 자리표시를 보여 준다."""
+
     def value(name: str) -> str:
         """지연·토큰 항목 하나의 표시 값."""
-        return storage.format_latency(name, report.latency.get(name)) if report else "[값]"
+        return (
+            storage.format_latency(name, report.latency.get(name)) if report else "[값]"
+        )
 
     rows = "".join(
         f'<div class="kv-row"><span>{escape(name)}</span><b>{escape(value(name))}</b></div>'
@@ -211,12 +241,16 @@ def _run():
                 yield card, ui.idle_button("평가 실행", RUN_CLASSES), *rest
     except (CodexError, TestSetError) as exc:
         ui.warn(str(exc))
-        yield run_card_html(storage.load_latest()), ui.idle_button("평가 실행", RUN_CLASSES), *skip
+        yield run_card_html(storage.load_latest()), ui.idle_button(
+            "평가 실행", RUN_CLASSES
+        ), *skip
     except Exception:
         # 화면 경계: 버튼이 "실행 중"에 멈추지 않게 되돌리고 원인은 로그로 남긴다.
         logger.exception("evaluation run failed")
         ui.warn("평가 중 오류가 났어요. 로그를 확인해 주세요")
-        yield run_card_html(storage.load_latest()), ui.idle_button("평가 실행", RUN_CLASSES), *skip
+        yield run_card_html(storage.load_latest()), ui.idle_button(
+            "평가 실행", RUN_CLASSES
+        ), *skip
     finally:
         _RUN_LOCK.release()
 
@@ -230,7 +264,9 @@ def build() -> PageView:
     gr.HTML(ui.section_title("기술 Q&A 결과"), padding=False)
     metrics = gr.HTML(metrics_html(report), padding=False)
     with gr.Row(elem_classes=["body-row"]):
-        failures = gr.HTML(failures_html(report), padding=False, elem_classes=["grow-col"])
+        failures = gr.HTML(
+            failures_html(report), padding=False, elem_classes=["grow-col"]
+        )
         with gr.Column(elem_classes=["card", "right-panel", "latency-card"]):
             latency = gr.HTML(latency_html(report), padding=False)
             download = gr.DownloadButton(
@@ -238,7 +274,12 @@ def build() -> PageView:
                 value=export_csv(),
                 elem_classes=["btn-secondary", "sm-btn", "full"],
             )
-    run.click(_run, None, [info, run, metrics, failures, latency, download], show_progress="hidden")
+    run.click(
+        _run,
+        None,
+        [info, run, metrics, failures, latency, download],
+        show_progress="hidden",
+    )
     download.click(_warn_if_no_result, None, None)
     return PageView(
         lambda: _view(storage.load_latest()),
