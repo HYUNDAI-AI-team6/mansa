@@ -10,6 +10,7 @@ from features.evaluation.models import (
     CaseScore,
     Failure,
     Judgement,
+    LlmError,
     TestCase,
 )
 
@@ -86,28 +87,32 @@ def score_case(case: TestCase, record: AnswerRecord, judgement: Judgement | None
         extra = set(record.cited_ids) - set(case.expected_sources)
         score.overattach = len(extra) / len(set(record.cited_ids))
     if judgement is not None:
-        score.consistent = judgement.consistent
+        # 채점 LLM 오류도 표현 일관성에서는 실패로 센다. 오류 내용은 collect_llm_errors가 따로 남긴다.
+        score.consistent = False if judgement.error else judgement.consistent
     return score
 
 
 def compute_metrics(scores: list[CaseScore]) -> dict[str, float | None]:
     """문항 판정을 지표 5개의 백분율로 모은다.
 
-    오류가 아닌 문항 중 값을 낸 문항이 하나도 없는 지표는 None("값 없음")이다.
-    값이 있으면 오류 문항도 분모에 넣어 실패로 센다. 과잉 첨부율은 문항별 비율의 평균이다.
+    LLM 오류 문항은 계산 가능한 지표에서 실패로 센다. 수치 정확도(정답 수치만 있으면 계산 가능)와
+    표현 일관성은 전 문항이 오류여도 0%로 집계한다. 검색·출처 지표는 응답기가 근거 정보를 주는지에
+    달려 있으므로, 오류가 아닌 문항 중 값을 낸 문항이 하나도 없으면 None("값 없음")이다.
+    과잉 첨부율은 문항별 비율의 평균이다.
     """
-    def rate(attr: str) -> float | None:
-        """CaseScore의 통과 여부 필드 하나를 백분율로 바꾼다."""
-        if all(getattr(s, attr) is None for s in scores if not s.error):
+
+    def rate(attr: str, needs_answerer_info: bool = False) -> float | None:
+        """CaseScore의 통과 여부 필드 하나를 백분율로 바꾼다. 계산할 문항이 없으면 None이다."""
+        if needs_answerer_info and all(getattr(s, attr) is None for s in scores if not s.error):
             return None
         values = [getattr(s, attr) for s in scores if getattr(s, attr) is not None]
-        return 100 * sum(values) / len(values)
+        return 100 * sum(values) / len(values) if values else None
 
     overattach = [s.overattach for s in scores if s.overattach is not None]
     return {
-        "검색 적중률": rate("retrieval_hit"),
+        "검색 적중률": rate("retrieval_hit", needs_answerer_info=True),
         "수치 정확도": rate("numeric_ok"),
-        "출처 정확도": rate("source_ok"),
+        "출처 정확도": rate("source_ok", needs_answerer_info=True),
         "과잉 첨부율": 100 * mean(overattach) if overattach else None,
         "표현 일관성": rate("consistent"),
     }
@@ -119,14 +124,19 @@ def classify_failure(
     score: CaseScore,
     judgement: Judgement | None,
 ) -> Failure | None:
-    """통과하지 못한 지표가 있는 문항을 실패 사례로 만든다. 모두 통과(또는 계산 불가)면 None이다.
+    """답변 품질이 기준에 못 미친 문항을 실패 사례로 만든다. 모두 통과(또는 계산 불가)면 None이다.
 
+    답변 LLM 오류 문항과 채점 LLM 오류로 생긴 표현 일관성 실패는 품질 실패가 아니므로 여기서
+    제외하고 collect_llm_errors가 따로 남긴다.
     원인: 검색 미적중 → 검색, 그 밖의 L3 → 조회, 그 밖의 L2 → 생성.
     """
-    checks = (score.retrieval_hit, score.numeric_ok, score.source_ok, score.consistent)
-    if not score.error and False not in checks:
+    if score.error:
         return None
-    if score.retrieval_hit is False and not score.error:
+    judge_failed = judgement is not None and judgement.error is not None
+    consistent = None if judge_failed else score.consistent
+    if False not in (score.retrieval_hit, score.numeric_ok, score.source_ok, consistent):
+        return None
+    if score.retrieval_hit is False:
         cause = "검색"
     elif case.workflow == "L3":
         cause = "조회"
@@ -148,8 +158,6 @@ def _failure_detail(
     judgement: Judgement | None,
 ) -> str:
     """실패 사례의 "기대 → 실제" 설명. 가장 먼저 실패한 항목 하나만 설명한다."""
-    if record.error:
-        return f"응답 오류: {record.error}"
     if score.retrieval_hit is False:
         retrieved = (record.retrieved_ids or [])[:_MAX_FOUND]
         return f"{_join(case.expected_sources)} → {_join(retrieved)}"
@@ -159,6 +167,18 @@ def _failure_detail(
         return f"근거 {_join(case.expected_sources)} → {_join(record.cited_ids or [])}"
     reason = judgement.reason if judgement else ""
     return f"표현 불일치: {reason}" if reason else "표현 불일치"
+
+
+def collect_llm_errors(
+    case: TestCase, record: AnswerRecord, judgement: Judgement | None
+) -> list[LlmError]:
+    """문항 하나의 답변·채점 LLM 호출 실패를 목록으로 만든다. 실패가 없으면 빈 목록이다."""
+    errors = []
+    if record.error:
+        errors.append(LlmError(case.id, case.question, "답변", record.error))
+    if judgement is not None and judgement.error:
+        errors.append(LlmError(case.id, case.question, "채점", judgement.error))
+    return errors
 
 
 def _join(values: list[str]) -> str:

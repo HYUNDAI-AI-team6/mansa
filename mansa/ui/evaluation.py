@@ -20,6 +20,7 @@ from ui.page import PageView
 logger = logging.getLogger(__name__)
 
 FAIL_COLUMNS = [("질문", "1.4fr"), ("워크플로", "80px"), ("원인", "64px"), ("기대 → 실제", "1fr")]
+LLM_ERROR_COLUMNS = [("질문", "1.4fr"), ("단계", "64px"), ("사유", "1fr")]
 FLOW_TAG = {"L2": "blue", "L3": "purple"}
 CAUSE_TAG = {"검색": "red", "조회": "orange", "생성": "red"}
 
@@ -90,7 +91,7 @@ def metrics_html(report: EvalReport | None = None) -> str:
 
 
 def failures_html(report: EvalReport | None = None) -> str:
-    """실패 사례 카드."""
+    """실패 사례 카드. LLM 오류가 있으면 그 아래에 LLM 오류 카드를 붙인다."""
     failures = report.failures if report else []
     rows = [
         [
@@ -106,7 +107,32 @@ def failures_html(report: EvalReport | None = None) -> str:
         '<div class="card-head"><div class="title">실패 사례'
         f'<span class="count">{len(failures)}건</span></div></div>'
     )
-    return f'<div class="card fail-card">{head}{ui.table_html(FAIL_COLUMNS, rows, empty)}</div>'
+    card = f'<div class="card fail-card">{head}{ui.table_html(FAIL_COLUMNS, rows, empty)}</div>'
+    errors = llm_errors_html(report)
+    return f'<div class="fail-stack">{card}{errors}</div>' if errors else card
+
+
+def llm_errors_html(report: EvalReport | None) -> str:
+    """답변·채점 LLM 호출 실패 카드. 오류가 없으면 빈 문자열이다.
+
+    이 문항들은 지표에서는 실패로 세지만 답변 품질 실패와 구분하려고 따로 보여 준다.
+    """
+    errors = report.llm_errors if report else []
+    if not errors:
+        return ""
+    rows = [
+        [
+            ui.cell(f"<b>{escape(e.question)}</b>"),
+            ui.cell(ui.tag(e.stage, "gray")),
+            ui.cell(f"<em>{escape(e.reason)}</em>"),
+        ]
+        for e in errors
+    ]
+    head = (
+        '<div class="card-head"><div class="title">LLM 오류'
+        f'<span class="count">{len(errors)}건</span></div></div>'
+    )
+    return f'<div class="card fail-card">{head}{ui.table_html(LLM_ERROR_COLUMNS, rows)}</div>'
 
 
 def latency_html(report: EvalReport | None = None) -> str:
@@ -173,7 +199,9 @@ def _run():
                 card = run_card_html(caption=caption, percent=percent)
                 yield card, ui.loading_button("실행 중", RUN_CLASSES), *skip
             else:
-                ui.notify(f"평가를 마쳤어요 · 실패 {len(event.failures)}건")
+                ui.notify(
+                    f"평가를 마쳤어요 · 실패 {len(event.failures)}건 · LLM 오류 {len(event.llm_errors)}건"
+                )
                 card, *rest = _view(event)
                 yield card, ui.idle_button("평가 실행", RUN_CLASSES), *rest
     except (CodexError, TestSetError) as exc:

@@ -22,6 +22,7 @@ from features.evaluation.models import (
     AnswerRecord,
     EvalReport,
     Failure,
+    LlmError,
 )
 
 logger = logging.getLogger(__name__)
@@ -144,13 +145,18 @@ def report_csv(report: EvalReport) -> str:
         ["실패 사례", f.question, f"{f.workflow} · {f.cause} · {f.detail}"]
         for f in report.failures
     )
+    writer.writerows(
+        ["LLM 오류", e.question, f"{e.stage} · {e.reason}"] for e in report.llm_errors
+    )
     return buffer.getvalue()
 
 
 def _report_from_dict(data: dict) -> EvalReport:
     """저장된 결과 JSON을 EvalReport로 되돌린다. 필드가 맞지 않으면 KeyError/TypeError가 난다."""
     failures = [Failure(**f) for f in data.pop("failures")]
-    return EvalReport(failures=failures, **data)
+    # llm_errors가 없는 이전 결과 파일도 읽는다.
+    llm_errors = [LlmError(**e) for e in data.pop("llm_errors", [])]
+    return EvalReport(failures=failures, llm_errors=llm_errors, **data)
 
 
 def _write_atomic(path: Path, text: str, encoding: str) -> None:

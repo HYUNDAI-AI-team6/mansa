@@ -5,6 +5,7 @@ from typing import Literal
 
 Workflow = Literal["L2", "L3"]
 FailureCause = Literal["검색", "조회", "생성"]
+LlmStage = Literal["답변", "채점"]
 
 # 화면과 CSV에 나오는 지표 순서. scoring.compute_metrics가 이 키로 값을 채운다.
 METRIC_NAMES = ["검색 적중률", "수치 정확도", "출처 정확도", "과잉 첨부율", "표현 일관성"]
@@ -64,10 +65,14 @@ class AnswerRecord:
 
 @dataclass
 class Judgement:
-    """채점 LLM의 표현 일관성 판정. consistent가 None이면 판정을 얻지 못한 것이다."""
+    """채점 LLM의 표현 일관성 판정.
+
+    error가 있으면 채점 LLM 호출·해석에 실패한 것이고 consistent는 None이다.
+    """
 
     consistent: bool | None
     reason: str = ""
+    error: str | None = None
 
 
 @dataclass
@@ -100,11 +105,22 @@ class Failure:
 
 
 @dataclass
+class LlmError:
+    """LLM 호출 실패 한 건. stage는 답변(응답기) 또는 채점(judge) 단계다."""
+
+    case_id: str
+    question: str
+    stage: LlmStage
+    reason: str
+
+
+@dataclass
 class EvalReport:
     """평가 1회의 집계 결과.
 
     metrics는 METRIC_NAMES 순서의 지표명 → 백분율(0~100) 또는 None("값 없음")이다.
     latency는 화면 표시 이름 → 값(초·토큰) 또는 None이다. finished_at은 전체 평가가 끝난 시각(ISO 8601)이다.
+    failures는 답변 품질 실패, llm_errors는 답변·채점 LLM 호출 실패다. LLM 오류 문항도 지표에서는 실패로 센다.
     """
 
     run_id: str
@@ -116,6 +132,7 @@ class EvalReport:
     failures: list[Failure]
     latency: dict[str, float | None]
     answers_file: str = ""
+    llm_errors: list[LlmError] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

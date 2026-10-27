@@ -35,7 +35,7 @@ class Judge(Protocol):
     name: str
 
     def judge(self, case: TestCase, record: AnswerRecord) -> Judgement:
-        """답변 하나를 판정한다. 판정을 얻지 못하면 consistent가 None인 Judgement를 돌려준다."""
+        """답변 하나를 판정한다. 판정을 얻지 못하면 error가 채워진 Judgement를 돌려준다."""
         ...
 
 
@@ -53,7 +53,7 @@ class CodexJudge:
     def judge(self, case: TestCase, record: AnswerRecord) -> Judgement:
         """Codex에 채점을 맡기고 JSON 결과를 해석한다. Codex를 실행한다(사용량 소모).
 
-        호출 실패나 형식이 맞지 않는 응답은 consistent=None과 이유로 돌려준다.
+        호출 실패나 형식이 맞지 않는 응답은 error가 채워진 Judgement로 돌려준다.
         """
         prompt = JUDGE_PROMPT.format(
             question=case.question,
@@ -63,16 +63,16 @@ class CodexJudge:
         try:
             result = self._call(prompt, model=self._model, output_schema=JUDGE_SCHEMA)
         except CodexError as exc:
-            return Judgement(consistent=None, reason=f"judge failed: {exc}")
+            return Judgement(consistent=None, error=str(exc))
         return parse_judgement(result.text)
 
 
 def parse_judgement(text: str) -> Judgement:
-    """채점 LLM의 JSON 답을 Judgement로 바꾼다. 형식이 틀리면 consistent=None이다."""
+    """채점 LLM의 JSON 답을 Judgement로 바꾼다. 형식이 틀리면 error가 채워진 Judgement다."""
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
-        return Judgement(consistent=None, reason="judge output is not JSON")
+        return Judgement(consistent=None, error="judge output is not JSON")
     if not isinstance(data, dict) or not isinstance(data.get("consistent"), bool):
-        return Judgement(consistent=None, reason="judge output has no boolean 'consistent'")
+        return Judgement(consistent=None, error="judge output has no boolean 'consistent'")
     return Judgement(consistent=data["consistent"], reason=str(data.get("reason", "")))

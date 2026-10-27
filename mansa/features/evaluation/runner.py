@@ -81,7 +81,7 @@ def _score(
     judge 진행률은 stage="judge"인 Progress로 yield한다. 오류 문항은 judge를 부르지 않는다.
     """
     total = len(testset.cases)
-    scores, failures = [], []
+    scores, failures, llm_errors = [], [], []
     for done, (case, record) in enumerate(zip(testset.cases, records), start=1):
         judgement = None if record.error else judge.judge(case, record)
         score = scoring.score_case(case, record, judgement)
@@ -89,6 +89,7 @@ def _score(
         failure = scoring.classify_failure(case, record, score, judgement)
         if failure is not None:
             failures.append(failure)
+        llm_errors.extend(scoring.collect_llm_errors(case, record, judgement))
         yield Progress(done, total, stage="judge")
     return EvalReport(
         run_id=run_id,
@@ -99,6 +100,7 @@ def _score(
         metrics=scoring.compute_metrics(scores),
         failures=failures,
         latency=scoring.compute_latency(records),
+        llm_errors=llm_errors,
     )
 
 
