@@ -102,7 +102,7 @@ def _reset() -> tuple:
 def _upload(state: dict, dept: str, store: dict):
     """필수값을 확인하고 문서 목록에 '처리 중' 으로 추가한다(목데이터).
 
-    올리는 동안 버튼이 '업로드 중…' 으로 바뀌고 취소와 함께 잠긴다.
+    올리는 동안 버튼이 '업로드 중' 으로 바뀌고 취소와 함께 잠긴다.
     문서 업로드 기능(features/documents)이 생기면 여기서 그 함수를 부른다.
     """
     missing = [
@@ -116,7 +116,7 @@ def _upload(state: dict, dept: str, store: dict):
         return
     yield (
         *(gr.skip() for _ in range(6)),
-        ui.loading_button("업로드 중…", SUBMIT_CLASSES),
+        ui.loading_button("업로드 중", SUBMIT_CLASSES),
         gr.Button(interactive=False),
     )
     mock.wait()

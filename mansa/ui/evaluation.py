@@ -93,7 +93,7 @@ def _run():
     평가 스크립트가 생기면 진행률을 그 함수에서 받아 온다.
     """
     for percent in RUN_STEPS[:-1]:
-        yield run_card_html(percent=percent), ui.loading_button("실행 중…", RUN_CLASSES)
+        yield run_card_html(percent=percent), ui.loading_button("실행 중", RUN_CLASSES)
         mock.wait(mock.MOCK_DELAY / 2)
     now = datetime.now().strftime("%m/%d %H:%M")
     ui.notify("평가를 실행했어요 (목데이터라 결과 값은 그대로예요)")
