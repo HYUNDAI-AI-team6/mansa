@@ -779,10 +779,6 @@
 .member-table .who em {
   font-size: 12px;
 }
-/* 비활성 회원: Figma 처럼 줄 전체를 흐리게 (관리 버튼은 또렷하게) */
-.member-table .tr.off > span:not(:last-child) {
-  opacity: 0.45;
-}
 .mini-btn {
   height: 30px;
   padding: 0 12px;
