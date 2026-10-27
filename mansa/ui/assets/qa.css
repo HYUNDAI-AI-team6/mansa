@@ -594,3 +594,111 @@
   font: inherit;
   font-weight: 400;
 }
+
+/* ---------- 로딩 표시 ---------- */
+.typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid var(--card-border);
+  border-radius: 4px 18px 18px 18px;
+  padding: 12px 18px;
+  font-size: 13px;
+  color: var(--text2);
+}
+.dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--brand);
+  opacity: 0.3;
+  animation: dot-blink 1.2s ease-in-out infinite;
+}
+.dots i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.dots i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes dot-blink {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+.spin {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--brand);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+.sys-line.connecting {
+  justify-content: center;
+}
+.sys-line.connecting::before,
+.sys-line.connecting::after {
+  display: none;
+}
+.sys-line.connecting span:not(.spin) {
+  color: var(--text2);
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* 처리 중인 버튼: 파란색을 유지하고 앞에 빙글빙글 도는 원을 단다 */
+.gradio-container button.loading:disabled {
+  background: var(--brand) !important;
+  color: #fff !important;
+  opacity: 0.75;
+  cursor: progress;
+}
+.gradio-container button.loading::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 8px;
+  vertical-align: -2px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+.progress {
+  height: 6px;
+  max-width: 320px;
+  margin: 10px 0 6px;
+  border-radius: 999px;
+  background: var(--subtle);
+  overflow: hidden;
+}
+.progress span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--brand);
+  transition: width 0.4s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dots i,
+  .spin,
+  .gradio-container button.loading::before {
+    animation-duration: 2.4s;
+  }
+}

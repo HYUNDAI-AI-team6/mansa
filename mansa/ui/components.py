@@ -53,6 +53,25 @@ def ai_avatar() -> str:
     return f'<div class="ai-avatar">{icons.logo(24)}</div>'
 
 
+def typing_html(text: str, avatar: str = "") -> str:
+    """'답을 찾는 중' 말풍선: 점 세 개가 깜빡이고 무슨 일을 하는지 한 줄로 알려 준다."""
+    dots = '<span class="dots"><i></i><i></i><i></i></span>'
+    return (
+        f'<div class="bot-row typing-row" role="status">{avatar or ai_avatar()}'
+        f'<div class="typing">{dots}<span>{escape(text)}</span></div></div>'
+    )
+
+
+def loading_button(label: str, classes: list[str]) -> gr.Button:
+    """처리 중인 버튼: 글자가 바뀌고 빙글빙글 돌며 누를 수 없다."""
+    return gr.Button(value=label, interactive=False, elem_classes=[*classes, "loading"])
+
+
+def idle_button(label: str, classes: list[str]) -> gr.Button:
+    """처리가 끝난 버튼을 원래 모습으로 돌린다."""
+    return gr.Button(value=label, interactive=True, elem_classes=classes)
+
+
 def user_bubble(text: str) -> str:
     """오른쪽에 붙는 사용자 질문 말풍선."""
     return f'<div class="user-msg"><div class="bubble">{escape(text)}</div></div>'

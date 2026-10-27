@@ -15,6 +15,8 @@ from ui.page import PageView
 from ui.theme import BRAND, TEXT3
 
 MAX_MB = 50
+SUBMIT_CLASSES = ["btn-primary", "sm-btn"]
+CANCEL_CLASSES = ["btn-secondary", "sm-btn"]
 TYPE_ICON = {"기술 문서": ("file", "blue", "#2F54EB"), "안전 문서": ("shield", "orange", "#C2410C")}
 
 
@@ -97,9 +99,10 @@ def _reset() -> tuple:
     return _empty(), None, "", type_cards_html(""), ""
 
 
-def _upload(state: dict, dept: str, store: dict) -> tuple:
+def _upload(state: dict, dept: str, store: dict):
     """필수값을 확인하고 문서 목록에 '처리 중' 으로 추가한다(목데이터).
 
+    올리는 동안 버튼이 '업로드 중…' 으로 바뀌고 취소와 함께 잠긴다.
     문서 업로드 기능(features/documents)이 생기면 여기서 그 함수를 부른다.
     """
     missing = [
@@ -109,7 +112,14 @@ def _upload(state: dict, dept: str, store: dict) -> tuple:
     ]
     if missing:
         ui.warn(f"아직 정하지 않았어요: {' · '.join(missing)}")
-        return (store, *(gr.skip() for _ in range(5)))
+        yield tuple(gr.skip() for _ in range(8))
+        return
+    yield (
+        *(gr.skip() for _ in range(6)),
+        ui.loading_button("업로드 중…", SUBMIT_CLASSES),
+        gr.Button(interactive=False),
+    )
+    mock.wait()
     title = state["file"]["name"].rsplit(".", 1)[0]
     doc = {
         "title": title,
@@ -119,7 +129,12 @@ def _upload(state: dict, dept: str, store: dict) -> tuple:
         "date": datetime.now().strftime("%m/%d"),
     }
     ui.notify("업로드했어요. 문서 관리에서 처리 상태를 확인할 수 있어요")
-    return ({**store, "docs": [*store["docs"], doc]}, *_reset())
+    yield (
+        {**store, "docs": [*store["docs"], doc]},
+        *_reset(),
+        ui.idle_button("업로드", SUBMIT_CLASSES),
+        gr.Button(interactive=True),
+    )
 
 
 def build(store: gr.State) -> PageView:
@@ -142,17 +157,15 @@ def build(store: gr.State) -> PageView:
         gr.HTML('<h4 class="step">3. 소속 부서</h4>', padding=False)
         dept = ui.select_box(mock.DEPARTMENTS, "부서 선택", classes=["w-320"])
         with gr.Row(elem_classes=["form-actions"]):
-            cancel = gr.Button(
-                "취소", elem_classes=["btn-secondary", "sm-btn"], scale=0, min_width=0
-            )
-            submit = gr.Button(
-                "업로드", elem_classes=["btn-primary", "sm-btn"], scale=0, min_width=0
-            )
+            cancel = gr.Button("취소", elem_classes=CANCEL_CLASSES, scale=0, min_width=0)
+            submit = gr.Button("업로드", elem_classes=SUBMIT_CLASSES, scale=0, min_width=0)
 
     form = [state, file, dept, types, file_row]
     file.upload(_pick_file, [file, state], [state, file, file_row])
     file_row.select(_clear_file, state, [state, file_row])
     types.select(_pick_type, state, [state, types])
     cancel.click(_reset, None, form)
-    submit.click(_upload, [state, dept, store], [store, *form])
+    submit.click(
+        _upload, [state, dept, store], [store, *form, submit, cancel], show_progress="hidden"
+    )
     return PageView(_reset, [], form)

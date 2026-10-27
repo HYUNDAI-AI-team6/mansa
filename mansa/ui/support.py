@@ -55,9 +55,21 @@ def _message(msg: dict) -> str:
     return _bot(f'<div class="s-bubble">{escape(msg["text"])}</div>{chips}')
 
 
-def messages_html(state: dict) -> str:
-    """대화 전체."""
-    return f'<div class="s-msgs">{"".join(_message(m) for m in state["msgs"])}</div>'
+def _typing(kind: str) -> str:
+    """답을 기다리는 표시. kind 는 챗봇(bot) · 관리자(admin) · 연결 중(connect)."""
+    if kind == "connect":
+        spin = '<span class="spin"></span>'
+        return f'<div class="sys-line connecting">{spin}<span>관리자를 연결하고 있어요</span></div>'
+    if kind == "admin":
+        avatar = '<div class="admin-avatar">관</div>'
+        return ui.typing_html(f"{mock.ADMIN_NAME} 관리자가 입력하고 있어요", avatar)
+    return ui.typing_html("답변을 준비하고 있어요")
+
+
+def messages_html(state: dict, typing: str = "") -> str:
+    """대화 전체. typing 이 있으면 끝에 '기다리는 중' 표시를 붙인다."""
+    body = "".join(_message(m) for m in state["msgs"]) + (_typing(typing) if typing else "")
+    return f'<div class="s-msgs">{body}</div>'
 
 
 def status_html(connected: bool) -> str:
@@ -83,44 +95,60 @@ def _now() -> str:
     return datetime.now().strftime("%H:%M")
 
 
-def _render(state: dict) -> tuple:
-    """상태에 맞게 화면을 다시 그린다. 순서는 build() 의 outs 와 같다."""
+def _render(state: dict, typing: str = "") -> tuple:
+    """상태에 맞게 화면을 다시 그린다. 순서는 build() 의 outs 와 같다.
+
+    typing 이 있으면 대화 끝에 '기다리는 중' 표시를 붙이고 단추를 잠시 누를 수 없게 한다.
+    """
     on = state["connected"]
+    busy = bool(typing)
     return (
         state,
-        messages_html(state),
+        messages_html(state, typing),
         status_html(on),
-        gr.Button(visible=not on),
-        gr.Button(visible=not on),
-        gr.Button(visible=on),
+        gr.Button(visible=not on, interactive=not busy),
+        gr.Button(visible=not on, interactive=not busy),
+        gr.Button(visible=on, interactive=not busy),
         gr.Textbox(value="", placeholder=PLACEHOLDER[on]),
     )
 
 
-def _send(text: str, state: dict) -> tuple:
+def _waiting(state: dict, typing: str) -> tuple:
+    """답이 나오기 전 화면: 보낸 말과 '기다리는 중' 표시를 먼저 보여 준다."""
+    return (gr.skip(), *_render(state, typing)[1:])
+
+
+def _send(text: str, state: dict):
     """질문을 보낸다. 관리자와 연결 중이면 관리자에게, 아니면 챗봇이 답한다(목데이터)."""
     text = (text or "").strip()
     if not text:
-        return tuple(gr.skip() for _ in range(7))
+        yield tuple(gr.skip() for _ in range(7))
+        return
     state = {**state, "msgs": [*state["msgs"], {"who": "user", "text": text}]}
+    if state["connected"] and state["admin_replied"]:
+        yield _render(state)  # 관리자는 처음 한 번만 자동으로 답한다(그 뒤는 사람이 답하는 자리)
+        return
+    yield _waiting(state, "admin" if state["connected"] else "bot")
+    mock.wait()
     if state["connected"]:
-        if not state["admin_replied"]:
-            state["msgs"].append({"who": "admin", "text": "확인해 볼게요. 잠시만 기다려 주세요."})
-            state["admin_replied"] = True
+        state["msgs"].append({"who": "admin", "text": "확인해 볼게요. 잠시만 기다려 주세요."})
+        state["admin_replied"] = True
     else:
         state["msgs"].append({"who": "bot", **mock.mock_support(text)})
-    return _render(state)
+    yield _render(state)
 
 
-def _connect(state: dict) -> tuple:
-    """관리자 연결(목데이터): 관리자가 대화에 들어온 것처럼 보여 준다."""
+def _connect(state: dict):
+    """관리자 연결(목데이터): 잠시 '연결 중'을 보여 준 뒤 관리자가 들어온 것처럼 보여 준다."""
+    yield _waiting(state, "connect")
+    mock.wait()
     msgs = [
         *state["msgs"],
         {"who": "bot", "text": "가이드에서 답을 찾지 못했어요. 관리자에게 연결해 드릴게요."},
         {"who": "system", "text": f"{mock.ADMIN_NAME} 관리자가 대화에 들어왔어요 · {_now()}"},
         {"who": "admin", "text": f"안녕하세요, {mock.ADMIN_NAME}입니다. 무엇을 도와드릴까요?"},
     ]
-    return _render({"msgs": msgs, "connected": True, "admin_replied": False})
+    yield _render({"msgs": msgs, "connected": True, "admin_replied": False})
 
 
 def _end(state: dict) -> tuple:
@@ -129,14 +157,14 @@ def _end(state: dict) -> tuple:
     return _render({**state, "msgs": msgs, "connected": False})
 
 
-def _pick_chip(state: dict, evt: gr.SelectData) -> tuple:
+def _pick_chip(state: dict, evt: gr.SelectData):
     """인사말 아래 예시 질문 칩을 누르면 그 질문을 보낸다."""
-    return _send(mock.SUPPORT_CHIPS[evt.index], state)
+    yield from _send(mock.SUPPORT_CHIPS[evt.index], state)
 
 
-def _pick_faq(state: dict, evt: gr.SelectData) -> tuple:
+def _pick_faq(state: dict, evt: gr.SelectData):
     """오른쪽 자주 묻는 질문을 누르면 그 질문을 보낸다."""
-    return _send(mock.SUPPORT_FAQ[evt.index][1], state)
+    yield from _send(mock.SUPPORT_FAQ[evt.index][1], state)
 
 
 # ------------------------------------------------------------------ 화면
@@ -179,11 +207,11 @@ def build() -> None:
 
     outs = [state, msgs, status, connect, new, end, text]
     ui.enable_when_filled(text, send)
-    send.click(_send, [text, state], outs)
-    text.submit(_send, [text, state], outs)
-    msgs.select(_pick_chip, state, outs)
-    faq.select(_pick_faq, state, outs)
-    connect.click(_connect, state, outs)
+    send.click(_send, [text, state], outs, show_progress="hidden")
+    text.submit(_send, [text, state], outs, show_progress="hidden")
+    msgs.select(_pick_chip, state, outs, show_progress="hidden")
+    faq.select(_pick_faq, state, outs, show_progress="hidden")
+    connect.click(_connect, state, outs, show_progress="hidden")
     end.click(_end, state, outs)
     new.click(lambda: _render(_new_state()), None, outs)
     return None  # 메뉴를 옮겨 다녀도 고객센터 대화는 그대로 둔다

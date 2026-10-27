@@ -14,6 +14,8 @@ from ui import mock_data as mock
 from ui.theme import BRAND, TEXT2
 
 DEPT_COLOR = {"유지보수팀": "blue", "안전팀": "orange", "검사·품질팀": "teal"}
+QUIET = {"show_progress": "hidden"}  # 로딩은 우리가 그린 '찾는 중' 표시로 보여 준다
+THINKING_TEXT = "문서에서 답을 찾고 있어요"
 OUTPUT_COUNT = 15  # _render() 가 돌려주는 값 개수 = build() 의 outs 개수
 DISCLAIMER = '<p class="disclaimer">참고용 안내이며 법적 판단이 아닙니다.</p>'
 RULES = [
@@ -219,15 +221,18 @@ def _empty_state() -> dict:
     return {"turns": [], "pending": None, "model": ""}
 
 
-def _render(state: dict) -> tuple:
+def _render(state: dict, thinking: str = "") -> tuple:
     """대화 상태에 맞게 화면 전체(질문 전/대화, 되묻기, 근거 창 등)를 다시 그린다.
 
-    반환 순서는 build() 의 outputs 목록과 같다.
+    thinking 에 질문을 넣으면 그 질문 말풍선과 '답을 찾는 중' 표시를 대화 끝에 붙인다
+    (답이 나오기 전까지 보여 주는 로딩 화면). 반환 순서는 build() 의 outputs 목록과 같다.
     """
     turns, pending = state["turns"], state["pending"]
-    in_conv = bool(turns) or pending is not None
-    show_answer = pending is None and bool(turns) and turns[-1]["kind"] == "answer"
+    in_conv = bool(turns) or pending is not None or bool(thinking)
+    show_answer = not thinking and pending is None and bool(turns) and turns[-1]["kind"] == "answer"
     convo = turns_html(turns) + (ui.user_bubble(pending["q"]) if pending else "")
+    if thinking:
+        convo += ui.user_bubble(thinking) + ui.typing_html(THINKING_TEXT)
     return (
         state,
         gr.Column(visible=not in_conv),
@@ -236,7 +241,7 @@ def _render(state: dict) -> tuple:
         gr.Row(visible=pending is not None),
         gr.Column(visible=show_answer),
         gr.HTML(visible=show_answer),
-        gr.HTML(visible=in_conv and not show_answer),
+        gr.HTML(visible=in_conv and not show_answer and not thinking),
         source_html(mock.SOURCES[0]),
         "매뉴얼",
         "",
@@ -247,17 +252,26 @@ def _render(state: dict) -> tuple:
     )
 
 
-def _ask(question: str, model: str, state: dict) -> tuple:
+def _thinking(state: dict, question: str) -> tuple:
+    """답이 나오기 전 화면: 질문과 '답을 찾는 중'을 먼저 보여 준다(대화 상태는 아직 안 바꾼다)."""
+    return (gr.skip(), *_render(state, thinking=question.strip())[1:])
+
+
+def _ask(question: str, model: str, state: dict):
     """질문을 보내고 결과(답변·되묻기·답변 불가)를 대화에 더한다. 빈 질문은 무시한다.
 
+    먼저 '찾는 중' 화면을 보여 주고, 결과가 나오면 그 화면으로 바꾼다.
     지금은 mock_data.mock_ask 를 부른다. 기술 Q&A 기능이 생기면 그 함수로 바꾼다.
     """
     if not (question or "").strip():
-        return tuple(gr.skip() for _ in range(OUTPUT_COUNT))
+        yield tuple(gr.skip() for _ in range(OUTPUT_COUNT))
+        return
     turns = list(state["turns"])
     if state["pending"] is not None:
         turns.append({"q": state["pending"]["q"], "kind": "clarify"})
     state = {"turns": turns, "pending": None, "model": model or state["model"]}
+    yield _thinking(state, question)
+    mock.wait()
     result = mock.mock_ask(question, state["model"])
     if result["type"] == "clarify":
         state["pending"] = {"q": question.strip()}
@@ -266,17 +280,20 @@ def _ask(question: str, model: str, state: dict) -> tuple:
         state["model"] = result["answer"].model  # 이어지는 질문도 같은 모델로 찾는다
     else:
         state["turns"].append({"q": question.strip(), "kind": "no_answer"})
-    return _render(state)
+    yield _render(state)
 
 
-def _continue(model: str, part: str, state: dict) -> tuple:
+def _continue(model: str, part: str, state: dict):
     """되묻기에서 고른 모델로 답변을 만든다. part 는 지금 목데이터에서는 쓰지 않는다."""
     if state["pending"] is None:
-        return _render(state)
+        yield _render(state)
+        return
     question = state["pending"]["q"]
+    yield _thinking({**state, "pending": None}, question)
+    mock.wait()
     answer = mock.mock_answer_for(question, model)
     turns = state["turns"] + [{"q": question, "kind": "answer", "answer": answer}]
-    return _render({"turns": turns, "pending": None, "model": model})
+    yield _render({"turns": turns, "pending": None, "model": model})
 
 
 def _cancel(state: dict) -> tuple:
@@ -290,9 +307,9 @@ def _pick_source(evt: gr.SelectData) -> tuple[str, str]:
     return source_html(src), src.kind
 
 
-def _pick_recent(state: dict, evt: gr.SelectData) -> tuple:
+def _pick_recent(state: dict, evt: gr.SelectData):
     """최근 질문 줄을 누르면 그 질문을 다시 보낸다(목데이터)."""
-    return _ask(mock.RECENT_QUESTIONS[evt.index]["title"], "", state)
+    yield from _ask(mock.RECENT_QUESTIONS[evt.index]["title"], "", state)
 
 
 def _model_classes(model: str) -> gr.Dropdown:
@@ -460,18 +477,18 @@ def build(test_mode: bool = False) -> QAView:
     outs += [ask["text"], conv["follow"]]
     outs += [conv["clar_model"], conv["clar_part"], conv["cont"]]
 
-    ask["ask"].click(_ask, [ask["text"], ask["model"], state], outs)
-    ask["text"].submit(_ask, [ask["text"], ask["model"], state], outs)
-    conv["send"].click(_ask, [conv["follow"], ask["model"], state], outs)
-    conv["follow"].submit(_ask, [conv["follow"], ask["model"], state], outs)
+    ask["ask"].click(_ask, [ask["text"], ask["model"], state], outs, **QUIET)
+    ask["text"].submit(_ask, [ask["text"], ask["model"], state], outs, **QUIET)
+    conv["send"].click(_ask, [conv["follow"], ask["model"], state], outs, **QUIET)
+    conv["follow"].submit(_ask, [conv["follow"], ask["model"], state], outs, **QUIET)
     for btn, text in zip(ask["examples"], mock.EXAMPLE_QUESTIONS, strict=True):
         btn.click(lambda t=text: t, None, ask["text"])
     if "recent" in ask:
-        ask["recent"].select(_pick_recent, state, outs)
+        ask["recent"].select(_pick_recent, state, outs, **QUIET)
     ui.enable_when_filled(ask["text"], ask["ask"])
     ui.enable_when_filled(conv["follow"], conv["send"])
     ui.enable_when_chosen([conv["clar_model"], conv["clar_part"]], conv["cont"])
-    conv["cont"].click(_continue, [conv["clar_model"], conv["clar_part"], state], outs)
+    conv["cont"].click(_continue, [conv["clar_model"], conv["clar_part"], state], outs, **QUIET)
     conv["cancel"].click(_cancel, state, outs)
     conv["src_list"].select(_pick_source, None, [conv["viewer"], conv["src_tab"]])
     conv["src_tab"].input(_pick_tab, conv["src_tab"], conv["viewer"])

@@ -15,12 +15,23 @@ FLOW_TAG = {"L2": "blue", "L3": "purple"}
 CAUSE_TAG = {"검색": "red", "조회": "orange", "생성": "red"}
 
 
-def run_card_html(last_run: str) -> str:
-    """테스트셋 카드 왼쪽 내용 (이름 · 설명 · 마지막 실행)."""
+RUN_STEPS = [10, 35, 60, 85, 100]  # 실행 중 보여 줄 진행률(%)
+RUN_CLASSES = ["btn-primary", "sm-btn"]
+
+
+def run_card_html(last_run: str = "", percent: int | None = None) -> str:
+    """테스트셋 카드 왼쪽 내용 (이름 · 설명 · 마지막 실행). percent 가 있으면 진행 막대."""
+    if percent is None:
+        foot = f'<span class="cap">마지막 실행 {escape(last_run)}</span>'
+    else:
+        foot = (
+            '<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" '
+            f'aria-valuenow="{percent}"><span style="width:{percent}%"></span></div>'
+            f'<span class="cap">평가하는 중이에요 · {percent}%</span>'
+        )
     return (
         f'<div class="run-info"><div class="title">{escape(mock.EVAL_SET["title"])}'
-        f"{ui.tag('L2', 'blue')}</div><p>{escape(mock.EVAL_SET['desc'])}</p>"
-        f'<span class="cap">마지막 실행 {escape(last_run)}</span></div>'
+        f"{ui.tag('L2', 'blue')}</div><p>{escape(mock.EVAL_SET['desc'])}</p>{foot}</div>"
     )
 
 
@@ -76,17 +87,24 @@ def export_csv() -> str:
     return path
 
 
-def _run() -> str:
-    """평가 실행(목데이터): 마지막 실행 시각만 바꾼다. 평가 스크립트가 생기면 그 함수를 부른다."""
+def _run():
+    """평가 실행(목데이터): 진행 막대를 채운 뒤 마지막 실행 시각만 바꾼다.
+
+    평가 스크립트가 생기면 진행률을 그 함수에서 받아 온다.
+    """
+    for percent in RUN_STEPS[:-1]:
+        yield run_card_html(percent=percent), ui.loading_button("실행 중…", RUN_CLASSES)
+        mock.wait(mock.MOCK_DELAY / 2)
+    now = datetime.now().strftime("%m/%d %H:%M")
     ui.notify("평가를 실행했어요 (목데이터라 결과 값은 그대로예요)")
-    return run_card_html(datetime.now().strftime("%m/%d %H:%M"))
+    yield run_card_html(now), ui.idle_button("평가 실행", RUN_CLASSES)
 
 
 def build() -> None:
     """평가 화면을 만든다. 메뉴를 옮겨도 마지막 실행 시각은 그대로 둔다."""
     with gr.Row(elem_classes=["card", "run-card"]):
         info = gr.HTML(run_card_html(mock.EVAL_SET["last_run"]), padding=False, scale=1)
-        run = gr.Button("평가 실행", elem_classes=["btn-primary", "sm-btn"], scale=0, min_width=0)
+        run = gr.Button("평가 실행", elem_classes=RUN_CLASSES, scale=0, min_width=0)
     gr.HTML(ui.section_title("기술 Q&A 결과"), padding=False)
     gr.HTML(metrics_html(), padding=False)
     with gr.Row(elem_classes=["body-row"]):
@@ -98,4 +116,4 @@ def build() -> None:
                 value=export_csv,
                 elem_classes=["btn-secondary", "sm-btn", "full"],
             )
-    run.click(_run, None, info)
+    run.click(_run, None, [info, run], show_progress="hidden")

@@ -5,12 +5,21 @@ features/ 기능이 붙기 전까지 화면이 이 값을 사용한다.
 """
 
 import copy
+import time
 from dataclasses import dataclass, field
 
 MODELS = ["[모델 A]", "[모델 B]", "[모델 C]"]
 DEPARTMENTS = ["유지보수팀", "안전팀", "검사·품질팀"]
 
 # ---------------------------------------------------------------- 로그인
+MOCK_DELAY = 1.2  # 시연용 대기 시간(초): 실제 처리 시간을 흉내 낸다
+
+
+def wait(seconds: float | None = None) -> None:
+    """실제 검색·생성·업로드 처리 시간을 흉내 낸다. 진짜 기능을 연결하면 이 호출을 지운다."""
+    time.sleep(MOCK_DELAY if seconds is None else seconds)
+
+
 MOCK_ACCOUNTS = {
     "user": {"name": "홍길동", "dept": "유지보수팀"},
     "admin": {"name": "김안전", "dept": "관리자"},
