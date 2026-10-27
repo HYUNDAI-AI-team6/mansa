@@ -134,7 +134,7 @@ class EvalReport:
 
 
 @dataclass(frozen=True)
-class Progress:
+class EvalProgress:
     """실행 중 진행 상황. done은 답변을 받은 문항 수다."""
 
     done: int

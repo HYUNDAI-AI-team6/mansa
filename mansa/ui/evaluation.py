@@ -11,7 +11,12 @@ from features.dashboard.evaluation import storage
 from features.dashboard.evaluation.answerer import CodexAnswerer
 from features.dashboard.evaluation.codex_cli import CodexError, find_codex
 from features.dashboard.evaluation.judge import CodexJudge
-from features.dashboard.evaluation.models import LATENCY_UNITS, METRIC_NAMES, EvalReport, Progress
+from features.dashboard.evaluation.models import (
+    LATENCY_UNITS,
+    METRIC_NAMES,
+    EvalProgress,
+    EvalReport,
+)
 from features.dashboard.evaluation.runner import run_evaluation
 from features.dashboard.evaluation.testset import TestSetError, load_testset
 from ui import components as ui
@@ -171,7 +176,7 @@ def _view(report: EvalReport | None) -> tuple:
     )
 
 
-def _progress(event: Progress) -> tuple[str, int]:
+def _progress(event: EvalProgress) -> tuple[str, int]:
     """진행 상황을 (안내 문구, 전체 %)로 바꾼다. 답변 받기가 앞 절반, 채점이 뒤 절반이다."""
     total = max(event.total, 1)
     half = 50 * event.done // total
@@ -194,7 +199,7 @@ def _run():
         find_codex()
         events = run_evaluation(CodexAnswerer(), CodexJudge())
         for event in events:
-            if isinstance(event, Progress):
+            if isinstance(event, EvalProgress):
                 caption, percent = _progress(event)
                 card = run_card_html(caption=caption, percent=percent)
                 yield card, ui.loading_button("실행 중", RUN_CLASSES), *skip
