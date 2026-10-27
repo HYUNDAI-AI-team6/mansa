@@ -36,6 +36,7 @@ class Shell:
     view: gr.Row
     sides: dict[str, gr.Column]
     navs: dict[str, gr.Button]
+    logos: dict[str, gr.HTML]  # 권한 -> 눌러서 첫 메뉴로 가는 로고
     logouts: list[gr.Button]
     header: gr.HTML
     pages: dict[str, gr.Column]
@@ -67,26 +68,26 @@ def _build_page(key: str, store: gr.State, user: gr.State):
     return builders[key]()
 
 
-def _build_sidebar(role: str) -> tuple[gr.Column, dict, gr.Button]:
+def _build_sidebar(role: str) -> tuple[gr.Column, gr.HTML, dict, gr.Button]:
     """권한별 왼쪽 메뉴바(사용자: 흰색, 관리자: 파란색)를 만든다."""
     admin = role == "admin"
     classes = ["sidebar", "admin"] if admin else ["sidebar"]
     with gr.Column(elem_classes=classes, visible=False, scale=0, min_width=96) as column:
-        gr.HTML(ui.logo_html(40, admin), padding=False, elem_classes=["logo-block"])
+        logo = ui.click_list(ui.logo_html(40, admin, link=True), elem_classes=["logo-block"])
         buttons = {
             p.key: gr.Button(p.label, elem_classes=["nav-btn", f"ic-{p.icon}"])
             for p in navigation.pages_for(role)
         }
         gr.HTML("", padding=False, elem_classes=["grow"])
         logout = gr.Button("로그아웃", elem_classes=["nav-btn", "ic-logout"])
-    return column, buttons, logout
+    return column, logo, buttons, logout
 
 
 def _build_shell(store: gr.State, user: gr.State) -> Shell:
     """메뉴바와 모든 화면을 만든다. 처음에는 숨겨 두고 로그인하면 보인다."""
     with gr.Row(elem_id="shell", visible=False) as view:
-        side_user, nav_user, logout_user = _build_sidebar("user")
-        side_admin, nav_admin, logout_admin = _build_sidebar("admin")
+        side_user, logo_user, nav_user, logout_user = _build_sidebar("user")
+        side_admin, logo_admin, nav_admin, logout_admin = _build_sidebar("admin")
         with gr.Column(elem_id="main"):
             header = gr.HTML(padding=False, elem_classes=["header-block"])
             pages, resettable = {}, {}
@@ -97,7 +98,8 @@ def _build_shell(store: gr.State, user: gr.State) -> Shell:
                     resettable[page.key] = built
     sides = {"user": side_user, "admin": side_admin}
     navs = {**nav_user, **nav_admin}
-    return Shell(view, sides, navs, [logout_user, logout_admin], header, pages, resettable)
+    logos = {"user": logo_user, "admin": logo_admin}
+    return Shell(view, sides, navs, logos, [logout_user, logout_admin], header, pages, resettable)
 
 
 def _nav_classes(key: str, active: bool) -> list[str]:
@@ -127,6 +129,10 @@ def _wire_nav(shell: Shell, user: gr.State) -> None:
     for key, button in shell.navs.items():
         event = button.click(lambda u, k=key: _show(k, u, nav_keys), user, shell.nav_outputs())
         _then_reset(event, shell.resettable.get(key))
+    for role, logo in shell.logos.items():  # 로고를 누르면 그 권한의 첫 메뉴로
+        home = HOME[role]
+        event = logo.select(lambda u, k=home: _show(k, u, nav_keys), user, shell.nav_outputs())
+        _then_reset(event, shell.resettable.get(home))
 
 
 def _wire_links(shell: Shell, user: gr.State) -> None:

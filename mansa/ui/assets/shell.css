@@ -32,6 +32,17 @@
   justify-content: center;
   height: 40px;
 }
+.sidebar .logo.link {
+  cursor: pointer;
+}
+.sidebar .logo.link:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+.sidebar.admin .logo.link:focus-visible {
+  outline-color: #fff;
+}
 .sidebar .block.logo-block {
   margin-bottom: 24px !important;
 }

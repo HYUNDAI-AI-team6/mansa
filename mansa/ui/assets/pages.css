@@ -766,11 +766,14 @@
 
 /* ---------- 회원 관리 ---------- */
 .member-table .letter {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
   border-radius: 50%;
-  font-size: 12px;
+  font-size: 14px;
+}
+.member-table .tr > span:first-child {
+  gap: 10px;
 }
 .member-table .who {
   display: flex;

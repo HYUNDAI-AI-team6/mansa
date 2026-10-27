@@ -36,9 +36,15 @@ def page_header(title: str, description: str | None, user: dict | None) -> str:
     return f'<div class="page-header"><div><h1>{escape(title)}</h1>{desc}</div>{account}</div>'
 
 
-def logo_html(size: int = 40, admin: bool = False) -> str:
-    """메뉴바 맨 위 서비스 심볼. 관리자 메뉴바에서는 흰색으로 그린다."""
+def logo_html(size: int = 40, admin: bool = False, link: bool = False) -> str:
+    """메뉴바 맨 위 서비스 심볼. 관리자 메뉴바에서는 흰색으로 그린다.
+
+    link=True 이면 누르면 첫 메뉴로 가는 버튼이 된다(click_list 와 함께 쓴다).
+    """
     art = icons.logo(size, "#FFFFFF", "rgba(255,255,255,0.5)") if admin else icons.logo(size)
+    if link:
+        attrs = 'data-i="0" role="button" tabindex="0" aria-label="첫 화면으로"'
+        return f'<div class="logo link" {attrs}>{art}</div>'
     return f'<div class="logo">{art}</div>'
 
 
@@ -59,9 +65,16 @@ def icon(name: str, color: str = TEXT2, size: int = 20) -> str:
 
 # 목록 HTML 안에서 data-i 가 붙은 줄(버튼)을 누르면 .select 이벤트로 번호를 보낸다.
 # data-v 가 있으면 value 로 함께 보낸다 (예: "edit", "toggle" 처럼 어떤 버튼인지 구분).
-CLICK_JS = """element.addEventListener('click', (e) => {
+CLICK_JS = """const pick = (e) => {
   const row = e.target.closest('[data-i]');
   if (row) trigger('select', {index: Number(row.dataset.i), value: row.dataset.v || ''});
+};
+element.addEventListener('click', pick);
+element.addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role=button]')) {
+    e.preventDefault();
+    pick(e);
+  }
 });"""
 
 
