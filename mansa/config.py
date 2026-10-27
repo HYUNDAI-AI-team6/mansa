@@ -7,6 +7,8 @@ load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 LLM_API_KEY = os.getenv("LLM_API_KEY")
+LLM_MODEL = os.getenv("LLM_MODEL")
+
 
 TECH_CHROMA_HOST = os.getenv("TECH_CHROMA_HOST")
 SECURE_CHROMA_HOST = os.getenv("SECURE_CHROMA_HOST")
