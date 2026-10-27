@@ -5,7 +5,6 @@ import unicodedata
 from statistics import mean
 
 from features.evaluation.models import (
-    LATENCY_UNITS,
     AnswerRecord,
     CaseScore,
     Failure,
@@ -196,10 +195,10 @@ def _join(values: list[str]) -> str:
 
 
 def compute_latency(records: list[AnswerRecord]) -> dict[str, float | None]:
-    """측정값이 있는 문항만으로 기술 Q&A 평균 지연·토큰을 계산한다. 고객센터 항목은 None이다."""
+    """측정값이 있는 문항만으로 기술 Q&A 평균 지연·토큰을 계산한다. 측정값이 없으면 None이다."""
     latencies = [r.latency_sec for r in records if r.latency_sec is not None]
     tokens = [r.tokens for r in records if r.tokens is not None]
-    result: dict[str, float | None] = dict.fromkeys(LATENCY_UNITS)
-    result["기술 Q&A 평균 지연"] = mean(latencies) if latencies else None
-    result["기술 Q&A 평균 토큰"] = mean(tokens) if tokens else None
-    return result
+    return {
+        "기술 Q&A 평균 지연": mean(latencies) if latencies else None,
+        "기술 Q&A 평균 토큰": mean(tokens) if tokens else None,
+    }
