@@ -37,6 +37,7 @@ def run_evaluation(
     records: list[AnswerRecord] = []
     yield EvalProgress(0, total)
     for case in testset.cases:
+        # 여기서 LLM이 답함
         records.append(answerer.answer(case))
         yield EvalProgress(len(records), total)
     answers_path = storage.save_answers(
@@ -91,6 +92,7 @@ def _score(
     for done, (case, record) in enumerate(zip(testset.cases, records), start=1):
         # 채점 LLM이 돌아가는 곳
         judgement = None if record.error else judge.judge(case, record)
+        # 코드로 채점하는곳
         score = scoring.score_case(case, record, judgement)
         scores.append(score)
         failure = scoring.classify_failure(case, record, score, judgement)
