@@ -1,0 +1,48 @@
+{
+  "title": "기술 Q&A 테스트셋",
+  "description": "정답 수치·정답 근거 포함 (임시 문항, 정답은 실제 문서 확정 전 임시값)",
+  "cases": [
+    {
+      "id": "T01",
+      "question": "[모델 A] 메인 로프 교체 기준이 뭐야?",
+      "workflow": "L2",
+      "expected_numbers": ["10%"],
+      "expected_sources": ["manual-model-a:5.3.2"]
+    },
+    {
+      "id": "T02",
+      "question": "비상정지장치 작동 시험 순서 알려줘",
+      "workflow": "L2",
+      "expected_numbers": ["5.6절"],
+      "expected_sources": ["manual-model-a:5.6"]
+    },
+    {
+      "id": "T03",
+      "question": "권상기 브레이크 갭 기준값은?",
+      "workflow": "L2",
+      "expected_numbers": ["0.5 mm"],
+      "expected_sources": ["spec-model-a:3.2"]
+    },
+    {
+      "id": "T04",
+      "question": "[모델 B] 정격하중은 몇 kg이야?",
+      "workflow": "L3",
+      "expected_numbers": ["1000 kg"],
+      "expected_sources": []
+    },
+    {
+      "id": "T05",
+      "question": "[모델 A] 정격속도 알려줘",
+      "workflow": "L3",
+      "expected_numbers": ["105 m/min"],
+      "expected_sources": []
+    },
+    {
+      "id": "T06",
+      "question": "도어 센서 감도 조정할 때 안전 요건은?",
+      "workflow": "L2",
+      "expected_numbers": [],
+      "expected_sources": ["safety-rule:door-01", "manual-model-a:7.1"]
+    }
+  ]
+}
