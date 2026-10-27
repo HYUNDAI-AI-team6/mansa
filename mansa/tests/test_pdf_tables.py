@@ -1,3 +1,4 @@
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -5,7 +6,11 @@ from unittest import mock
 
 import pymupdf
 
-from features.processing.pdf_tables import extract_pdf_tables
+from features.processing.pdf_tables import (
+    extract_pdf_tables,
+    is_reliable_table,
+    restore_split_number,
+)
 from features.processing.pdf_text import PdfExtractionError
 
 PDF_DIR = Path(__file__).resolve().parents[2] / "data" / "pdfs"
@@ -110,6 +115,48 @@ class ExtractPdfTablesTest(unittest.TestCase):
             extract_pdf_tables(enc)
 
 
+class RestoreSplitNumberTest(unittest.TestCase):
+    BOX = (0, 0, 50, 20)
+    WORDS = [(5, 5, 40, 15, "0.37", 0, 0, 0), (200, 5, 240, 15, "9.99", 1, 0, 0)]
+
+    def test_restores_number_from_words_in_cell(self) -> None:
+        self.assertEqual(restore_split_number("0 37\n.", self.BOX, self.WORDS), "0.37")
+
+    def test_restores_number_with_trailing_comma(self) -> None:
+        words = [(5, 5, 40, 15, "1,000", 0, 0, 0)]
+        self.assertEqual(restore_split_number("1 000\n,", self.BOX, words), "1,000")
+
+    def test_leaves_text_cell_unchanged(self) -> None:
+        self.assertEqual(restore_split_number("문장입니다\n.", self.BOX, self.WORDS), "문장입니다\n.")
+
+    def test_leaves_normal_number_unchanged(self) -> None:
+        self.assertEqual(restore_split_number("0 37", self.BOX, self.WORDS), "0 37")
+
+    def test_keeps_original_when_no_word_in_cell(self) -> None:
+        self.assertEqual(restore_split_number("0 37\n.", (100, 100, 150, 120), self.WORDS), "0 37\n.")
+
+    def test_keeps_original_when_cell_box_missing(self) -> None:
+        self.assertEqual(restore_split_number("0 37\n.", None, self.WORDS), "0 37\n.")
+
+
+class IsReliableTableTest(unittest.TestCase):
+    def test_normal_table_is_reliable(self) -> None:
+        self.assertTrue(is_reliable_table(10, 5, 0.2))
+
+    def test_too_many_empty_cells_is_unreliable(self) -> None:
+        self.assertFalse(is_reliable_table(10, 5, 0.51))
+
+    def test_half_empty_is_still_reliable(self) -> None:
+        self.assertTrue(is_reliable_table(10, 5, 0.5))
+
+    def test_tiny_table_is_unreliable(self) -> None:
+        self.assertFalse(is_reliable_table(2, 2, 0.0))
+        self.assertFalse(is_reliable_table(1, 2, 0.0))
+
+    def test_two_rows_with_many_columns_is_reliable(self) -> None:
+        self.assertTrue(is_reliable_table(2, 6, 0.0))
+
+
 @unittest.skipUnless(PDF_DIR.is_dir(), "data/pdfs/ not found")
 class RealPdfTablesTest(unittest.TestCase):
     """data/pdfs/ 의 실제 PDF 3개 확인. 원본은 Git에 없으므로 파일이 있을 때만 실행한다."""
@@ -144,6 +191,37 @@ class RealPdfTablesTest(unittest.TestCase):
         self.assertEqual(len(result.table_pages), 39)
         self.assertEqual(result.failed_pages, [])
         self.assertEqual(result.tables_on_page(148)[0].rows[0][0], "기준항목")
+
+    @unittest.skipUnless(SAFETY_PDF.is_file(), "safety pdf not found")
+    def test_safety_split_numbers_are_restored(self) -> None:
+        result = extract_pdf_tables(SAFETY_PDF)
+
+        cells = [c for c in (x for r in result.tables_on_page(51)[0].rows for x in r)]
+        self.assertIn("0.37", cells)
+        self.assertIn("2.20", cells)
+        split = re.compile(r"\n[.,]( [.,])*\s*$")
+        leftover = [
+            c
+            for t in result.tables
+            for row in t.rows
+            for c in row
+            if split.search(c) and not re.search(r"[A-Za-z가-힣]", c)
+        ]
+        self.assertEqual(leftover, [])
+
+    @unittest.skipUnless(
+        SAFETY_PDF.is_file() and ELTRON_PDF.is_file() and LUXEN_PDF.is_file(), "pdfs not found"
+    )
+    def test_unreliable_tables_on_real_pdfs(self) -> None:
+        bad = {
+            ELTRON_PDF: [(9, 0)],
+            LUXEN_PDF: [(26, 0), (27, 0)],
+            SAFETY_PDF: [(193, 0), (197, 0), (199, 0)],
+        }
+        for pdf, expected in bad.items():
+            result = extract_pdf_tables(pdf)
+            found = [(t.page_no, t.table_index) for t in result.tables if not t.is_reliable]
+            self.assertEqual(found, expected, pdf.name)
 
 
 if __name__ == "__main__":
