@@ -102,17 +102,45 @@ def chat_html(value: str = "", **kwargs) -> gr.HTML:
     return gr.HTML(value, js_on_load=SCROLL_JS, padding=False, **kwargs)
 
 
-def chip_radio(choices: list, value=None, **kwargs) -> gr.Radio:
-    """알약 모양 버튼으로 보이는 하나 고르기. value 가 없으면 첫 항목을 고른다."""
+def chip_radio(choices: list, value=None, empty: bool = False, **kwargs) -> gr.Radio:
+    """알약 모양 버튼으로 보이는 하나 고르기. value 가 없으면 첫 항목을 고른다.
+
+    empty=True 이면 아무것도 고르지 않은 채로 시작한다(되묻기 카드처럼 직접 골라야 할 때).
+    """
     first = choices[0][1] if isinstance(choices[0], tuple) else choices[0]
+    if value is None and not empty:
+        value = first
     return gr.Radio(
         choices,
-        value=first if value is None else value,
+        value=value,
         show_label=False,
         container=False,
         elem_classes=["chip-radio"],
         **kwargs,
     )
+
+
+def enable_when_filled(text: gr.Textbox, button: gr.Button) -> None:
+    """글자가 들어 있을 때만 버튼을 켠다 (비어 있으면 회색으로 눌리지 않는다)."""
+    text.change(
+        lambda t: gr.Button(interactive=bool((t or "").strip())),
+        text,
+        button,
+        show_progress="hidden",
+        queue=False,
+    )
+
+
+def enable_when_chosen(radios: list[gr.Radio], button: gr.Button) -> None:
+    """모두 골랐을 때만 버튼을 켠다."""
+    for radio in radios:
+        radio.change(
+            lambda *values: gr.Button(interactive=all(values)),
+            radios,
+            button,
+            show_progress="hidden",
+            queue=False,
+        )
 
 
 def select_box(

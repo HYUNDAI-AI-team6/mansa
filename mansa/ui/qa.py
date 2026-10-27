@@ -14,7 +14,7 @@ from ui import mock_data as mock
 from ui.theme import BRAND, TEXT2
 
 DEPT_COLOR = {"유지보수팀": "blue", "안전팀": "orange", "검사·품질팀": "teal"}
-OUTPUT_COUNT = 12  # _render() 가 돌려주는 값 개수 = build() 의 outs 개수
+OUTPUT_COUNT = 15  # _render() 가 돌려주는 값 개수 = build() 의 outs 개수
 DISCLAIMER = '<p class="disclaimer">참고용 안내이며 법적 판단이 아닙니다.</p>'
 RULES = [
     ("chat", "모델·부위가 비었거나 후보가 여럿", "실제 등록된 후보로 선택지를 보여 줘요"),
@@ -241,6 +241,9 @@ def _render(state: dict) -> tuple:
         "매뉴얼",
         "",
         "",
+        None,  # 되묻기 카드: 모델·부위는 매번 새로 고르고
+        None,
+        gr.Button(interactive=False),  # 둘 다 고르기 전에는 '선택하고 계속'을 막는다
     )
 
 
@@ -368,7 +371,11 @@ def _question_card(c: dict) -> None:
                 ]
                 gr.HTML("", padding=False, scale=1)
                 c["ask"] = gr.Button(
-                    "질문하기", elem_classes=["btn-primary"], scale=0, min_width=110
+                    "질문하기",
+                    elem_classes=["btn-primary"],
+                    scale=0,
+                    min_width=110,
+                    interactive=False,
                 )
 
 
@@ -392,7 +399,9 @@ def _build_conv(test_mode: bool) -> dict:
                         max_lines=3,
                         elem_classes=["chat-text"],
                     )
-                    c["send"] = gr.Button("", elem_classes=["send-btn"], scale=0, min_width=40)
+                    c["send"] = gr.Button(
+                        "", elem_classes=["send-btn"], scale=0, min_width=40, interactive=False
+                    )
             with gr.Column(elem_classes=["right-panel", "wide", "side-scroll"]):
                 _source_panel(c)
                 c["rules"] = gr.HTML(rules_html(), visible=False, padding=False)
@@ -410,12 +419,16 @@ def _clarify_card(c: dict) -> None:
                 '<span class="label">설비 모델</span>',
                 padding=False,
             )
-            c["clar_model"] = ui.chip_radio(mock.MODELS)
+            c["clar_model"] = ui.chip_radio(mock.MODELS, empty=True)
             gr.HTML('<span class="label">부위</span>', padding=False)
-            c["clar_part"] = ui.chip_radio(mock.CLARIFY_PARTS)
+            c["clar_part"] = ui.chip_radio(mock.CLARIFY_PARTS, empty=True)
             with gr.Row(elem_classes=["clarify-actions"]):
                 c["cont"] = gr.Button(
-                    "선택하고 계속", elem_classes=["btn-primary", "sm-btn"], scale=0, min_width=0
+                    "선택하고 계속",
+                    elem_classes=["btn-primary", "sm-btn"],
+                    scale=0,
+                    min_width=0,
+                    interactive=False,
                 )
                 c["cancel"] = gr.Button(
                     "취소", elem_classes=["btn-secondary", "sm-btn"], scale=0, min_width=0
@@ -445,6 +458,7 @@ def build(test_mode: bool = False) -> QAView:
     outs = [state, ask["view"], conv["view"], conv["turns"], conv["clarify"]]
     outs += [conv["src_panel"], conv["src_list"], conv["rules"], conv["viewer"], conv["src_tab"]]
     outs += [ask["text"], conv["follow"]]
+    outs += [conv["clar_model"], conv["clar_part"], conv["cont"]]
 
     ask["ask"].click(_ask, [ask["text"], ask["model"], state], outs)
     ask["text"].submit(_ask, [ask["text"], ask["model"], state], outs)
@@ -454,6 +468,9 @@ def build(test_mode: bool = False) -> QAView:
         btn.click(lambda t=text: t, None, ask["text"])
     if "recent" in ask:
         ask["recent"].select(_pick_recent, state, outs)
+    ui.enable_when_filled(ask["text"], ask["ask"])
+    ui.enable_when_filled(conv["follow"], conv["send"])
+    ui.enable_when_chosen([conv["clar_model"], conv["clar_part"]], conv["cont"])
     conv["cont"].click(_continue, [conv["clar_model"], conv["clar_part"], state], outs)
     conv["cancel"].click(_cancel, state, outs)
     conv["src_list"].select(_pick_source, None, [conv["viewer"], conv["src_tab"]])

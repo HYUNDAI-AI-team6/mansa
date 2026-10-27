@@ -480,6 +480,13 @@
   align-items: center;
   justify-content: center;
 }
+.gradio-container button.send-btn:disabled {
+  background: #e5e7eb !important;
+  cursor: not-allowed;
+}
+.gradio-container button.send-btn:disabled::before {
+  opacity: 0.9;
+}
 .gradio-container button.send-btn::before {
   content: "";
   width: 20px;

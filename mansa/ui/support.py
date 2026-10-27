@@ -171,11 +171,14 @@ def build() -> None:
                     max_lines=3,
                     elem_classes=["chat-text"],
                 )
-                send = gr.Button("", elem_classes=["send-btn"], scale=0, min_width=40)
+                send = gr.Button(
+                    "", elem_classes=["send-btn"], scale=0, min_width=40, interactive=False
+                )
         with gr.Column(elem_classes=["right-panel", "side-scroll"]):
             faq = ui.click_list(faq_html())
 
     outs = [state, msgs, status, connect, new, end, text]
+    ui.enable_when_filled(text, send)
     send.click(_send, [text, state], outs)
     text.submit(_send, [text, state], outs)
     msgs.select(_pick_chip, state, outs)
