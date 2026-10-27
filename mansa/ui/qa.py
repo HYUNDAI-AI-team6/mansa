@@ -330,18 +330,10 @@ def _build_ask(test_mode: bool) -> dict:
     with gr.Column(elem_classes=["qa-ask"]) as c["view"]:
         with gr.Row(elem_classes=["body-row"]):
             with gr.Column(elem_classes=["content"]):
-                caption = "모델을 고르면 더 정확하게 찾아요"
-                if test_mode:
-                    caption = "테스트 질문은 질문 기록에 남지 않아요"
-                gr.HTML(ui.section_title("질문하기", caption), padding=False)
+                gr.HTML(ui.section_title("질문하기"), padding=False)
                 _question_card(c)
                 if not test_mode:
-                    gr.HTML(
-                        ui.section_title(
-                            "자주 찾는 작업", "다른 엔지니어가 많이 물어본 작업이에요"
-                        ),
-                        padding=False,
-                    )
+                    gr.HTML(ui.section_title("자주 찾는 작업"), padding=False)
                     gr.HTML(task_cards_html(), padding=False)
             if not test_mode:
                 with gr.Column(elem_classes=["right-panel"]):
@@ -362,9 +354,6 @@ def _model_row(c: dict) -> None:
             elem_classes=["model-select"],
             scale=0,
             min_width=300,
-        )
-        gr.HTML(
-            '<span class="hint">모델을 고르지 않으면 필요할 때 다시 물어봐요</span>', padding=False
         )
 
 
@@ -402,8 +391,6 @@ def _build_conv(test_mode: bool) -> dict:
     with gr.Column(visible=False, elem_classes=["qa-conv"]) as c["view"]:
         with gr.Row(elem_classes=["body-row", "chat-layout"]):
             with gr.Column(elem_classes=["content", "conv"]):
-                if test_mode:
-                    gr.HTML(ui.tag("테스트 질문은 질문 기록에 남지 않아요"), padding=False)
                 with gr.Column(elem_classes=["chat-scroll"]):
                     c["turns"] = ui.chat_html()
                     _clarify_card(c)
