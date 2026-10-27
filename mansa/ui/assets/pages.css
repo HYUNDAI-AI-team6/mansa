@@ -566,13 +566,25 @@
   border: 1.5px solid var(--brand);
 }
 
-/* ---------- 기준정보 ---------- */
+/* ---------- 기준정보 (Figma A3) ---------- */
 .master-top {
-  align-items: stretch !important;
+  align-items: flex-start !important;
+  gap: 16px !important;
+}
+.dept-card,
+.model-card,
+.tax-card,
+.syn-card {
+  gap: 14px !important;
+}
+.model-card .card-head,
+.syn-card .card-head {
+  margin-bottom: 0;
 }
 .dept-card {
   flex: 0 0 400px !important;
   max-width: 400px;
+  gap: 10px !important;
 }
 .dept-list {
   display: flex;
@@ -595,24 +607,31 @@
 }
 .dept-row b {
   font-size: 14px;
+  line-height: 20px;
   font-weight: 500;
 }
-.dept-row .body span,
+.dept-row .body span {
+  font-size: 13px;
+  line-height: 19px;
+  font-style: normal;
+  color: var(--text2);
+}
 .dept-row em {
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 19px;
   font-style: normal;
   color: var(--text3);
 }
 .letter {
-  width: 36px;
-  height: 36px;
-  min-width: 36px;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 500;
   background: #eaf0ff;
   color: #2f54eb;
 }
@@ -635,7 +654,6 @@
   border-radius: 14px;
 }
 .model-card {
-  height: 100%;
   display: flex;
   flex-direction: column;
 }
@@ -644,8 +662,48 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+.syn-card {
+  display: flex;
+  flex-direction: column;
+}
 .syn-card .title .cap {
-  margin-left: 4px;
+  font-size: 14px;
+  margin-left: 0;
+}
+/* 기준정보 표: 머리 38px · 줄 위아래 14px · 칸 사이 16px */
+.model-card .tbl .th,
+.tax-card .tbl .th {
+  height: 38px;
+  border-radius: 12px;
+  column-gap: 16px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.model-card .tbl .tr,
+.tax-card .tbl .tr {
+  min-height: 0;
+  padding: 14px 16px;
+  column-gap: 16px;
+  color: var(--text2);
+}
+.model-card .tbl .th span,
+.tax-card .tbl .th span,
+.model-card .tbl .tr > span,
+.tax-card .tbl .tr > span {
+  color: var(--text2);
+}
+.model-card .tbl .tr > span,
+.tax-card .tbl .tr > span {
+  gap: 6px;
+  line-height: 21px;
+}
+.model-card .tbl b,
+.tax-card .tbl b {
+  color: var(--text);
+}
+.tax-card .chip-radio label {
+  padding: 0 16px !important;
+  font-weight: 500;
 }
 
 /* ---------- 평가 ---------- */

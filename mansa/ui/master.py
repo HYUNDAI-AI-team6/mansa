@@ -9,20 +9,20 @@ from ui import mock_data as mock
 from ui.page import PageView
 
 DEPT_COLOR = {"유지보수팀": "blue", "안전팀": "orange", "검사·품질팀": "teal"}
-MODEL_COLUMNS = [
-    ("모델 ID", "88px"),
+MODEL_COLUMNS = [  # Figma A3: 모델명 칸만 남는 너비를 차지한다
+    ("모델 ID", "64px"),
     ("모델명", "1fr"),
-    ("제조사", "1fr"),
-    ("정격속도", "1fr"),
-    ("정격하중", "0.8fr"),
-    ("용도", "64px"),
-    ("문서", "40px"),
+    ("제조사", "72px"),
+    ("정격속도", "84px"),
+    ("정격하중", "72px"),
+    ("용도", "48px"),
+    ("문서", "36px"),
 ]
-RELATION_COLUMNS = [
-    ("작업", "1fr"),
-    ("작업 위치", "1fr"),
-    ("위험 유형", "1fr"),
-    ("안전 문서 검색에 쓰는 말", "1.2fr"),
+RELATION_COLUMNS = [  # Figma A3: 330 · 300 · 260 · 260 비율
+    ("작업", "330fr"),
+    ("작업 위치", "300fr"),
+    ("위험 유형", "260fr"),
+    ("안전 문서 검색에 쓰는 말", "260fr"),
 ]
 TABS = ["관계표", *mock.TAXONOMY]
 
@@ -53,7 +53,7 @@ def models_html() -> str:
         [ui.cell(f"<b>{escape(str(m[k]))}</b>" if k == "name" else escape(str(m[k]))) for k in keys]
         for m in mock.MODEL_SPECS
     ]
-    head = _head("설비 모델", "시드 데이터", "고객센터 조회 원본")
+    head = _head("설비 모델", "시드 데이터")
     return f"{head}{ui.table_html(MODEL_COLUMNS, rows)}"
 
 
@@ -125,8 +125,8 @@ def build(store: gr.State) -> PageView:
             padding=False,
             elem_classes=["grow-col"],
         )
-    with gr.Column(elem_classes=["card"]):
-        head = _head("작업 분류표 · 관계표", "읽기 전용", "data/taxonomy 파일에서 읽어 와요")
+    with gr.Column(elem_classes=["card", "tax-card"]):
+        head = _head("작업 분류표 · 관계표", "읽기 전용")
         gr.HTML(head, padding=False)
         tab = ui.chip_radio(TABS)
         taxonomy = gr.HTML(taxonomy_html("관계표"), padding=False)
