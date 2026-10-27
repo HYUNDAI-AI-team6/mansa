@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import gradio as gr
 
+from features.evaluation.storage import SAVE_DIR
 from ui import components as ui
 from ui import (
     doc_view,
@@ -228,7 +229,13 @@ def main():
         _wire_login("admin", admin_form, shell, user, layout_outputs)
         _wire_logout(shell, [user, store], layout_outputs, [user_form, admin_form])
 
-    demo.launch(theme=theme.build_theme(), css=theme.build_css(), head=FONT_HEAD)
+    # 평가 결과 CSV는 실행 폴더(mansa/) 밖인 저장소 루트 eval/save/에 있어 내려받기를 허용해야 한다.
+    demo.launch(
+        theme=theme.build_theme(),
+        css=theme.build_css(),
+        head=FONT_HEAD,
+        allowed_paths=[str(SAVE_DIR)],
+    )
 
 
 if __name__ == "__main__":
