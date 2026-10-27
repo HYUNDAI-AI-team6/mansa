@@ -9,13 +9,14 @@ UI는 `upload_embeddings` 하나만 호출하면 되고, 어느 DB로 갈지는 
 uv sync --locked
 ```
 
-접속 주소는 코드에 기본값이 들어 있다. 바꿔야 하면 환경변수로 지정한다.
+접속 주소는 코드에 없고 `mansa/.env`에서 읽는다. `mansa/.env.example`을 복사해 `mansa/.env`를 만든다.
+호스트가 비어 있으면 접속 시 `RuntimeError`가 발생한다.
 
-| 환경변수 | 기본값 | 설명 |
+| 환경변수 | 값 | 설명 |
 |---|---|---|
 | `TECH_CHROMA_HOST` | `techchromadb-production.up.railway.app` | 기술 벡터 DB 주소 |
 | `SECURE_CHROMA_HOST` | `securechromadb-production.up.railway.app` | 안전 벡터 DB 주소 |
-| `CHROMA_PORT` | `443` | HTTPS 포트. 8000은 Railway 내부 포트라 외부에서 접속되지 않는다 |
+| `CHROMA_PORT` | (생략 시 기본값) | HTTPS 포트. 8000은 Railway 내부 포트라 외부에서 접속되지 않는다 |
 
 ## 함수
 
