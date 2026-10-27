@@ -330,7 +330,8 @@ def _build_ask(test_mode: bool) -> dict:
     with gr.Column(elem_classes=["qa-ask"]) as c["view"]:
         with gr.Row(elem_classes=["body-row"]):
             with gr.Column(elem_classes=["content"]):
-                gr.HTML(ui.section_title("질문하기"), padding=False)
+                caption = "테스트 질문은 질문 기록에 남지 않아요" if test_mode else ""
+                gr.HTML(ui.section_title("질문하기", caption), padding=False)
                 _question_card(c)
                 if not test_mode:
                     gr.HTML(ui.section_title("자주 찾는 작업"), padding=False)
@@ -391,6 +392,8 @@ def _build_conv(test_mode: bool) -> dict:
     with gr.Column(visible=False, elem_classes=["qa-conv"]) as c["view"]:
         with gr.Row(elem_classes=["body-row", "chat-layout"]):
             with gr.Column(elem_classes=["content", "conv"]):
+                if test_mode:
+                    gr.HTML(ui.tag("테스트 질문은 질문 기록에 남지 않아요"), padding=False)
                 with gr.Column(elem_classes=["chat-scroll"]):
                     c["turns"] = ui.chat_html()
                     _clarify_card(c)
