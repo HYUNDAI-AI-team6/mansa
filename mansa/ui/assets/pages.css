@@ -723,6 +723,11 @@
   font-size: 14px;
   color: var(--text2);
 }
+.fail-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
 .metrics {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
