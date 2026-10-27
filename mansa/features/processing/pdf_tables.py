@@ -7,7 +7,7 @@ from features.processing.pdf_text import PdfExtractionError
 
 
 @dataclass(frozen=True)
-class TableData:
+class TableBlock:
     """find_tables()가 감지한 표 한 개. page_no는 1부터, table_index는 페이지 안에서 0부터 시작한다."""
 
     page_no: int
@@ -25,7 +25,7 @@ class PdfTables:
 
     file_name: str
     page_count: int
-    tables: list[TableData]
+    tables: list[TableBlock]
     failed_pages: list[int] = field(default_factory=list)
 
     @property
@@ -33,20 +33,20 @@ class PdfTables:
         """표가 한 개 이상 감지된 페이지 번호 목록(중복 없음, 오름차순)."""
         return sorted({t.page_no for t in self.tables})
 
-    def tables_on_page(self, page_no: int) -> list[TableData]:
+    def tables_on_page(self, page_no: int) -> list[TableBlock]:
         """해당 페이지에서 감지된 표를 감지 순서대로 반환한다."""
         return [t for t in self.tables if t.page_no == page_no]
 
 
-def build_table(page_no: int, table_index: int, table) -> TableData:
-    """PyMuPDF 표 객체를 TableData로 바꾼다. 빈 셀(None)은 빈 문자열로 바꾸고 글자는 그대로 둔다.
+def build_table(page_no: int, table_index: int, table) -> TableBlock:
+    """PyMuPDF 표 객체를 TableBlock로 바꾼다. 빈 셀(None)은 빈 문자열로 바꾸고 글자는 그대로 둔다.
 
     empty_ratio는 빈 셀 비율로, 잘못 감지된 표를 가려내는 참고 지표일 뿐 필터링에는 쓰지 않는다.
     """
     rows = [[cell or "" for cell in row] for row in table.extract()]
     cells = [cell for row in rows for cell in row]
     empty = sum(1 for cell in cells if not cell.strip())
-    return TableData(
+    return TableBlock(
         page_no=page_no,
         table_index=table_index,
         bbox=tuple(table.bbox),
@@ -75,7 +75,7 @@ def extract_pdf_tables(path: str | Path) -> PdfTables:
     with doc:
         if doc.needs_pass:
             raise PdfExtractionError(f"encrypted pdf is not supported: {path.name}")
-        tables: list[TableData] = []
+        tables: list[TableBlock] = []
         failed_pages: list[int] = []
         for page in doc:
             page_no = page.number + 1
