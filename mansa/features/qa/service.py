@@ -13,7 +13,7 @@ from core.schemas import (
 )
 from features.qa.answer_generator import attach_notice
 from features.qa.answer_guard import build_no_answer, is_sufficient
-from features.qa.retriever import merge_evidence
+from features.retrieval.retriever import merge_evidence
 
 # 첫 생성이 근거 검사에 실패하면 이 횟수만큼 다시 생성한다.
 MAX_REGENERATIONS = 2
