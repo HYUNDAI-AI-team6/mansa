@@ -7,7 +7,12 @@ from pathlib import Path
 from features.dashboard.evaluation import scoring, storage
 from features.dashboard.evaluation.answerer import Answerer
 from features.dashboard.evaluation.judge import Judge
-from features.dashboard.evaluation.models import AnswerRecord, EvalProgress, EvalReport, TestSet
+from features.dashboard.evaluation.models import (
+    AnswerRecord,
+    EvalProgress,
+    EvalReport,
+    TestSet,
+)
 from features.dashboard.evaluation.testset import load_testset
 
 Clock = Callable[[], datetime]
@@ -58,7 +63,8 @@ def rescore(
     meta, loaded = storage.load_answers(answers_path)
     by_id = {r.case_id: r for r in loaded}
     records = [
-        by_id.get(c.id, AnswerRecord(c.id, error="no answer recorded")) for c in testset.cases
+        by_id.get(c.id, AnswerRecord(c.id, error="no answer recorded"))
+        for c in testset.cases
     ]
     run_id = storage.new_run_id(save_dir, clock())
     answerer_name = str(meta.get("answerer", "unknown"))
@@ -83,6 +89,7 @@ def _score(
     total = len(testset.cases)
     scores, failures, llm_errors = [], [], []
     for done, (case, record) in enumerate(zip(testset.cases, records), start=1):
+        # 채점 LLM이 돌아가는 곳
         judgement = None if record.error else judge.judge(case, record)
         score = scoring.score_case(case, record, judgement)
         scores.append(score)

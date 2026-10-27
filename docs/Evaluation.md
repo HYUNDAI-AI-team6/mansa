@@ -200,7 +200,7 @@ uv run --locked python -B -m unittest discover -s tests -v
 ```
 
 평가 관련 테스트는 `tests/test_eval_*.py`이며 Codex를 실제로 호출하지 않는다(가짜 응답기·judge·실제 출력 픽스처
-`tests/fixtures/codex_exec.jsonl` 사용).
+`tests/test_eval_codex_cli.py`의 `CODEX_OUTPUT` 사용).
 
 ## 현재 한계
 
