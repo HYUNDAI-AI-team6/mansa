@@ -2,7 +2,7 @@ import subprocess
 import unittest
 from unittest import mock
 
-from features.dashboard.evaluation.codex_cli import CodexError, find_codex, parse_jsonl, run_codex
+from features.evaluation.codex_cli import CodexError, find_codex, parse_jsonl, run_codex
 
 # codex exec --json 실제 출력(Codex CLI 0.164.0, 질문 "1+1"). 형식이 바뀌면 새 출력으로 교체한다.
 CODEX_OUTPUT = "\n".join([
@@ -71,7 +71,7 @@ class RunCodexTest(unittest.TestCase):
             run_codex("q", runner=runner, executable="codex", timeout=1)
 
     def test_not_installed(self):
-        with mock.patch("features.dashboard.evaluation.codex_cli.shutil.which", return_value=None):
+        with mock.patch("features.evaluation.codex_cli.shutil.which", return_value=None):
             with self.assertRaisesRegex(CodexError, "not found"):
                 find_codex()
 

@@ -1,8 +1,8 @@
 import unittest
 
-from features.dashboard.evaluation.answerer import CodexAnswerer
-from features.dashboard.evaluation.codex_cli import CodexError, CodexResult
-from features.dashboard.evaluation.models import TestCase
+from features.evaluation.answerer import CodexAnswerer
+from features.evaluation.codex_cli import CodexError, CodexResult
+from features.evaluation.models import TestCase
 
 CASE = TestCase(id="T01", question="브레이크 갭은?", workflow="L2")
 

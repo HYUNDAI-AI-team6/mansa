@@ -2,7 +2,7 @@
 
 관리자 화면의 **평가(A4)** 기능 설명이다. 테스트셋 문항을 Q&A 응답기에 보내 답변을 받고,
 그 답변을 채점해 지표·실패 사례·지연·토큰을 화면과 파일로 보여 준다.
-코드는 `mansa/features/dashboard/evaluation/`에 있고, 화면은 `mansa/ui/evaluation.py`다.
+코드는 `mansa/features/evaluation/`에 있고, 화면은 `mansa/ui/evaluation.py`다.
 
 > 현재 응답기와 채점 LLM은 **임시로 OpenAI Codex CLI**를 쓴다. 실제 Q&A 파이프라인(LLM·RAG)이 완성되면
 > 응답기만 교체한다. 교체 방법은 [응답기 교체](#응답기-교체) 참고.
@@ -99,7 +99,7 @@ eval/save/<run_id>_result.json / _result.csv  ─ 결과 저장 → 화면 표�
 | 지표 | 문항 통과 조건 | 비고 |
 |---|---|---|
 | 검색 적중률 | 정답 근거 중 하나 이상이 검색 결과에 있음 | 높을수록 좋음 |
-| 수치 정확도 | `expected_numbers`가 모두 답변에 있음 | 높을수록 좋음 |
+| 수치 정확도 | `expected_numbers`가 모두 답변에 있음(규칙 + 채점 LLM 보조, 아래 참고) | 높을수록 좋음 |
 | 출처 정확도 | 정답 근거가 모두 답변의 인용 근거에 있음 | 높을수록 좋음 |
 | 과잉 첨부율 | 인용 근거 중 정답이 아닌 근거의 비율(문항 평균) | **낮을수록 좋음** |
 | 표현 일관성 | 채점 LLM이 용어·단위 표기가 일관된다고 판정 | 높을수록 좋음 |
@@ -121,6 +121,30 @@ eval/save/<run_id>_result.json / _result.csv  ─ 결과 저장 → 화면 표�
     앞이 공백·문장 시작인 `-`는 부호로 보아 `-10 mm`에서 `10 mm`는 맞지 않는다.
   - 단위 환산(`1000 mm` = `1 m`)은 하지 않는다. 한글 단위(절·초·회)는 뒤에 붙는 조사와 구분할 수 없어 뒤 경계를 검사하지 않는다.
 
+### 수치 판정: 규칙 + 채점 LLM 보조
+
+정규식 규칙만으로는 표기 예외(`N·m`/`N-m`, 띄어쓰기, 한글 문장 속 수치 등)를 다 다룰 수 없어서,
+표현 일관성을 판정하는 같은 채점 LLM 호출에서 정답 수치별 판정도 함께 받는다. **호출 수는 늘지 않는다.**
+
+| 규칙 결과 | 채점 LLM 결과 | 문항 판정 | 기록 |
+|---|---|---|---|
+| 통과 | 일치 | 통과 | 없음 |
+| 통과 | 불일치 | **통과(규칙을 따름)** | `LLM 이견` |
+| 실패 | 일치 + 근거 원문 확인 | **통과** | `LLM 통과` |
+| 실패 | 불일치, 또는 근거 원문 확인 실패 | 실패 | 없음 |
+| 실패 | 채점 LLM 오류 | 실패(규칙만 사용) | LLM 오류 목록 |
+
+- 채점 LLM은 정답 수치마다 `matched`(true/false)와 `quote`(답변에서 그 수치를 말한 원문)를 JSON으로 돌려준다.
+- **근거 원문 확인**: LLM이 답변에 없는 내용을 지어내는 경우를 막으려고 코드가 두 가지를 확인한다.
+  1. `quote`가 답변에 실제로 있는 문자열이다(공백 차이만 무시).
+  2. 정답 수치의 숫자가 `quote`에 모두 있다. 그래서 `1000 mm` ↔ `1 m` 같은 단위 환산은 LLM이 맞다고 해도 통과하지 않는다.
+- 채점 LLM에게도 단위 대소문자 구분(`MPa` ≠ `mPa`), 환산 불인정, 다른 수치의 일부·범위 한쪽 끝 불인정을 지시한다(`judge.py`의 `JUDGE_PROMPT`).
+- 규칙이 통과시킨 수치는 LLM이 반대해도 통과다. 규칙 통과 문항은 실행마다 결과가 같고, LLM 판정에 따라
+  흔들리는 것은 `LLM 통과` 문항뿐이다.
+- 기록은 화면의 **수치 LLM 판정 n건** 카드(질문, 판정, 정답 수치 → 근거 원문), 결과 JSON의 `number_notes`,
+  CSV의 `수치 LLM 판정` 행에 남는다. 두 종류 모두 사람이 확인할 대상이다.
+  `LLM 이견`이 반복되면 규칙이 잘못 통과시키는 표기(예: `10 N-m` ↔ `10 N`)일 가능성이 높다.
+
 ### 실패 원인
 
 하나라도 통과하지 못한 지표가 있는 문항이 실패 사례에 나온다.
@@ -141,7 +165,7 @@ LLM 오류는 실패 사례가 아니라 아래 LLM 오류 목록에 나온다.
 | 단계 | 지표 처리 |
 |---|---|
 | 답변 | 수치 정확도·표현 일관성에서 실패로 센다. 전 문항이 오류면 두 지표는 0%다. 검색 적중률·출처 정확도는 응답기가 근거 정보를 주는 경우에만 실패로 센다 |
-| 채점 | 표현 일관성에서 실패로 센다 |
+| 채점 | 표현 일관성에서 실패로 센다. 수치 정확도는 규칙 결과만 쓴다 |
 
 - 화면에서는 실패 사례 카드 아래 **LLM 오류 n건** 카드(질문, 단계, 사유)로 따로 보여 준다. 오류가 없으면 카드가 나오지 않는다.
 - 결과 JSON의 `llm_errors`, CSV의 `LLM 오류` 행에도 남는다.
@@ -161,12 +185,12 @@ LLM 오류는 실패 사례가 아니라 아래 LLM 오류 목록에 나온다.
 
 ```powershell
 cd mansa
-uv run python -c "from pathlib import Path; from features.dashboard.evaluation.runner import rescore; from features.dashboard.evaluation.judge import CodexJudge; print(list(rescore(Path('../eval/save/<run_id>_answers.json'), CodexJudge()))[-1].metrics)"
+uv run python -c "from pathlib import Path; from features.evaluation.runner import rescore; from features.evaluation.judge import CodexJudge; print(list(rescore(Path('../eval/save/<run_id>_answers.json'), CodexJudge()))[-1].metrics)"
 ```
 
 ## 응답기 교체
 
-응답기는 아래 형태만 맞추면 된다(`features/dashboard/evaluation/answerer.py`의 `Answerer`).
+응답기는 아래 형태만 맞추면 된다(`features/evaluation/answerer.py`의 `Answerer`).
 
 ```python
 class Answerer(Protocol):

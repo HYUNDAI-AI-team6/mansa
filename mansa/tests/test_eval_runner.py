@@ -4,10 +4,10 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 
-from features.dashboard.evaluation import storage
-from features.dashboard.evaluation.models import AnswerRecord, EvalProgress, EvalReport, Judgement
-from features.dashboard.evaluation.runner import rescore, run_evaluation
-from features.dashboard.evaluation.testset import TestSetError
+from features.evaluation import storage
+from features.evaluation.models import AnswerRecord, EvalProgress, EvalReport, Judgement
+from features.evaluation.runner import rescore, run_evaluation
+from features.evaluation.testset import TestSetError
 
 CASES = [
     {"id": "T1", "question": "갭", "workflow": "L2",

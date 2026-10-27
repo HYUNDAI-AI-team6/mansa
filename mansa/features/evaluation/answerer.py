@@ -3,8 +3,8 @@
 from collections.abc import Callable
 from typing import Protocol
 
-from features.dashboard.evaluation.codex_cli import CodexError, CodexResult, run_codex
-from features.dashboard.evaluation.models import AnswerRecord, TestCase
+from features.evaluation.codex_cli import CodexError, CodexResult, run_codex
+from features.evaluation.models import AnswerRecord, TestCase
 
 ANSWER_PROMPT = """너는 승강기 유지보수 기술 문서를 바탕으로 답하는 Q&A 도우미다.
 파일을 읽거나 명령을 실행하지 말고 아래 질문에 한국어로 바로 답해라.

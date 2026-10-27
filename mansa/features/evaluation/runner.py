@@ -4,16 +4,16 @@ from collections.abc import Callable, Generator, Iterator
 from datetime import datetime
 from pathlib import Path
 
-from features.dashboard.evaluation import scoring, storage
-from features.dashboard.evaluation.answerer import Answerer
-from features.dashboard.evaluation.judge import Judge
-from features.dashboard.evaluation.models import (
+from features.evaluation import scoring, storage
+from features.evaluation.answerer import Answerer
+from features.evaluation.judge import Judge
+from features.evaluation.models import (
     AnswerRecord,
     EvalProgress,
     EvalReport,
     TestSet,
 )
-from features.dashboard.evaluation.testset import load_testset
+from features.evaluation.testset import load_testset
 
 Clock = Callable[[], datetime]
 
@@ -88,7 +88,7 @@ def _score(
     judge 진행률은 stage="judge"인 EvalProgress로 yield한다. 오류 문항은 judge를 부르지 않는다.
     """
     total = len(testset.cases)
-    scores, failures, llm_errors = [], [], []
+    scores, failures, llm_errors, number_notes = [], [], [], []
     for done, (case, record) in enumerate(zip(testset.cases, records), start=1):
         # 채점 LLM이 돌아가는 곳
         judgement = None if record.error else judge.judge(case, record)
@@ -99,6 +99,7 @@ def _score(
         if failure is not None:
             failures.append(failure)
         llm_errors.extend(scoring.collect_llm_errors(case, record, judgement))
+        number_notes.extend(scoring.collect_number_notes(case, score))
         yield EvalProgress(done, total, stage="judge")
     return EvalReport(
         run_id=run_id,
@@ -110,6 +111,7 @@ def _score(
         failures=failures,
         latency=scoring.compute_latency(records),
         llm_errors=llm_errors,
+        number_notes=number_notes,
     )
 
 

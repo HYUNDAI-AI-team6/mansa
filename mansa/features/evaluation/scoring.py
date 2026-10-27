@@ -4,12 +4,14 @@ import re
 import unicodedata
 from statistics import mean
 
-from features.dashboard.evaluation.models import (
+from features.evaluation.models import (
     AnswerRecord,
     CaseScore,
     Failure,
     Judgement,
     LlmError,
+    NumberCheck,
+    NumberNote,
     TestCase,
 )
 
@@ -73,6 +75,7 @@ def find_numbers(answer: str) -> list[str]:
 def score_case(case: TestCase, record: AnswerRecord, judgement: Judgement | None) -> CaseScore:
     """문항 하나를 지표별로 판정한다.
 
+    수치 정확도는 규칙(contains_number)을 먼저 쓰고, 규칙이 놓친 수치만 채점 LLM 판정으로 다시 본다.
     응답기가 값을 주지 않았거나(None) 정답이 비어 있으면 그 지표는 None이다.
     오류 문항은 계산 가능한 지표를 모두 실패(False)로 둔다. 근거 지표를 응답기가 아예
     제공하지 않는 경우의 처리는 compute_metrics가 맡는다.
@@ -80,9 +83,7 @@ def score_case(case: TestCase, record: AnswerRecord, judgement: Judgement | None
     score = CaseScore(case_id=case.id, error=record.error is not None)
     has_sources = bool(case.expected_sources)
     if case.expected_numbers:
-        score.numeric_ok = not score.error and all(
-            contains_number(record.answer_text, n) for n in case.expected_numbers
-        )
+        score.numeric_ok = not score.error and _check_numbers(case, record, judgement, score)
         score.found_numbers = find_numbers(record.answer_text)
     if score.error:
         score.retrieval_hit = False if has_sources else None
@@ -100,6 +101,59 @@ def score_case(case: TestCase, record: AnswerRecord, judgement: Judgement | None
         # 채점 LLM 오류도 표현 일관성에서는 실패로 센다. 오류 내용은 collect_llm_errors가 따로 남긴다.
         score.consistent = False if judgement.error else judgement.consistent
     return score
+
+
+def _check_numbers(
+    case: TestCase, record: AnswerRecord, judgement: Judgement | None, score: CaseScore
+) -> bool:
+    """정답 수치가 모두 답변에 있으면 True다. 규칙과 LLM이 다르게 본 수치는 score에 기록한다.
+
+    - 규칙 통과: 통과. LLM이 matched=false면 numbers_disputed에 남긴다(판정은 규칙을 따른다).
+    - 규칙 실패: LLM이 matched=true이고 근거 원문이 _verified_quote를 통과하면 통과로 보고
+      numbers_by_llm에 남긴다. 채점 LLM 오류(numbers 없음)면 규칙 결과만 쓴다.
+    """
+    checks = _number_checks(case, judgement)
+    ok = True
+    for expected, check in zip(case.expected_numbers, checks):
+        if contains_number(record.answer_text, expected):
+            if check is not None and not check.matched:
+                score.numbers_disputed.append(expected)
+        elif quote := _verified_quote(check, expected, record.answer_text):
+            score.numbers_by_llm[expected] = quote
+        else:
+            ok = False
+    return ok
+
+
+def _number_checks(case: TestCase, judgement: Judgement | None) -> list[NumberCheck | None]:
+    """정답 수치 순서대로 LLM 판정을 맞춘다. expected 문자열로 찾고, 못 찾으면 같은 순번 판정을 쓴다.
+
+    순번으로 맞추는 것은 LLM이 expected를 조금 바꿔 옮긴 경우를 위한 것으로, 개수가 같을 때만 쓴다.
+    """
+    numbers = judgement.numbers if judgement else []
+    by_expected = {c.expected: c for c in numbers}
+    same_count = len(numbers) == len(case.expected_numbers)
+    return [
+        by_expected.get(n) or (numbers[i] if same_count else None)
+        for i, n in enumerate(case.expected_numbers)
+    ]
+
+
+def _verified_quote(check: NumberCheck | None, expected: str, answer: str) -> str:
+    """LLM이 맞다고 한 수치의 근거 원문을 확인해 돌려준다. 확인하지 못하면 빈 문자열이다.
+
+    LLM이 답변에 없는 내용을 지어내는 경우를 막으려고 두 가지를 본다.
+    1. quote가 답변에 실제로 있는 문자열이다(공백 차이만 무시).
+    2. 정답 수치의 숫자들이 quote에 모두 있다(단위 환산·다른 값은 통과시키지 않는다).
+    """
+    if check is None or not check.matched:
+        return ""
+    quote = " ".join(check.quote.split())
+    if not quote or quote not in " ".join(answer.split()):
+        return ""
+    digits = re.findall(r"\d+(?:\.\d+)?", normalize(expected))
+    normalized = normalize(quote)
+    return quote if digits and all(d in normalized for d in digits) else ""
 
 
 def compute_metrics(scores: list[CaseScore]) -> dict[str, float | None]:
@@ -189,6 +243,18 @@ def collect_llm_errors(
     if judgement is not None and judgement.error:
         errors.append(LlmError(case.id, case.question, "채점", judgement.error))
     return errors
+
+
+def collect_number_notes(case: TestCase, score: CaseScore) -> list[NumberNote]:
+    """수치 판정에서 규칙과 채점 LLM이 다르게 본 기록을 만든다. 없으면 빈 목록이다."""
+    rescued = [
+        NumberNote(case.id, case.question, n, "LLM 통과", quote)
+        for n, quote in score.numbers_by_llm.items()
+    ]
+    disputed = [
+        NumberNote(case.id, case.question, n, "LLM 이견") for n in score.numbers_disputed
+    ]
+    return rescued + disputed
 
 
 def _join(values: list[str]) -> str:

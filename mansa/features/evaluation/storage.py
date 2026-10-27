@@ -17,19 +17,20 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
-from features.dashboard.evaluation.models import (
+from features.evaluation.models import (
     LATENCY_UNITS,
     METRIC_NAMES,
     AnswerRecord,
     EvalReport,
     Failure,
     LlmError,
+    NumberNote,
 )
 
 logger = logging.getLogger(__name__)
 
 # 저장소 루트의 eval/. 실행 위치(cwd)와 상관없이 이 파일 기준으로 계산한다.
-EVAL_ROOT = Path(__file__).resolve().parents[4] / "eval"
+EVAL_ROOT = Path(__file__).resolve().parents[3] / "eval"
 TESTSET_PATH = EVAL_ROOT / "testsets" / "tech_qa.json"
 SAVE_DIR = EVAL_ROOT / "save"
 
@@ -156,15 +157,20 @@ def report_csv(report: EvalReport) -> str:
     writer.writerows(
         ["LLM 오류", e.question, f"{e.stage} · {e.reason}"] for e in report.llm_errors
     )
+    writer.writerows(
+        ["수치 LLM 판정", n.question, " · ".join(filter(None, [n.kind, n.expected, n.quote]))]
+        for n in report.number_notes
+    )
     return buffer.getvalue()
 
 
 def _report_from_dict(data: dict) -> EvalReport:
     """저장된 결과 JSON을 EvalReport로 되돌린다. 필드가 맞지 않으면 KeyError/TypeError가 난다."""
     failures = [Failure(**f) for f in data.pop("failures")]
-    # llm_errors가 없는 이전 결과 파일도 읽는다.
+    # llm_errors·number_notes가 없는 이전 결과 파일도 읽는다.
     llm_errors = [LlmError(**e) for e in data.pop("llm_errors", [])]
-    return EvalReport(failures=failures, llm_errors=llm_errors, **data)
+    number_notes = [NumberNote(**n) for n in data.pop("number_notes", [])]
+    return EvalReport(failures=failures, llm_errors=llm_errors, number_notes=number_notes, **data)
 
 
 def _write_atomic(path: Path, text: str, encoding: str) -> None:

@@ -3,8 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from features.dashboard.evaluation.storage import EVAL_ROOT
-from features.dashboard.evaluation.testset import TestSetError, load_testset
+from features.evaluation.storage import EVAL_ROOT
+from features.evaluation.testset import TestSetError, load_testset
 
 VALID_CASE = {
     "id": "T01",

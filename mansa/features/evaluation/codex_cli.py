@@ -1,7 +1,7 @@
 """임시 LLM으로 쓰는 OpenAI Codex CLI(`codex exec`) 호출과 출력 해석.
 
 shortcut: 실제 Q&A 파이프라인 대신 쓰는 임시 호출이다. 파이프라인이 완성되면 응답기는
-features.dashboard.evaluation.answerer에 새 구현을 추가하고, 채점 LLM도 정식 모델로 바꾼다.
+features.evaluation.answerer에 새 구현을 추가하고, 채점 LLM도 정식 모델로 바꾼다.
 """
 
 import json

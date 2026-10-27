@@ -1,11 +1,12 @@
 import unittest
 
-from features.dashboard.evaluation.codex_cli import CodexError, CodexResult
-from features.dashboard.evaluation.judge import CodexJudge, parse_judgement
-from features.dashboard.evaluation.models import AnswerRecord, Judgement, TestCase
-from features.dashboard.evaluation.scoring import (
+from features.evaluation.codex_cli import CodexError, CodexResult
+from features.evaluation.judge import CodexJudge, parse_judgement
+from features.evaluation.models import AnswerRecord, Judgement, NumberCheck, TestCase
+from features.evaluation.scoring import (
     classify_failure,
     collect_llm_errors,
+    collect_number_notes,
     compute_latency,
     compute_metrics,
     contains_number,
@@ -128,6 +129,52 @@ class ScoreCaseTest(unittest.TestCase):
         )
 
 
+class LlmNumberCheckTest(unittest.TestCase):
+    TORQUE = TestCase("T9", "체결 토크", "L2", ["10 N·m"], [])
+
+    def judged(self, matched, quote, consistent=True):
+        return Judgement(consistent, "ok", numbers=[NumberCheck("10 N·m", matched, quote)])
+
+    def test_llm_rescues_rule_miss_with_verified_quote(self):
+        record = AnswerRecord("T9", "체결 토크는 10 N - m 입니다")
+        score = score_case(self.TORQUE, record, self.judged(True, "10 N - m"))
+        self.assertTrue(score.numeric_ok)
+        self.assertEqual(score.numbers_by_llm, {"10 N·m": "10 N - m"})
+        notes = collect_number_notes(self.TORQUE, score)
+        self.assertEqual([(n.kind, n.quote) for n in notes], [("LLM 통과", "10 N - m")])
+
+    def test_quote_not_in_answer_is_rejected(self):
+        record = AnswerRecord("T9", "체결 토크는 규정값을 따릅니다")
+        score = score_case(self.TORQUE, record, self.judged(True, "10 N·m"))
+        self.assertFalse(score.numeric_ok)
+        self.assertEqual(score.numbers_by_llm, {})
+
+    def test_quote_with_other_digits_is_rejected(self):
+        case = TestCase("T8", "길이", "L2", ["1000 mm"], [])
+        record = AnswerRecord("T8", "길이는 1 m 입니다")
+        judgement = Judgement(True, "ok", numbers=[NumberCheck("1000 mm", True, "1 m")])
+        self.assertFalse(score_case(case, record, judgement).numeric_ok)
+
+    def test_rule_pass_with_llm_dispute_keeps_rule(self):
+        record = AnswerRecord("T1", "갭은 0.5 mm")
+        judgement = Judgement(True, "ok", numbers=[NumberCheck("0.5 mm", False, "")])
+        score = score_case(L2, record, judgement)
+        self.assertTrue(score.numeric_ok)
+        self.assertEqual(score.numbers_disputed, ["0.5 mm"])
+        self.assertEqual([n.kind for n in collect_number_notes(L2, score)], ["LLM 이견"])
+
+    def test_matches_by_position_when_expected_rewritten(self):
+        record = AnswerRecord("T9", "체결 토크는 10 N - m 입니다")
+        judgement = Judgement(True, "ok", numbers=[NumberCheck("10 N.m", True, "10 N - m")])
+        self.assertTrue(score_case(self.TORQUE, record, judgement).numeric_ok)
+
+    def test_judge_error_uses_rule_only(self):
+        record = AnswerRecord("T9", "체결 토크는 10 N - m 입니다")
+        score = score_case(self.TORQUE, record, Judgement(None, error="timeout"))
+        self.assertFalse(score.numeric_ok)
+        self.assertEqual(collect_number_notes(self.TORQUE, score), [])
+
+
 class FailureTest(unittest.TestCase):
     def test_retrieval_cause(self):
         record = AnswerRecord("T1", "0.5 mm", retrieved_ids=["doc:2"])
@@ -209,6 +256,13 @@ class JudgeTest(unittest.TestCase):
         self.assertIsNotNone(parse_judgement("not json").error)
         self.assertIsNotNone(parse_judgement('{"consistent": "yes"}').error)
 
+    def test_parse_numbers(self):
+        text = ('{"consistent": true, "reason": "ok", "numbers": '
+                '[{"expected": "0.5 mm", "matched": true, "quote": "0.5mm"}]}')
+        self.assertEqual(parse_judgement(text).numbers, [NumberCheck("0.5 mm", True, "0.5mm")])
+        bad = '{"consistent": true, "reason": "ok", "numbers": [{"expected": "0.5 mm"}]}'
+        self.assertIsNotNone(parse_judgement(bad).error)
+
     def test_codex_judge_passes_schema_and_handles_error(self):
         calls = []
 
@@ -218,6 +272,7 @@ class JudgeTest(unittest.TestCase):
 
         self.assertTrue(CodexJudge(call=call).judge(L2, AnswerRecord("T1", "0.5 mm")).consistent)
         self.assertIn("consistent", calls[0]["properties"])
+        self.assertIn("numbers", calls[0]["required"])
 
         def failing(prompt, model=None, output_schema=None):
             raise CodexError("boom")

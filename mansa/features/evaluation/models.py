@@ -61,16 +61,26 @@ class AnswerRecord:
     error: str | None = None
 
 
+@dataclass(frozen=True)
+class NumberCheck:
+    """채점 LLM의 정답 수치 하나 판정. quote는 답변에서 그 수치를 말한 원문 부분이다."""
+
+    expected: str
+    matched: bool
+    quote: str = ""
+
+
 @dataclass
 class Judgement:
-    """채점 LLM의 표현 일관성 판정.
+    """채점 LLM의 판정. 표현 일관성(consistent)과 정답 수치별 판정(numbers)을 함께 받는다.
 
-    error가 있으면 채점 LLM 호출·해석에 실패한 것이고 consistent는 None이다.
+    error가 있으면 채점 LLM 호출·해석에 실패한 것이고 consistent는 None, numbers는 빈 목록이다.
     """
 
     consistent: bool | None
     reason: str = ""
     error: str | None = None
+    numbers: list[NumberCheck] = field(default_factory=list)
 
 
 @dataclass
@@ -89,6 +99,10 @@ class CaseScore:
     overattach: float | None = None
     consistent: bool | None = None
     found_numbers: list[str] = field(default_factory=list)
+    # 규칙(contains_number)은 놓쳤지만 채점 LLM 판정으로 통과한 정답 수치 → 근거 원문
+    numbers_by_llm: dict[str, str] = field(default_factory=dict)
+    # 규칙은 통과했지만 채점 LLM은 다르다고 본 정답 수치 (판정은 규칙을 따른다)
+    numbers_disputed: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -112,6 +126,24 @@ class LlmError:
     reason: str
 
 
+NumberNoteKind = Literal["LLM 통과", "LLM 이견"]
+
+
+@dataclass
+class NumberNote:
+    """수치 정확도를 규칙과 채점 LLM이 다르게 본 경우 한 건.
+
+    LLM 통과: 규칙은 놓쳤지만 LLM 판정과 근거 원문 확인으로 통과시킨 수치.
+    LLM 이견: 규칙은 통과시켰지만 LLM은 다르다고 본 수치(지표는 규칙 판정을 따른다).
+    """
+
+    case_id: str
+    question: str
+    expected: str
+    kind: NumberNoteKind
+    quote: str = ""
+
+
 @dataclass
 class EvalReport:
     """평가 1회의 집계 결과.
@@ -119,6 +151,7 @@ class EvalReport:
     metrics는 METRIC_NAMES 순서의 지표명 → 백분율(0~100) 또는 None("값 없음")이다.
     latency는 화면 표시 이름 → 값(초·토큰) 또는 None이다. finished_at은 전체 평가가 끝난 시각(ISO 8601)이다.
     failures는 답변 품질 실패, llm_errors는 답변·채점 LLM 호출 실패다. LLM 오류 문항도 지표에서는 실패로 센다.
+    number_notes는 수치 판정에서 규칙과 채점 LLM이 다르게 본 기록이다.
     """
 
     run_id: str
@@ -131,6 +164,7 @@ class EvalReport:
     latency: dict[str, float | None]
     answers_file: str = ""
     llm_errors: list[LlmError] = field(default_factory=list)
+    number_notes: list[NumberNote] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

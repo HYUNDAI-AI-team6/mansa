@@ -4,8 +4,14 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 
-from features.dashboard.evaluation import storage
-from features.dashboard.evaluation.models import AnswerRecord, EvalReport, Failure, LlmError
+from features.evaluation import storage
+from features.evaluation.models import (
+    AnswerRecord,
+    EvalReport,
+    Failure,
+    LlmError,
+    NumberNote,
+)
 
 
 def make_report(run_id="20261027-100000"):
@@ -20,6 +26,7 @@ def make_report(run_id="20261027-100000"):
         failures=[Failure("T01", "브레이크 갭", "L2", "생성", "0.5 mm → 없음")],
         latency={"기술 Q&A 평균 지연": 2.25, "기술 Q&A 평균 토큰": 1234.0},
         llm_errors=[LlmError("T2", "정격하중", "채점", "codex timed out after 180s")],
+        number_notes=[NumberNote("T3", "체결 토크", "10 N·m", "LLM 통과", "10 N - m")],
     )
 
 
@@ -75,6 +82,7 @@ class StorageTest(unittest.TestCase):
         self.assertNotIn("고객센터", text)
         self.assertIn("실패 사례,브레이크 갭,L2 · 생성 · 0.5 mm → 없음", text)
         self.assertIn("LLM 오류,정격하중,채점 · codex timed out after 180s", text)
+        self.assertIn("수치 LLM 판정,체결 토크,LLM 통과 · 10 N·m · 10 N - m", text)
 
     def test_latest_picks_later_run_in_same_second(self):
         storage.save_report(make_report("20261027-100000"), self.dir)
@@ -88,9 +96,10 @@ class StorageTest(unittest.TestCase):
         path = self.dir / "20261027-090000_result.json"
         storage.save_report(make_report("20261027-090000"), self.dir)
         raw = json.loads(path.read_text(encoding="utf-8"))
-        del raw["llm_errors"]
+        del raw["llm_errors"], raw["number_notes"]
         path.write_text(json.dumps(raw), encoding="utf-8")
-        self.assertEqual(storage.load_latest(self.dir).llm_errors, [])
+        latest = storage.load_latest(self.dir)
+        self.assertEqual((latest.llm_errors, latest.number_notes), ([], []))
 
 
 if __name__ == "__main__":
