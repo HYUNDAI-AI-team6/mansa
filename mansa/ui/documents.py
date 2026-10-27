@@ -6,6 +6,7 @@ import gradio as gr
 
 from ui import components as ui
 from ui import mock_data as mock
+from ui.doc_view import OPEN_PDF_JS, title_button
 from ui.page import PageView
 from ui.theme import TEXT3
 
@@ -42,6 +43,13 @@ def stats_html(docs: list[dict]) -> str:
     return f'<div class="stats">{"".join(cards)}</div>'
 
 
+def _title(doc: dict) -> str:
+    """완료된 문서는 누르면 PDF 가 열린다. 처리 중·실패 문서는 열 PDF 가 없어 글자만 보인다."""
+    if doc["status"] == "완료":
+        return title_button(doc)
+    return f"{ui.pdf_badge()}<b>{escape(doc['title'])}</b>"
+
+
 def table(docs: list[dict], keyword: str = "") -> str:
     """문서 표. 휴지통 버튼의 data-i 는 docs 의 번호다."""
     word = (keyword or "").strip()
@@ -55,7 +63,7 @@ def table(docs: list[dict], keyword: str = "") -> str:
         )
         rows.append(
             [
-                ui.cell(f"{ui.pdf_badge()}<b>{escape(d['title'])}</b>"),
+                ui.cell(_title(d)),
                 ui.cell(ui.tag(d["type"], ui.TYPE_TAG[d["type"]])),
                 ui.cell(ui.dept_tag(d["dept"])),
                 ui.cell(ui.tag(d["status"], ui.STATUS_TAG[d["status"]])),
@@ -86,7 +94,7 @@ def build(store: gr.State) -> PageView:
     stats = gr.HTML(stats_html(docs), padding=False)
     with gr.Column(elem_classes=["card"]):
         keyword = ui.search_box("문서명 검색", ["w-280"])
-        result = ui.click_list(table(docs))
+        result = gr.HTML(table(docs), js_on_load=ui.CLICK_JS + "\n" + OPEN_PDF_JS, padding=False)
 
     keyword.change(lambda s, k: table(s["docs"], k), [store, keyword], result)
     result.select(_delete, [store, keyword], [store, stats, result])

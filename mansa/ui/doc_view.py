@@ -22,7 +22,7 @@ OPEN_PDF_JS = """element.addEventListener('click', (e) => {
 });"""
 
 
-def _title_button(doc: dict) -> str:
+def title_button(doc: dict) -> str:
     """PDF 표시 + 문서 이름. 누르면 그 문서의 PDF 가 열린다(지금은 시연용 샘플)."""
     label = f"{ui.pdf_badge()}<b>{escape(doc['title'])}</b>"
     return (
@@ -54,7 +54,7 @@ def table(docs: list[dict], doc_type: str, dept: str, keyword: str) -> str:
     ]
     rows = [
         [
-            ui.cell(_title_button(d)),
+            ui.cell(title_button(d)),
             ui.cell(ui.tag(d["type"], ui.TYPE_TAG[d["type"]])),
             ui.cell(ui.dept_tag(d["dept"])),
             ui.cell(f"<em>{escape(d['date'])}</em>"),
