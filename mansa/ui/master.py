@@ -1,5 +1,7 @@
 """기준정보(A3): 부서, 설비 모델(시드 데이터), 작업 분류표·관계표(읽기 전용), 동의어 사전."""
 
+import logging  # [DB 연동] 저장 실패 원인을 서버 로그에 남기려고 추가
+from datetime import date  # [DB 연동] 등록일자(created_at)에 오늘 날짜를 넘기려고 추가
 from html import escape
 
 import gradio as gr
@@ -8,6 +10,11 @@ from ui import components as ui
 from ui import mock_data as mock
 from ui.page import PageView
 
+# [DB 연동] MySQL 에 쿼리를 보내는 함수. fetch_all = 조회(SELECT), execute = 입력·수정·삭제.
+from util.mysql_connection import execute, fetch_all
+
+# [DB 연동] departments.name, departments.description 컬럼이 varchar(50) 이라 이 글자 수까지만 저장된다.
+MAX_LENGTH = 50
 DEPT_COLOR = {"유지보수팀": "blue", "안전팀": "orange", "검사·품질팀": "teal"}
 MODEL_COLUMNS = [  # Figma A3: 모델명 칸만 남는 너비를 차지한다
     ("모델 ID", "64px"),
@@ -85,14 +92,51 @@ def synonyms_html() -> str:
 
 
 def _add_dept(store: dict, name: str, desc: str) -> tuple:
-    """부서를 등록한다(목데이터). 이름이 비었거나 이미 있으면 안내만 한다."""
+    """부서를 DB(departments)에 등록하고 목록에 더한다.
+
+    이름이 비었거나 너무 길거나 이미 있으면, DB에 저장하지 못했을 때도 안내만 하고 목록은 그대로 둔다.
+    """
+    # 처리 순서: 입력 정리 → 화면에서 거를 수 있는 것(빈 이름·길이·화면 목록 중복)
+    #            → [DB 연동] DB 중복 확인과 저장 → 화면 목록 갱신.
+    # 앞의 거르는 단계에서는 DB 에 접속하지 않는다.
+    # 돌려주는 값 5개는 등록 버튼 outputs [store, 부서 목록, 등록 칸, 이름 칸, 설명 칸] 순서다.
+    # gr.skip() 은 "그 칸을 바꾸지 않는다"는 뜻이라, 실패해도 등록 칸과 입력한 글자가 그대로 남는다.
     name, desc = (name or "").strip(), (desc or "").strip()
     if not name:
         ui.warn("부서 이름을 입력해 주세요")
         return (gr.skip(),) * 5
+    # [DB 연동] 컬럼 길이(varchar(50))를 넘으면 DB 가 오류를 내므로, 보내기 전에 막는다.
+    if len(name) > MAX_LENGTH or len(desc) > MAX_LENGTH:
+        ui.warn(f"부서 이름과 설명은 {MAX_LENGTH}자 이하로 입력해 주세요")
+        return (gr.skip(),) * 5
     if any(d["name"] == name for d in store["depts"]):
         ui.warn("이미 등록된 부서예요")
         return (gr.skip(),) * 5
+    # [DB 연동] 이 try 안에서 DB 에 저장한다. 성공할 때만 아래에서 화면 목록에 더한다.
+    try:
+        # 화면 목록(store)에는 없어도 DB 에는 있을 수 있다(앱을 다시 켠 뒤 등).
+        # 이름에 UNIQUE 제약이 없어서 직접 확인한다. 비교는 DB 정렬 규칙을 따라 대소문자를 구분하지 않는다.
+        # 확인과 저장이 따로라서 정말 동시에 같은 이름을 등록하면 둘 다 저장될 수 있다.
+        if fetch_all("SELECT 1 FROM departments WHERE name = :name", {"name": name}):
+            ui.warn("이미 등록된 부서예요")
+            return (gr.skip(),) * 5
+        # 등록일자(created_at)에는 시각 없이 오늘 날짜만 넘긴다. 앱이 있는 컴퓨터의 날짜라서
+        # DB 서버(UTC)의 NOW() 를 쓸 때처럼 한국 시각과 하루 가까이 어긋나지 않는다.
+        # 컬럼이 DATETIME 이라 DB 에는 '2026-10-27 00:00:00' 처럼 시각이 0시로 채워져 저장된다.
+        # 값은 :name 같은 자리표시자로 넘긴다. SQL 문자열에 이어 붙이면 SQL 인젝션이 생긴다.
+        execute(
+            "INSERT INTO departments (name, created_at, description) "
+            "VALUES (:name, :created_at, :description)",
+            {"name": name, "created_at": date.today(), "description": desc},
+        )
+    except Exception:
+        # DB 접속·쿼리 실패: 원인은 서버 로그에만 남기고 화면에는 일반 문구만 보여 준다.
+        logging.getLogger(__name__).exception("failed to register department")
+        ui.warn("부서를 저장하지 못했어요. 잠시 후 다시 시도해 주세요")
+        return (gr.skip(),) * 5
+    # 여기까지 오면 DB 저장이 끝난 상태다. 화면용 목록(store)에 같은 부서를 더하고 등록 칸을 닫는다.
+    # 설명이 비면 DB 에는 빈 문자열로 저장되고, 화면에서만 "설명 없음"으로 보여 준다.
+    # 이 목록은 DB 에서 읽은 게 아니라 목데이터(store) 기준이라, 앱을 다시 켜면 화면에서는 사라진다.
     depts = [*store["depts"], {"name": name, "desc": desc or "설명 없음"}]
     ui.notify(f"‘{name}’ 부서를 등록했어요")
     store = {**store, "depts": depts}
