@@ -141,7 +141,7 @@ def search_box(placeholder: str, classes: list[str] | None = None, **kwargs) -> 
 def table_html(columns: list[tuple[str, str]], rows: list[list[str]], empty: str = "") -> str:
     """표 HTML. columns 는 (제목, 너비) 목록, rows 는 이미 escape 된 칸 HTML 목록이다.
 
-    줄에 칸이 하나 더 있으면 그 값은 줄 class 로 붙는다 (예: 비활성 회원 "off").
+    줄에 칸이 하나 더 있으면 그 값은 줄 class 로 붙는다 (예: 흐리게 보일 줄 "off").
 
     너비는 CSS grid 값(예: "1fr", "120px")이다. 행이 없으면 empty 문구를 보여 준다.
     """
@@ -155,7 +155,7 @@ def table_html(columns: list[tuple[str, str]], rows: list[list[str]], empty: str
 
 
 def _tr(grid: str, cells: list[str], count: int) -> str:
-    """표 한 줄. 칸 수보다 하나 더 있으면 마지막 값은 줄 class 다 (예: 비활성 회원 "off")."""
+    """표 한 줄. 칸 수보다 하나 더 있으면 마지막 값은 줄 class 다 (예: 흐리게 보일 줄 "off")."""
     extra = f" {cells[count]}" if len(cells) > count else ""
     body = "".join(cells[:count])
     return f'<div class="tr{extra}" style="grid-template-columns:{grid}">{body}</div>'

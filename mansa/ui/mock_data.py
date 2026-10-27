@@ -385,7 +385,6 @@ MEMBERS = [
         "id": "admin01",
         "dept": "안전팀",
         "role": "관리자",
-        "active": True,
         "date": "10/20",
     },
     {
@@ -393,7 +392,6 @@ MEMBERS = [
         "id": "user01",
         "dept": "유지보수팀",
         "role": "사용자",
-        "active": True,
         "date": "10/21",
     },
     {
@@ -401,7 +399,6 @@ MEMBERS = [
         "id": "user02",
         "dept": "유지보수팀",
         "role": "사용자",
-        "active": True,
         "date": "10/21",
     },
     {
@@ -409,7 +406,6 @@ MEMBERS = [
         "id": "user03",
         "dept": "검사·품질팀",
         "role": "사용자",
-        "active": True,
         "date": "10/22",
     },
     {
@@ -417,7 +413,6 @@ MEMBERS = [
         "id": "user04",
         "dept": "유지보수팀",
         "role": "사용자",
-        "active": False,
         "date": "10/22",
     },
 ]
