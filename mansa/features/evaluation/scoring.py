@@ -19,23 +19,25 @@ _NUMBER_TOKEN = re.compile(r"[+\-±−]?\d+(?:[.,]\d+)*\s*(?:[a-zA-Zµ%/°²³]+
 _THOUSANDS = re.compile(r"(?<=\d),(?=\d{3}(?!\d))")
 _MINUS = str.maketrans({"−": "-", "–": "-", "—": "-"})
 _MAX_FOUND = 3
-# 수치 앞에 오면 다른 수치의 일부(부호·자릿수)로 보는 문자
-_BEFORE_NUMBER = r"[\d.,+\-±]"
+# 수치 앞에 오면 다른 수치의 일부로 보는 것: 부호·자릿수·소수점, 분수(1/1000), 지수(1e5)
+# 천 단위가 아닌 쉼표는 목록 구분자로 보고 막지 않는다 (예: "500kg,1000kg")
+_BEFORE_NUMBER = r"(?<![\d.+\-±])(?<!\d/)(?<!\d[eE])"
 # 수치·단위 뒤에 오면 단위가 더 이어지는 것으로 보는 문자 (예: mm 뒤의 2, kg 뒤의 /h, kg 뒤의 f)
-_AFTER_UNIT = r"[\da-zµ%°/]"
+_AFTER_UNIT = r"[\da-zA-Zµμ%°/]"
 
 
 def normalize(text: str) -> str:
     """수치 비교용 정규화. 단위 환산(1000 mm = 1 m)은 하지 않는다.
 
-    전각→반각(NFKC, ²→2·㎜→mm 포함), 소문자, 유니코드 빼기 기호→"-", 천 단위 쉼표 제거,
+    전각→반각(NFKC, ²→2·㎜→mm 포함), 유니코드 빼기 기호→"-", 천 단위 쉼표 제거,
     공백 하나로 축소 후 숫자와 단위 사이·"/" 앞뒤·부호와 숫자 사이 공백 제거.
+    대소문자는 단위 의미가 달라지므로(MPa·mPa) 바꾸지 않는다.
     다른 공백은 남겨 "1000 kg 2개"처럼 이웃한 값이 하나로 붙지 않게 한다.
     """
-    text = unicodedata.normalize("NFKC", text).lower().translate(_MINUS)
+    text = unicodedata.normalize("NFKC", text).translate(_MINUS)
     text = _THOUSANDS.sub("", text)
     text = re.sub(r"\s+", " ", text).strip()
-    text = re.sub(r"(?<=\d) (?=[a-zµ%°가-힣])", "", text)
+    text = re.sub(r"(?<=\d) (?=[a-zA-Zµμ%°가-힣])", "", text)
     text = re.sub(r" ?/ ?", "/", text)
     return re.sub(r"(?<=[+\-±]) (?=\d)", "", text)
 
@@ -43,15 +45,17 @@ def normalize(text: str) -> str:
 def contains_number(answer: str, expected: str) -> bool:
     """answer에 expected와 부호·숫자·단위가 모두 같은 값이 있으면 True다.
 
-    - 앞 경계: "1000 kg"은 "-1000 kg", "11000 kg", "1.1000 kg" 안에서 맞지 않는다.
-    - 뒤 경계: "0.5 mm"는 "0.5 mm²"(→mm2), "0.5 mm/s", "0.5 mmhg" 안에서 맞지 않고,
+    - 앞 경계: "1000 kg"은 "-1000 kg", "11000 kg", "1.1000 kg", "1/1000 kg" 안에서,
+      "5 mm"는 "1e5 mm" 안에서 맞지 않는다. "500kg,1000kg"에서는 맞는다.
+    - 뒤 경계: "0.5 mm"는 "0.5 mm²"(→mm2), "0.5 mm/s", "0.5 mmHg" 안에서 맞지 않고,
       단위 없는 "10"은 "10 mm"·"10%"·"10.5" 안에서 맞지 않는다.
+    - 단위 대소문자가 달라도 맞지 않는다("1 MPa" ↔ "1 mPa").
     한글 단위(절·초·회 등)는 뒤에 오는 조사와 구분할 수 없어 한글 뒤 경계는 검사하지 않는다.
     """
     target = normalize(expected)
     if not target:
         return False
-    pattern = rf"(?<!{_BEFORE_NUMBER}){re.escape(target)}(?!{_AFTER_UNIT}|\.\d)"
+    pattern = rf"{_BEFORE_NUMBER}{re.escape(target)}(?!{_AFTER_UNIT}|\.\d)"
     return re.search(pattern, normalize(answer)) is not None
 
 

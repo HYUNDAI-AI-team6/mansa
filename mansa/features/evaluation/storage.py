@@ -11,6 +11,7 @@ import io
 import json
 import logging
 import os
+import re
 import tempfile
 from dataclasses import asdict
 from datetime import datetime
@@ -38,7 +39,7 @@ NO_VALUE = "값 없음"
 def new_run_id(save_dir: Path = SAVE_DIR, now: datetime | None = None) -> str:
     """실행 ID(시작 시각 YYYYMMDD-HHMMSS)를 만든다. 같은 초에 이미 있으면 -2, -3을 붙인다.
 
-    ID가 시각 순으로 정렬되므로 load_latest는 파일명 정렬로 최신 결과를 고른다.
+    load_latest는 _run_order로 시각과 순번을 나눠 정렬해 최신 결과를 고른다.
     """
     base = (now or datetime.now()).strftime("%Y%m%d-%H%M%S")
     run_id, n = base, 1
@@ -100,12 +101,19 @@ def load_latest(save_dir: Path = SAVE_DIR) -> EvalReport | None:
 
     읽을 수 없는 결과 파일은 경고만 남기고 그 이전 결과를 찾는다.
     """
-    for path in sorted(save_dir.glob("*_result.json"), reverse=True):
+    for path in sorted(save_dir.glob("*_result.json"), key=_run_order, reverse=True):
         try:
             return _report_from_dict(json.loads(path.read_text(encoding="utf-8")))
         except (json.JSONDecodeError, KeyError, TypeError) as exc:
             logger.warning("skipping unreadable eval result %s: %s", path.name, exc)
     return None
+
+
+def _run_order(path: Path) -> tuple[str, int]:
+    """결과 파일을 (시각, 순번)으로 정렬하는 키. 파일명만 비교하면 "-"가 "_"보다 앞이라
+    같은 초의 "...-2_result.json"이 "..._result.json"보다 먼저 정렬된다."""
+    match = re.fullmatch(r"(\d{8}-\d{6})(?:-(\d+))?_result\.json", path.name)
+    return (match[1], int(match[2] or 1)) if match else (path.name, 0)
 
 
 def latest_csv(save_dir: Path = SAVE_DIR) -> Path | None:
