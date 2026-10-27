@@ -1,0 +1,327 @@
+/* 로그인: 사용자(기본) ↔ 관리자(파란 바탕, 좌우 반전)
+   화면 하나에 두 카드·두 소개를 겹쳐 두고, #login 에 admin 클래스를 붙이면
+   카드·소개가 미끄러지듯 자리를 바꾸고 바탕색·원 장식이 함께 바뀐다. */
+:root {
+  --login-move: 0.7s cubic-bezier(0.65, 0, 0.35, 1);
+  --login-fade-out: 0.22s ease;
+  --login-fade-in: 0.3s ease 0.42s; /* 카드와 소개가 서로 지나간 뒤에 나타난다 */
+}
+
+/* ---------- 바탕 + 원 장식 ----------
+   원은 움직이지 않는다. 사용자용 원(.login 의 ::before/::after)과
+   관리자용 원(.login-row 의 ::before/::after)을 따로 두고 흐려졌다 나타나게 한다. */
+.login {
+  min-height: 100vh;
+  background: var(--page);
+  position: relative;
+  overflow: hidden;
+  transition: background-color 0.6s ease;
+}
+.login.admin {
+  background: var(--brand);
+}
+.login::before,
+.login::after,
+.login-row::before,
+.login-row::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  transition: opacity 0.6s ease;
+}
+.login::before,
+.login::after {
+  /* 연파랑(#EEF2FF)에 브랜드 파랑 2% 섞음 */
+  background: color-mix(in srgb, var(--brand) 2%, var(--brand-weak));
+  z-index: 0;
+}
+.login-row::before,
+.login-row::after {
+  background: rgba(255, 255, 255, 0.12); /* 흰색 16% → 12% */
+  z-index: -1;
+  opacity: 0;
+}
+.login::before {
+  width: 720px;
+  height: 720px;
+  top: 560px;
+  left: -240px;
+}
+.login::after {
+  width: 460px;
+  height: 460px;
+  top: -200px;
+  right: -200px;
+}
+.login-row::before {
+  width: 720px;
+  height: 720px;
+  top: 560px;
+  right: -240px;
+}
+.login-row::after {
+  width: 460px;
+  height: 460px;
+  top: -200px;
+  left: -200px;
+}
+.login.admin::before,
+.login.admin::after {
+  opacity: 0;
+}
+.login.admin .login-row::before,
+.login.admin .login-row::after {
+  opacity: 1;
+}
+
+/* ---------- 자리: 사용자 = 소개 왼쪽·카드 오른쪽, 관리자 = 반대 ---------- */
+.login-row {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: block !important;
+}
+/* gr.HTML 의 elem_classes 는 바깥 .block 과 안쪽 .prose 에 모두 붙어서 .block 으로 한정한다 */
+.block.intro-stage,
+.card-stage {
+  position: absolute !important;
+  top: 50%;
+  transform: translateY(-50%);
+  transition: left var(--login-move);
+}
+.block.intro-stage {
+  left: 160px;
+  width: 560px !important;
+}
+.card-stage {
+  left: calc(100% - 600px);
+  width: 440px !important;
+  min-width: 440px !important;
+  display: grid !important;
+}
+.login.admin .block.intro-stage {
+  left: 720px;
+}
+.login.admin .card-stage {
+  left: 160px;
+}
+
+/* 겹쳐 둔 두 카드·두 소개 중 지금 모드의 것만 보인다 (나머지는 흐려지며 숨김) */
+.intro-stack {
+  display: grid;
+}
+.intro-stack > .login-intro,
+.card-stage > .login-card {
+  grid-area: 1 / 1;
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity var(--login-fade-in),
+    visibility 0s;
+}
+.login-intro.admin,
+.card-stage > .admin-card,
+.login.admin .login-intro.user,
+.login.admin .card-stage > .user-card {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--login-fade-out),
+    visibility 0s linear 0.22s;
+}
+.login.admin .login-intro.admin,
+.login.admin .card-stage > .admin-card {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity var(--login-fade-in),
+    visibility 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login,
+  .login::before,
+  .login::after,
+  .login-row::before,
+  .login-row::after,
+  .intro-stage,
+  .card-stage,
+  .login-intro,
+  .login-card {
+    transition: none !important;
+  }
+}
+
+/* ---------- 소개 ---------- */
+.login-intro {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+.mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--brand-weak);
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 500;
+  width: max-content;
+}
+.lockup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: Outfit, var(--font);
+  font-weight: 700;
+  font-size: 26px;
+  color: var(--text);
+}
+.login-intro h1 {
+  font-size: 36px;
+  line-height: 48px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--text);
+}
+.intro-gap {
+  height: 24px;
+}
+.features {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.feature {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+}
+.feature .tile {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---------- 카드 ---------- */
+.login-card {
+  width: 440px !important;
+  max-width: 440px !important;
+  min-width: 440px !important;
+  background: #fff;
+  border: 1px solid var(--card-border);
+  border-radius: 24px;
+  padding: 40px !important;
+  gap: 24px !important;
+}
+.login-card h2 {
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text);
+}
+.login-card .sub {
+  font-size: 14px;
+  color: var(--text2);
+  margin: 6px 0 0;
+}
+.login-card .fields {
+  gap: 16px !important;
+}
+.or-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text3);
+  font-size: 13px;
+}
+.or-divider::before,
+.or-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.help {
+  font-size: 13px;
+  color: var(--text3);
+  text-align: center;
+  margin: 0;
+}
+.error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fdecec;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+/* ---------- 관리자 소개·카드: 파란 바탕 위 흰색 ---------- */
+.login-intro.admin .mode-pill {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+.login-intro.admin .lockup,
+.login-intro.admin h1,
+.login-intro.admin .feature {
+  color: #fff;
+}
+.login-intro.admin .feature .tile {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.admin-card {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.admin-card h2 {
+  color: #fff;
+}
+.admin-card .sub,
+.admin-card .field label > span,
+.admin-card .field [data-testid="block-info"] {
+  color: rgba(255, 255, 255, 0.78) !important;
+}
+.admin-card .field input {
+  background: var(--brand) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: #fff !important;
+}
+.admin-card .field input::placeholder {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+.gradio-container .admin-card button.btn-primary {
+  background: #fff !important;
+  color: var(--brand) !important;
+}
+.gradio-container .admin-card button.btn-secondary {
+  background: transparent !important;
+  border-color: rgba(255, 255, 255, 0.36) !important;
+  color: #fff !important;
+}
+.admin-card .or-divider {
+  color: rgba(255, 255, 255, 0.6);
+}
+.admin-card .or-divider::before,
+.admin-card .or-divider::after {
+  background: rgba(255, 255, 255, 0.2);
+}
+.admin-card .help {
+  color: rgba(255, 255, 255, 0.6);
+}

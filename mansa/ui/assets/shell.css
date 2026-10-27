@@ -1,0 +1,186 @@
+/* 앱 틀: 왼쪽 메뉴바, 머리글, 본문 배치 */
+/* ---------- 앱 틀: 메뉴바 + 본문 ---------- */
+#shell {
+  min-height: 100vh;
+  gap: 0 !important;
+  flex-wrap: nowrap !important;
+  align-items: stretch !important;
+}
+.sidebar {
+  background: #fff;
+  border-right: 1px solid var(--border);
+  width: 96px !important;
+  min-width: 96px !important;
+  max-width: 96px !important;
+  padding: 24px 12px !important;
+  gap: 8px !important;
+  position: fixed !important;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 10;
+  align-items: center !important;
+  overflow-y: auto;
+}
+.sidebar.admin {
+  background: var(--brand);
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+}
+/* Figma: 로고(40) 아래 32px 띄우고 첫 메뉴 시작 = 메뉴 간격 8 + 24 */
+.sidebar .logo {
+  display: flex;
+  justify-content: center;
+  height: 40px;
+}
+.sidebar .logo.link {
+  cursor: pointer;
+}
+.sidebar .logo.link:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+.sidebar.admin .logo.link:focus-visible {
+  outline-color: #fff;
+}
+.sidebar .block.logo-block {
+  margin-bottom: 24px !important;
+}
+.sidebar .grow {
+  flex: 1 1 auto;
+}
+.gradio-container .sidebar button.nav-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 72px !important;
+  min-width: 72px !important;
+  max-width: 72px;
+  height: 60px;
+  min-height: 60px;
+  padding: 8px 4px !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 14px !important;
+  box-shadow: none !important;
+  color: var(--text2) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  line-height: 14px;
+  flex: 0 0 auto !important;
+}
+.gradio-container .sidebar button.nav-btn::before {
+  content: "";
+  width: 24px;
+  height: 24px;
+  background-size: 24px 24px;
+  background-repeat: no-repeat;
+  display: block;
+}
+.gradio-container .sidebar button.nav-btn.active {
+  background: var(--brand-weak) !important;
+  color: var(--brand) !important;
+  font-weight: 700 !important;
+}
+.gradio-container .sidebar.admin button.nav-btn {
+  color: rgba(255, 255, 255, 0.78) !important;
+}
+.gradio-container .sidebar.admin button.nav-btn.active {
+  background: rgba(255, 255, 255, 0.16) !important;
+  color: #fff !important;
+}
+#main {
+  gap: 0 !important;
+  min-width: 0;
+  margin-left: 96px;
+}
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+  padding: 28px 32px 24px;
+}
+.page-header h1 {
+  font-size: 26px;
+  line-height: 36px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text);
+}
+.page-header p {
+  font-size: 15px;
+  line-height: 24px;
+  color: var(--text2);
+  margin: 2px 0 0;
+}
+.page-header .meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.page-header .account {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--subtle);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text2);
+}
+.page-header .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #15803d;
+}
+.page-header .avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--brand-weak);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.page {
+  padding: 28px 32px 40px !important;
+  gap: 20px !important;
+}
+.body-row {
+  gap: 24px !important;
+  align-items: flex-start !important;
+  flex-wrap: nowrap !important;
+}
+.content {
+  gap: 20px !important;
+  min-width: 0;
+}
+.right-panel {
+  gap: 16px !important;
+  flex: 0 0 360px !important;
+  width: 360px !important;
+  min-width: 360px !important;
+}
+.right-panel.wide {
+  flex: 0 0 400px !important;
+  width: 400px !important;
+  min-width: 400px !important;
+}
+
+/* 머리글(메뉴 제목 줄)은 스크롤해도 위에 고정 (gr.HTML 바깥 .block 에 건다) */
+.block.header-block {
+  position: sticky !important;
+  top: 0;
+  z-index: 5;
+}
+/* Gradio 바깥 틀의 overflow:hidden 은 sticky 를 막아서, 잘라내기만 하는 clip 으로 바꾼다 */
+.gradio-container {
+  overflow: clip !important;
+}

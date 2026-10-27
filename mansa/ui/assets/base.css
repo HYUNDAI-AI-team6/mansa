@@ -1,0 +1,203 @@
+/* 공통: 색 변수, 버튼, 입력칸, 태그, 카드 */
+:root {
+  --brand: #3b5bf6;
+  --page: #f4f5f7;
+  --surface: #ffffff;
+  --subtle: #f7f8fa;
+  --brand-weak: #eef2ff;
+  --border: #e7e9ee;
+  --border-strong: #d5d9e0;
+  --card-border: #eceef2; /* 바깥 카드 테두리: --border 보다 살짝 연하게 */
+  --text: #1a1d23;
+  --text2: #6b7280;
+  --text3: #9ca3af;
+  --hl: #fff3bf;
+  --font: "Noto Sans KR", "Noto Sans CJK KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+}
+body,
+.gradio-container {
+  background: var(--page) !important;
+  font-family: var(--font) !important;
+  color: var(--text);
+}
+.gradio-container {
+  max-width: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+.gradio-container > .main,
+.gradio-container > .main > .wrap,
+.gradio-container .contain {
+  padding: 0 !important;
+  max-width: none !important;
+}
+.gradio-container .form {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  gap: 16px !important;
+  overflow: visible !important;
+}
+footer {
+  display: none !important;
+}
+.gradio-container .html-container {
+  padding: 0 !important;
+}
+.gradio-container .prose {
+  font-family: var(--font) !important;
+}
+* {
+  box-sizing: border-box;
+}
+
+/* ---------- 공통 버튼 ---------- */
+.gradio-container button.btn-primary,
+.gradio-container button.primary {
+  background: var(--brand) !important;
+  color: #fff !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  height: 44px;
+  min-height: 44px;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 0 20px;
+  box-shadow: none !important;
+}
+/* 눌 수 없는 파란 버튼은 회색으로 (질문하기 · 선택하고 계속 · 보내기) */
+.gradio-container button.btn-primary:disabled,
+.gradio-container button.primary:disabled {
+  background: #e5e7eb !important;
+  color: #9ca3af !important;
+  cursor: not-allowed;
+}
+.gradio-container button.btn-secondary {
+  background: #fff !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border-strong) !important;
+  border-radius: 12px !important;
+  height: 44px;
+  min-height: 44px;
+  font-weight: 500;
+  font-size: 14px;
+  box-shadow: none !important;
+}
+.gradio-container button.sm-btn {
+  height: 36px !important;
+  min-height: 36px !important;
+  border-radius: 10px !important;
+  font-size: 13px !important;
+  padding: 0 14px !important;
+}
+.gradio-container button.chip {
+  background: #fff !important;
+  border: 1px solid var(--border-strong) !important;
+  color: var(--text) !important;
+  border-radius: 999px !important;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 14px !important;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: none !important;
+  flex: 0 0 auto !important;
+  width: auto !important;
+  min-width: 0 !important;
+}
+.gradio-container button.chip.active {
+  background: var(--brand) !important;
+  border-color: var(--brand) !important;
+  color: #fff !important;
+}
+
+/* ---------- 입력 ---------- */
+.gradio-container textarea,
+.gradio-container input[type="text"],
+.gradio-container input[type="password"] {
+  font-family: var(--font) !important;
+  font-size: 14px !important;
+  color: var(--text) !important;
+}
+.field input,
+.field textarea {
+  background: #fff !important;
+  border: 1px solid var(--border-strong) !important;
+  border-radius: 12px !important;
+  height: 44px;
+  padding: 0 14px !important;
+  box-shadow: none !important;
+}
+.field label > span,
+.field [data-testid="block-info"] {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--text2) !important;
+  margin-bottom: 8px !important;
+}
+.field {
+  gap: 0 !important;
+}
+.gradio-container input::placeholder,
+.gradio-container textarea::placeholder {
+  color: var(--text3) !important;
+}
+
+/* ---------- 태그 ---------- */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ---------- 카드 ---------- */
+.card {
+  background: #fff !important;
+  border: 1px solid var(--card-border) !important;
+  border-radius: 20px !important;
+  padding: 24px !important;
+}
+.section-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+}
+.section-title h3 {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text);
+}
+.section-title span {
+  font-size: 13px;
+  color: var(--text3);
+}
+
+/* ---------- 알림(토스트) 제목을 한국어로 ---------- */
+/* Gradio 6.30 은 알림 묶음 제목을 Info/Warning 으로 고정해 보여 줘서 글자만 바꿔 그린다 */
+.toast-title {
+  font-size: 0 !important;
+}
+.toast-title::before {
+  font-size: 14px;
+}
+.toast-title.info::before {
+  content: "안내";
+}
+.toast-title.warning::before {
+  content: "확인해 주세요";
+}
+.toast-title.error::before {
+  content: "오류";
+}
+
+/* HTML 조각 안 아이콘이 flex 안에서 줄어들어 사라지지 않게 한다 */
+.gradio-container .prose svg {
+  flex-shrink: 0;
+}
