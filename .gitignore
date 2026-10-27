@@ -4,8 +4,10 @@ __pycache__/
 *.pyc
 .DS_Store
 .pytest_cache/
-openspec
 
+openspec
+data/pdfs/*
+!data/pdfs/.gitkeep
 .agents
 .claude
 graphify-out

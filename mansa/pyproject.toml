@@ -6,6 +6,7 @@ dependencies = [
     "chromadb>=1.5.9",
     "gradio>=6.30.0",
     "langchain-openai>=1.7.2",
+    "pymupdf>=2.0",
     "pymysql>=1.2.3",
     "python-dotenv>=1.2.4",
     "sqlalchemy>=2.1.6",
