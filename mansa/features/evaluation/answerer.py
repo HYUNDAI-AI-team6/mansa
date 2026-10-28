@@ -1,16 +1,28 @@
 """평가 대상 응답기. 테스트셋 문항을 받아 AnswerRecord를 돌려준다."""
 
+import time
 from collections.abc import Callable
 from typing import Protocol
 
-from features.evaluation.codex_cli import CodexError, CodexResult, run_codex
+import openai
+from pydantic import BaseModel
+
+from config import LLM_MODEL
+from core.exceptions import LlmError
+from core.llm import complete
 from features.evaluation.models import AnswerRecord, TestCase
 
 ANSWER_PROMPT = """너는 승강기 유지보수 기술 문서를 바탕으로 답하는 Q&A 도우미다.
-파일을 읽거나 명령을 실행하지 말고 아래 질문에 한국어로 바로 답해라.
+아래 질문에 한국어로 바로 답해라.
 수치에는 반드시 단위를 붙이고, 모르면 모른다고 답해라.
 
 질문: {question}"""
+
+
+class AnswerOutput(BaseModel):
+    """응답기 LLM의 응답 형식."""
+
+    answer: str
 
 
 class Answerer(Protocol):
@@ -23,26 +35,36 @@ class Answerer(Protocol):
         ...
 
 
-class CodexAnswerer:
-    """shortcut: Codex CLI로 질문만 보내는 임시 응답기. 문서 검색을 하지 않으므로
+class LlmAnswerer:
+    """shortcut: core.llm.complete로 질문만 보내는 임시 응답기. 문서 검색을 하지 않으므로
     cited_ids·retrieved_ids는 항상 None이다. 실제 Q&A 파이프라인이 완성되면 그 어댑터로 바꾼다.
     """
 
-    def __init__(self, model: str | None = None, call: Callable[..., CodexResult] = run_codex):
-        """model은 Codex에 넘길 모델명(None이면 Codex 기본값), call은 테스트용 호출 함수다."""
-        self.name = f"codex-cli ({model})" if model else "codex-cli"
-        self._model = model
+    def __init__(self, call: Callable[..., dict] = complete):
+        """call은 테스트용 호출 함수다(기본값 core.llm.complete)."""
+        self.name = f"llm ({LLM_MODEL})"
         self._call = call
 
     def answer(self, case: TestCase) -> AnswerRecord:
-        """Codex에 질문을 보내고 답변·지연·토큰을 기록한다. Codex를 실행한다(사용량 소모)."""
+        """LLM에 질문을 보내고 답변·지연을 기록한다. 유료 외부 API(OpenAI)를 호출한다.
+
+        LlmError와 문항 하나에 국한될 수 있는 openai 오류는 error가 채워진 AnswerRecord로 돌려준다.
+        인증·권한·모델 없음 오류는 모든 문항이 같은 이유로 실패하므로 그대로 올려 보낸다.
+        지연 시간에는 complete의 재시도 시간이 포함된다.
+        """
+        prompt = ANSWER_PROMPT.format(question=case.question)
+        started = time.perf_counter()
         try:
-            result = self._call(ANSWER_PROMPT.format(question=case.question), model=self._model)
-        except CodexError as exc:
+            result = self._call(case.workflow, prompt, AnswerOutput)
+        except (openai.AuthenticationError, openai.PermissionDeniedError, openai.NotFoundError):
+            raise
+        except (LlmError, openai.APIError) as exc:
             return AnswerRecord(case_id=case.id, error=str(exc))
+        # shortcut: complete()가 토큰 사용량을 돌려주지 않아 tokens=None("값 없음")이다.
+        # 실제 Q&A 파이프라인 어댑터를 붙일 때 토큰 측정을 추가한다.
         return AnswerRecord(
             case_id=case.id,
-            answer_text=result.text,
-            latency_sec=result.latency_sec,
-            tokens=result.tokens,
+            answer_text=result["answer"],
+            latency_sec=time.perf_counter() - started,
+            tokens=None,
         )

@@ -1,7 +1,7 @@
 import unittest
 
-from features.evaluation.codex_cli import CodexError, CodexResult
-from features.evaluation.judge import CodexJudge, parse_judgement
+from core.exceptions import LlmError
+from features.evaluation.judge import JudgeOutput, LlmJudge
 from features.evaluation.models import AnswerRecord, Judgement, NumberCheck, TestCase
 from features.evaluation.scoring import (
     classify_failure,
@@ -250,35 +250,28 @@ class MetricsTest(unittest.TestCase):
 
 
 class JudgeTest(unittest.TestCase):
-    def test_parse(self):
-        self.assertEqual(parse_judgement('{"consistent": false, "reason": "단위 없음"}'),
-                         Judgement(False, "단위 없음"))
-        self.assertIsNotNone(parse_judgement("not json").error)
-        self.assertIsNotNone(parse_judgement('{"consistent": "yes"}').error)
-
-    def test_parse_numbers(self):
-        text = ('{"consistent": true, "reason": "ok", "numbers": '
-                '[{"expected": "0.5 mm", "matched": true, "quote": "0.5mm"}]}')
-        self.assertEqual(parse_judgement(text).numbers, [NumberCheck("0.5 mm", True, "0.5mm")])
-        bad = '{"consistent": true, "reason": "ok", "numbers": [{"expected": "0.5 mm"}]}'
-        self.assertIsNotNone(parse_judgement(bad).error)
-
-    def test_codex_judge_passes_schema_and_handles_error(self):
+    def test_llm_judge_passes_schema_and_converts_numbers(self):
         calls = []
 
-        def call(prompt, model=None, output_schema=None):
-            calls.append(output_schema)
-            return CodexResult('{"consistent": true, "reason": "ok"}', 10, 1.0)
+        def call(workflow, prompt, schema):
+            calls.append((workflow, prompt, schema))
+            return {"consistent": True, "reason": "ok",
+                    "numbers": [{"expected": "0.5 mm", "matched": True, "quote": "0.5mm"}]}
 
-        self.assertTrue(CodexJudge(call=call).judge(L2, AnswerRecord("T1", "0.5 mm")).consistent)
-        self.assertIn("consistent", calls[0]["properties"])
-        self.assertIn("numbers", calls[0]["required"])
+        judgement = LlmJudge(call=call).judge(L2, AnswerRecord("T1", "갭은 0.5mm"))
+        workflow, prompt, schema = calls[0]
+        self.assertEqual((workflow, schema), ("L2", JudgeOutput))
+        self.assertIn("갭은 0.5mm", prompt)
+        self.assertEqual(judgement, Judgement(True, "ok",
+                                              numbers=[NumberCheck("0.5 mm", True, "0.5mm")]))
 
-        def failing(prompt, model=None, output_schema=None):
-            raise CodexError("boom")
+    def test_llm_judge_handles_error(self):
+        def failing(workflow, prompt, schema):
+            raise LlmError("L2 LLM failed after 3 attempts")
 
-        failed = CodexJudge(call=failing).judge(L2, AnswerRecord("T1", "a"))
-        self.assertEqual((failed.consistent, failed.error), (None, "boom"))
+        failed = LlmJudge(call=failing).judge(L2, AnswerRecord("T1", "a"))
+        self.assertEqual((failed.consistent, failed.error, failed.numbers),
+                         (None, "L2 LLM failed after 3 attempts", []))
 
 
 if __name__ == "__main__":
