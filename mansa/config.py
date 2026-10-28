@@ -8,7 +8,7 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 LLM_API_KEY = os.getenv("LLM_API_KEY")
 LLM_MODEL = os.getenv("LLM_MODEL")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-large")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL") or "text-embedding-3-large"
 
 TECH_CHROMA_HOST = os.getenv("TECH_CHROMA_HOST")
 SECURE_CHROMA_HOST = os.getenv("SECURE_CHROMA_HOST")
