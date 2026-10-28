@@ -36,8 +36,14 @@ class DocumentStore(Protocol):
     def get_document(self, document_id: int) -> Any:
         """문서 기록을 반환한다. doc_type("tech"/"secure")과 file_path(원본 PDF 경로)가 필요하다."""
 
-    def set_status(self, document_id: int, status: str, error: str | None = None) -> None:
-        """처리 상태와 실패 원인을 기록한다."""
+    def set_status(
+        self,
+        document_id: int,
+        status: str,
+        error: str | None = None,
+        chunk_count: int | None = None,
+    ) -> None:
+        """처리 상태와 실패 원인을 기록한다. 완료할 때는 저장한 청크 수(chunk_count)도 함께 받는다."""
 
 
 @dataclass
@@ -96,14 +102,14 @@ class IngestPipeline:
             document = self.documents.get_document(document_id)
             doc_type = document.doc_type
             self.documents.set_status(document_id, STATUS_PROCESSING)
-            self._process(document_id, doc_type, document)
-            self.documents.set_status(document_id, STATUS_COMPLETED)
+            stored_count = self._process(document_id, doc_type, document)
+            self.documents.set_status(document_id, STATUS_COMPLETED, chunk_count=stored_count)
         except Exception as exc:
             logger.exception("ingest failed: document_id=%s", document_id)
             self._fail(document_id, doc_type, exc)
 
-    def _process(self, document_id: int, doc_type: str, document: Any) -> None:
-        """추출 → 청킹 → 태그 → 저장용 변환 → 임베딩·저장 → 저장 개수 확인을 순서대로 한다."""
+    def _process(self, document_id: int, doc_type: str, document: Any) -> int:
+        """추출 → 청킹 → 태그 → 저장용 변환 → 임베딩·저장 → 저장 개수 확인을 순서대로 하고 저장한 청크 수를 반환한다."""
         content = self.steps.extract(document.file_path)
         chunks = self._tag(self.steps.chunk(document, content))
         if not chunks:
@@ -112,6 +118,7 @@ class IngestPipeline:
         records = self.indexer.prepare(document_id, doc_type, chunks)
         self._embed_and_save(doc_type, records)
         self.indexer.verify(doc_type, document_id, len(records))
+        return len(records)
 
     def _tag(self, chunks: list) -> list:
         """태그를 붙인다. 태그 생성이 통째로 실패해도 문서 처리는 태그 없이 계속한다."""

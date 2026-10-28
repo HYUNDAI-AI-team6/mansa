@@ -44,14 +44,16 @@ class FakeDocuments:
         self.document = document or FakeDocument()
         self.fail_on_status = fail_on_status
         self.statuses = []
+        self.chunk_counts = []
 
     def get_document(self, document_id):
         return self.document
 
-    def set_status(self, document_id, status, error=None):
+    def set_status(self, document_id, status, error=None, chunk_count=None):
         if status == self.fail_on_status:
             raise RuntimeError("db down")
         self.statuses.append((status, error))
+        self.chunk_counts.append(chunk_count)
 
 
 class FakeStore:
@@ -111,6 +113,17 @@ class IngestPipelineTest(unittest.TestCase):
         self.assertEqual(batches, [2, 2, 1])
         self.assertEqual(self.store.stored, {1: 5})
         self.assertEqual([s for s, _ in self.documents.statuses], [STATUS_PROCESSING, STATUS_COMPLETED])
+
+    def test_completion_records_the_number_of_stored_chunks(self):
+        self.pipeline(chunk=lambda document, content: make_chunks(5)).run(1)
+        self.assertEqual(self.documents.chunk_counts, [None, 5])
+
+    def test_failure_does_not_record_a_chunk_count(self):
+        def extract(path):
+            raise IngestError("실패")
+
+        self.pipeline(extract=extract).run(1)
+        self.assertEqual(self.documents.chunk_counts, [None, None])
 
     def test_extraction_error_is_recorded_with_its_message_and_stops_early(self):
         def extract(path):
