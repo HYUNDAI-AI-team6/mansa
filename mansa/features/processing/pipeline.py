@@ -44,10 +44,10 @@ class DocumentStore(Protocol):
 class IngestSteps:
     """장영균이 만드는 단계 함수 모음. 실제 PdfExtractor·Chunker·태그·임베딩을 여기에 연결한다."""
 
-    is_scanned: Callable[[str], bool]
-    extract_text: Callable[[str], list]
-    extract_tables: Callable[[str], list]
-    chunk: Callable[[Any, list, list], list]  # (문서, 페이지 본문, 표) -> 청크 목록
+    # PDF 경로 -> 본문·표 통합 추출 결과(PdfContent). 스캔본·열 수 없는 PDF는 예외로 알리며,
+    # 사용자에게 보여도 되는 문구는 IngestError로 바꿔 던진다(연결하는 쪽에서 변환한다).
+    extract: Callable[[str], Any]
+    chunk: Callable[[Any, Any], list]  # (문서, 추출 결과) -> 청크 목록
     tag: Callable[[list], list]  # 청크 목록을 받아 태그가 붙은 청크 목록을 반환
     embed: Callable[[list[str]], list[list[float]]]  # core.llm.embed
 
@@ -104,12 +104,8 @@ class IngestPipeline:
 
     def _process(self, document_id: int, doc_type: str, document: Any) -> None:
         """추출 → 청킹 → 태그 → 저장용 변환 → 임베딩·저장 → 저장 개수 확인을 순서대로 한다."""
-        path = document.file_path
-        if self.steps.is_scanned(path):
-            raise IngestError("scanned PDF: no extractable text")
-        pages = self.steps.extract_text(path)
-        tables = self.steps.extract_tables(path)
-        chunks = self._tag(self.steps.chunk(document, pages, tables))
+        content = self.steps.extract(document.file_path)
+        chunks = self._tag(self.steps.chunk(document, content))
         if not chunks:
             raise IngestError("no chunks were produced from the document")
         # 임베딩 요금이 들기 전에 메타데이터 오류를 먼저 거른다.

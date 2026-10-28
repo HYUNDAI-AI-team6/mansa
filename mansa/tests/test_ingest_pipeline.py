@@ -8,6 +8,7 @@ from features.processing.pipeline import (
     STATUS_FAILED,
     STATUS_PROCESSING,
     AlreadyProcessingError,
+    IngestError,
     IngestPipeline,
     IngestSteps,
 )
@@ -86,10 +87,8 @@ def make_chunks(count, document_id=1):
 
 def make_steps(**overrides):
     base = dict(
-        is_scanned=lambda path: False,
-        extract_text=lambda path: ["page"],
-        extract_tables=lambda path: [],
-        chunk=lambda document, pages, tables: make_chunks(5),
+        extract=lambda path: "content",
+        chunk=lambda document, content: make_chunks(5),
         tag=lambda chunks: chunks,
         embed=lambda texts: [[0.1, 0.2] for _ in texts],
     )
@@ -113,20 +112,43 @@ class IngestPipelineTest(unittest.TestCase):
         self.assertEqual(self.store.stored, {1: 5})
         self.assertEqual([s for s, _ in self.documents.statuses], [STATUS_PROCESSING, STATUS_COMPLETED])
 
-    def test_scanned_pdf_fails_without_embedding(self):
+    def test_extraction_error_is_recorded_with_its_message_and_stops_early(self):
+        def extract(path):
+            raise IngestError("스캔 PDF는 지원하지 않아요")
+
         embedded = []
-        self.pipeline(is_scanned=lambda p: True, embed=lambda t: embedded.append(t)).run(1)
-        self.assertEqual(self.documents.statuses[-1], (STATUS_FAILED, "scanned PDF: no extractable text"))
+        self.pipeline(extract=extract, embed=lambda t: embedded.append(t)).run(1)
+        self.assertEqual(self.documents.statuses[-1], (STATUS_FAILED, "스캔 PDF는 지원하지 않아요"))
         self.assertEqual(embedded, [])
         self.assertEqual(self.store.stored, {})
 
+    def test_unexpected_extraction_error_hides_its_message(self):
+        def extract(path):
+            raise OSError("/secret/path/a.pdf")
+
+        self.pipeline(extract=extract).run(1)
+        status, error = self.documents.statuses[-1]
+        self.assertEqual(status, STATUS_FAILED)
+        self.assertNotIn("/secret", error)
+        self.assertIn("OSError", error)
+
+    def test_chunker_receives_the_document_and_extracted_content(self):
+        seen = []
+
+        def chunk(document, content):
+            seen.append((document.file_path, content))
+            return make_chunks(1)
+
+        self.pipeline(extract=lambda path: ("content of", path), chunk=chunk).run(1)
+        self.assertEqual(seen, [("/files/a.pdf", ("content of", "/files/a.pdf"))])
+
     def test_no_chunks_fails(self):
-        self.pipeline(chunk=lambda d, p, t: []).run(1)
+        self.pipeline(chunk=lambda d, c: []).run(1)
         self.assertEqual(self.documents.statuses[-1][0], STATUS_FAILED)
 
     def test_bad_metadata_fails_before_embedding(self):
         embedded = []
-        bad = lambda d, p, t: [FakeChunk("본문", {"source": "a.pdf"})]
+        bad = lambda d, c: [FakeChunk("본문", {"source": "a.pdf"})]
         self.pipeline(chunk=bad, embed=lambda t: embedded.append(t)).run(1)
         self.assertEqual(self.documents.statuses[-1][0], STATUS_FAILED)
         self.assertEqual(embedded, [])
@@ -175,14 +197,14 @@ class IngestPipelineTest(unittest.TestCase):
         self.assertEqual(self.documents.statuses[-1][0], STATUS_COMPLETED)
 
     def test_guard_is_released_after_failure(self):
-        pipeline = self.pipeline(is_scanned=lambda p: True)
+        pipeline = self.pipeline(chunk=lambda d, c: [])
         pipeline.run(1)
         pipeline.run(1)
         self.assertEqual([s for s, _ in self.documents.statuses].count(STATUS_FAILED), 2)
 
     def test_run_does_not_raise_when_failure_cannot_be_recorded(self):
         self.documents.fail_on_status = STATUS_FAILED
-        self.pipeline(is_scanned=lambda p: True).run(1)
+        self.pipeline(chunk=lambda d, c: []).run(1)
         self.assertEqual([s for s, _ in self.documents.statuses], [STATUS_PROCESSING])
 
 
