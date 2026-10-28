@@ -7,18 +7,12 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pypdf import PdfReader
 
-from config import LLM_API_KEY
+# 임베딩 모델, 청크 크기·겹침, 한 번에 처리할 개수(BATCH_SIZE)는 환경변수로 바꿀 수 있다(config.py).
+from config import BATCH_SIZE, CHUNK_OVERLAP, CHUNK_SIZE, EMBEDDING_MODEL, LLM_API_KEY
 from util.vector_upload import DocType, upload_embeddings
-
-EMBEDDING_MODEL = "text-embedding-3-small"
-CHUNK_SIZE = 800
-CHUNK_OVERLAP = 100
-# 임베딩 API 호출과 Chroma 업로드를 이 개수씩 나눠 처리한다.
-BATCH_SIZE = 100
 
 Embedder = Callable[[list[str]], list[list[float]]]
 Unit = tuple[str, dict]  # (원문 텍스트, 출처 메타데이터)
-
 
 def test_load_pdf(path: Path) -> list[Unit]:
     """PDF를 페이지 단위로 읽어 (텍스트, {"source", "page"}) 목록을 반환한다.

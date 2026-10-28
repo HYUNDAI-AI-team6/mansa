@@ -11,7 +11,7 @@ Railway MySQL에 연결하고 SQL 쿼리를 보내는 함수의 사용법이다.
 DATABASE_URL=mysql+pymysql://사용자:비밀번호@호스트:포트/스키마
 ```
 
-예: `mysql+pymysql://root:비밀번호@hopper.proxy.rlwy.net:16614/testschema`
+예: `mysql+pymysql://사용자:비밀번호@호스트:포트/스키마` (실제 값은 팀에서 공유받은 것을 `.env`에만 적는다)
 
 - `호스트`와 `포트` 사이의 `host:` 같은 안내 문구를 남기지 않는다. 포트는 숫자여야 한다.
 - 비밀번호에 `@`, `:`, `/`, `#`, `%`가 있으면 URL 인코딩한다(`@` → `%40`, `:` → `%3A`, `/` → `%2F`).
