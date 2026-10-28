@@ -28,15 +28,18 @@ ChunkGetter = Callable[..., list[dict[str, Any]]]
 # shortcut: 매뉴얼 컬렉션 이름이 정해지지 않아 임시 이름(manual_docs)이 기본값이다, 올린 컬렉션 이름을
 # 받으면 .env 의 MANUAL_COLLECTION 을 바꾼다
 
-def default_safety_terms(intent: Intent) -> list[str]:
+def default_safety_terms(intent: Intent, lookup: Callable[[str], list[str]] | None = None) -> list[str]:
     """안전 문서 검색에 덧붙일 기본 단어로 작업 부위와 작업 내용을 반환한다.
 
     모델 ID는 넣지 않는다. 안전 문서는 특정 모델이 아니라 작업·위치 기준으로 쓰여 있어
     "CR-100" 같은 값을 붙이면 검색이 오히려 흐려진다.
-    shortcut: 위험 단어(넘어짐·끼임 등) 보강이 없다, 기준정보의 expand_query_terms가 생기면 그 함수로 바꾼다.
+    lookup(보통 TaxonomyService.expand_query_terms)을 주면 관계표의 작업 위치·위험 유형 단어를 뒤에 더한다.
+    작업이 없으면 lookup을 부르지 않는다.
     """
-    return [*intent.parts, *([intent.task] if intent.task else [])]
-
+    terms = [*intent.parts, *([intent.task] if intent.task else [])]
+    if lookup and intent.task:
+        terms += lookup(intent.task)
+    return terms
 
 def build_safety_query(
     question: str, intent: Intent, expand_terms: TermExpander = default_safety_terms
@@ -95,13 +98,17 @@ def search_bm25(
     return bm25_rank(query, [(chunk["id"], chunk["text"]) for chunk in corpus])[:top_k]
 
 def chunk_tags(metadata: dict[str, Any]) -> set[str]:
-    """청크 메타데이터의 태그 값을 모아 집합으로 반환한다. 태그가 없으면 빈 집합이다."""
-    # shortcut: 색인 쪽 태그 형식이 정해지지 않아 part·task 키에 쉼표로 구분한 문자열이 들어 있다고 가정한다, 형식이 정해지면 맞춘다
+    """청크 메타데이터의 태그 값을 모아 집합으로 반환한다. 태그가 없으면 빈 집합이다.
+    
+    part·task 값은 문자열 리스트나 쉼표로 구분한 문자열이다. 그 밖의 값과 빈 태그는 무시한다."""
     tags: set[str] =set()
     for key in TAG_KEYS:
         value = metadata.get(key)
+        # 쉼표 문자열은 리스트 형식으로 바뀌기 전에 색인된 청크를 위해 남겨 둔다.
         if isinstance(value, str):
-            tags.update(tag.strip() for tag in value.split(",") if tag.strip())
+            value = value.split(",")
+        if isinstance(value, list):
+            tags.update(tag.strip() for tag in value if isinstance(tag, str) and tag.strip())
     return tags
 
 def rank_by_tags(
@@ -221,3 +228,30 @@ def merge_evidence(
             best[chunk.chunk_id] = chunk
     ranked = sorted(best.values(), key=lambda c: c.score, reverse=True)
     return Evidence(chunks=ranked[:top_n])
+
+class HybridRetriever:
+    """QAService의 Retriever 구현. 벡터·BM25·태그 검색에 쓸 search와 청크 목록을 들고 있다.
+
+    명세서 services.qa.Retriever에 해당한다. 생성할 때 load_corpus로 매뉴얼·안전 문서 청크를
+    한 번 읽어 두므로 앱 시작 시 한 번만 만든다. 이후 올라온 문서는 새로 만들어야 BM25·태그에 반영된다.
+    """
+
+    def __init__(
+        self,
+        search: VectorSearch,
+        get: ChunkGetter,
+        expand_terms: TermExpander = default_safety_terms,
+    ) -> None:
+        """search는 util.rag_query.search_chunks, get은 get_chunks를 넘긴다. Chroma를 호출한다."""
+        self._search = search
+        self._expand_terms = expand_terms
+        self._manual_corpus = load_corpus(get, MANUAL_DOC_TYPE, MANUAL_COLLECTION)
+        self._safety_corpus = load_corpus(get, SAFETY_DOC_TYPE, SAFETY_COLLECTION)
+
+    def search_manual(self, question: str, intent: Intent) -> list[ScoredChunk]:
+        """매뉴얼·사양서 청크를 검색한다. 유료 임베딩 API와 Chroma를 호출한다."""
+        return search_manual(question, intent, self._search, self._manual_corpus)
+
+    def search_safety(self, question: str, intent: Intent) -> list[ScoredChunk]:
+        """안전 문서 청크를 검색한다. 유료 임베딩 API와 Chroma를 호출한다."""
+        return search_safety(question, intent, self._search, self._safety_corpus, self._expand_terms)

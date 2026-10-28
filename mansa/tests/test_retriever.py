@@ -1,14 +1,19 @@
 import unittest
+from functools import partial
 
 from core.schemas import Intent
+from features.master.taxonomy import TaxonomyService
 from features.retrieval.retriever import (
     MANUAL_COLLECTION,
     MANUAL_DOC_TYPE,
     SAFETY_COLLECTION,
     SAFETY_DOC_TYPE,
+    HybridRetriever,
     chunk_tags,
+    default_safety_terms,
     distance_to_similarity,
     load_corpus,
+    merge_evidence,
     rank_by_tags,
     rank_ids,
     search_manual,
@@ -128,6 +133,39 @@ class TagTest(unittest.TestCase):
         result = search_manual("작업 순서", BOOM_CHECK, fake_search([]), TAGGED)
         self.assertEqual([c.chunk_id for c in result], ["b", "c"])
         self.assertEqual(result[0].score, 0.0)  # 벡터 유사도가 없어서 점수는 0이다 (알려진 한계)
+    
+    def test_chunk_tags_reads_list_values(self):
+        self.assertEqual(chunk_tags({"part": ["붐", " 와이어로프 "], "task": ["점검"]}), {"붐", "와이어로프", "점검"})
+
+    def test_chunk_tags_ignores_wrong_list_items(self):
+        self.assertEqual(chunk_tags({"part": [3, ""], "task": []}), set())
+
+class SafetyTermsTest(unittest.TestCase):
+    def test_without_lookup_uses_parts_and_task(self):
+        self.assertEqual(default_safety_terms(BOOM_CHECK), ["붐", "점검"])
+
+    def test_lookup_terms_are_added_after_default_terms(self):
+        expand = partial(default_safety_terms, lookup=lambda task: ["기계실", "끼임"])
+        self.assertEqual(expand(BOOM_CHECK), ["붐", "점검", "기계실", "끼임"])
+
+    def test_no_task_skips_lookup(self):
+        calls = []
+        expand = partial(default_safety_terms, lookup=lambda task: calls.append(task) or ["x"])
+        self.assertEqual(expand(Intent(intent="procedure", parts=["붐"])), ["붐"])
+        self.assertEqual(calls, [])  # 작업이 없으면 관계표를 찾지 않는다
+
+    def test_safety_query_includes_lookup_terms(self):
+        search = fake_search([])
+        expand = partial(default_safety_terms, lookup=lambda task: ["작업반경"])
+        search_safety("각도 확인", BOOM_CHECK, search, SAFETY, expand)
+        self.assertEqual(search.calls[0][0], "각도 확인 붐 점검 작업반경")
+
+    def test_with_real_taxonomy(self):
+        expand = partial(default_safety_terms, lookup=TaxonomyService.from_directory().expand_query_terms)
+        intent = Intent(intent="safety", parts=["메인 로프"], task="메인 로프 점검")
+        self.assertEqual(expand(intent), ["메인 로프", "메인 로프 점검", "카 상부", "기계실", "추락", "끼임"])
+
+
 
 
 class HelperTest(unittest.TestCase):
@@ -144,6 +182,53 @@ class HelperTest(unittest.TestCase):
         self.assertEqual(distance_to_similarity(2.0), 0.0)
         self.assertEqual(distance_to_similarity(3.0), 0.0)  # 범위를 넘어도 0~1로 자른다
 
+def fake_get(corpora):
+    """get_chunks 대신 쓰는 가짜 함수. (DB, 컬렉션)별 청크를 페이지로 잘라 돌려주고 호출을 calls에 기록한다."""
+    calls = []
+
+    def get(doc_type, collection, limit=10, offset=0, where=None):
+        calls.append((doc_type, collection))
+        return corpora[(doc_type, collection)][offset:offset + limit]
+
+    get.calls = calls
+    return get
+
+
+CORPORA = {(MANUAL_DOC_TYPE, MANUAL_COLLECTION): MANUAL, (SAFETY_DOC_TYPE, SAFETY_COLLECTION): SAFETY}
+
+
+class HybridRetrieverTest(unittest.TestCase):
+    def test_loads_each_corpus_once(self):
+        get = fake_get(CORPORA)
+        retriever = HybridRetriever(fake_search([]), get)
+        retriever.search_manual("브레이크", NO_TAGS)
+        retriever.search_safety("크레인", NO_TAGS)
+        # 생성할 때 한 번씩만 읽고 질문할 때는 다시 읽지 않는다
+        self.assertEqual(get.calls, [(MANUAL_DOC_TYPE, MANUAL_COLLECTION), (SAFETY_DOC_TYPE, SAFETY_COLLECTION)])
+
+    def test_search_manual_uses_manual_corpus(self):
+        retriever = HybridRetriever(fake_search([]), fake_get(CORPORA))
+        result = retriever.search_manual("브레이크", NO_TAGS)
+        self.assertEqual([c.chunk_id for c in result], ["m.pdf:p1:0"])
+        self.assertEqual(result[0].doc_type, MANUAL_DOC_TYPE)
+
+    def test_search_safety_uses_safety_corpus_and_expander(self):
+        search = fake_search([])
+        retriever = HybridRetriever(search, fake_get(CORPORA))
+        result = retriever.search_safety("각도 확인", BOOM_CHECK)
+        self.assertEqual(search.calls, [("각도 확인 붐 점검", SAFETY_DOC_TYPE, SAFETY_COLLECTION)])
+        self.assertEqual([c.chunk_id for c in result], ["s.pdf:p2:0"])
+
+    def test_custom_expander_is_used(self):
+        retriever = HybridRetriever(fake_search([]), fake_get(CORPORA), expand_terms=lambda _: ["작업반경"])
+        self.assertEqual([c.chunk_id for c in retriever.search_safety("크레인", NO_TAGS)], ["s.pdf:p1:0"])
+
+    def test_results_feed_merge_evidence(self):
+        retriever = HybridRetriever(fake_search([]), fake_get(CORPORA))
+        evidence = merge_evidence(
+            retriever.search_manual("브레이크", NO_TAGS), retriever.search_safety("크레인", NO_TAGS)
+        )
+        self.assertEqual([c.chunk_id for c in evidence.chunks], ["m.pdf:p1:0", "s.pdf:p1:0"])
 
 if __name__ == "__main__":
     unittest.main()

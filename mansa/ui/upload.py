@@ -1,14 +1,19 @@
 """문서 업로드(A2): PDF 한 개 + 문서 유형(기술/안전) + 소속 부서 → 업로드.
 
-목데이터라 실제 처리는 하지 않고, 문서 관리 목록에 '처리 중' 으로 추가만 한다.
+소속 부서 목록은 DB(기준정보)에서 읽는다. 문서 기록(documents.dept_id)이 부서를 꼭 요구해서
+기술·안전 문서 모두 부서를 골라야 한다.
+업로드 처리는 아직 목데이터라 실제 처리는 하지 않고, 문서 관리 목록에 '처리 중' 으로 추가만 한다.
 """
 
+import logging  # 부서 목록을 못 불러온 원인을 서버 로그에 남기려고 쓴다
 import os
 from datetime import datetime
+from functools import cache
 from html import escape
 
 import gradio as gr
 
+from features.master.departments import DepartmentService
 from ui import components as ui
 from ui import mock_data as mock
 from ui.page import PageView
@@ -18,6 +23,36 @@ MAX_MB = 50
 SUBMIT_CLASSES = ["btn-primary", "sm-btn"]
 CANCEL_CLASSES = ["btn-secondary", "sm-btn"]
 TYPE_ICON = {"기술 문서": ("file", "blue", "#2F54EB"), "안전 문서": ("shield", "orange", "#C2410C")}
+DEPT_BOX_CLASSES = ["select", "w-320"]
+DEPT_PLACEHOLDER = "부서 선택"
+
+
+@cache
+def _departments() -> DepartmentService:
+    """부서 서비스(DB). 처음 쓸 때 한 번만 만든다."""
+    return DepartmentService()
+
+
+def _load_department_names() -> list[str] | None:
+    """부서 이름 목록을 DB 에서 읽는다. 실패하면 원인은 서버 로그에만 남기고 None 을 돌려준다."""
+    try:
+        return [d.name for d in _departments().list_all()]
+    except Exception:
+        logging.getLogger(__name__).exception("failed to load departments")
+        ui.warn("부서 목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요")
+        return None
+
+
+def _dept_box() -> gr.Dropdown:
+    """부서 드롭다운을 DB 의 최신 목록으로 채우고 고른 값을 비운다.
+
+    목록을 못 불러오면 보기 목록은 그대로 두고 고른 값만 비운다.
+    """
+    names = _load_department_names()
+    if names is None:
+        return gr.Dropdown(value="", elem_classes=DEPT_BOX_CLASSES)
+    choices = [(DEPT_PLACEHOLDER, ""), *((name, name) for name in names)]
+    return gr.Dropdown(choices=choices, value="", elem_classes=DEPT_BOX_CLASSES)
 
 
 def _empty() -> dict:
@@ -95,21 +130,19 @@ def _pick_type(state: dict, evt: gr.SelectData) -> tuple:
 
 
 def _reset() -> tuple:
-    """입력을 모두 비운다."""
-    return _empty(), None, "", type_cards_html(""), ""
+    """입력을 모두 비우고 부서 목록을 DB 에서 다시 읽는다."""
+    return _empty(), None, _dept_box(), type_cards_html(""), ""
 
 
 def _upload(state: dict, dept: str, store: dict):
     """필수값을 확인하고 문서 목록에 '처리 중' 으로 추가한다(목데이터).
 
+    필수값은 파일·문서 유형·소속 부서이고, 문서 유형과 상관없이 모두 필요하다.
     올리는 동안 버튼이 '업로드 중' 으로 바뀌고 취소와 함께 잠긴다.
     문서 업로드 기능(features/documents)이 생기면 여기서 그 함수를 부른다.
     """
-    missing = [
-        n
-        for n, ok in (("파일", state["file"]), ("문서 유형", state["type"]), ("소속 부서", dept))
-        if not ok
-    ]
+    required = [("파일", state["file"]), ("문서 유형", state["type"]), ("소속 부서", dept)]
+    missing = [name for name, ok in required if not ok]
     if missing:
         ui.warn(f"아직 정하지 않았어요: {' · '.join(missing)}")
         yield tuple(gr.skip() for _ in range(8))
@@ -155,7 +188,7 @@ def build(store: gr.State) -> PageView:
         gr.HTML('<h4 class="step">2. 문서 유형</h4>', padding=False)
         types = ui.click_list(type_cards_html(""))
         gr.HTML('<h4 class="step">3. 소속 부서</h4>', padding=False)
-        dept = ui.select_box(mock.DEPARTMENTS, "부서 선택", classes=["w-320"])
+        dept = ui.select_box([], DEPT_PLACEHOLDER, classes=["w-320"])  # 메뉴로 들어올 때 DB 에서 채운다
         with gr.Row(elem_classes=["form-actions"]):
             cancel = gr.Button("취소", elem_classes=CANCEL_CLASSES, scale=0, min_width=0)
             submit = gr.Button("업로드", elem_classes=SUBMIT_CLASSES, scale=0, min_width=0)
