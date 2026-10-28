@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Literal
 
 # 질문 의도. 공통 core/constants가 생기면 그쪽 값으로 옮긴다.
@@ -92,3 +93,34 @@ class NoAnswer:
     reason: NoAnswerReason
     message: str
     contact: str
+
+
+@dataclass
+class QaTurn:
+    """대화 안의 질문·답변 한 쌍. 저장한 답변을 그대로 보여 주며 다시 생성하지 않는다."""
+
+    question: str
+    answer: Answer
+    created_at: datetime
+
+
+@dataclass
+class Conversation:
+    """회원 한 명의 대화 하나. turns는 먼저 한 질문부터 순서대로다."""
+
+    id: int
+    member_id: int
+    title: str
+    created_at: datetime
+    turns: list[QaTurn] = field(default_factory=list)
+
+
+@dataclass
+class ConversationSummary:
+    """질문 기록 목록의 한 줄. tags(모델·작업)는 아직 저장하지 않아 빈 리스트다."""
+
+    id: int
+    title: str
+    updated_at: datetime
+    question_count: int
+    tags: list[str] = field(default_factory=list)
