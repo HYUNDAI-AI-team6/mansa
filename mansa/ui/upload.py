@@ -1,6 +1,7 @@
 """문서 업로드(A2): PDF 한 개 + 문서 유형(기술/안전) + 소속 부서 → 업로드.
 
-소속 부서 목록은 DB(기준정보)에서 읽는다. 기술 문서는 부서가 필수이고 안전 문서는 선택이다.
+소속 부서 목록은 DB(기준정보)에서 읽는다. 문서 기록(documents.dept_id)이 부서를 꼭 요구해서
+기술·안전 문서 모두 부서를 골라야 한다.
 업로드 처리는 아직 목데이터라 실제 처리는 하지 않고, 문서 관리 목록에 '처리 중' 으로 추가만 한다.
 """
 
@@ -24,8 +25,6 @@ CANCEL_CLASSES = ["btn-secondary", "sm-btn"]
 TYPE_ICON = {"기술 문서": ("file", "blue", "#2F54EB"), "안전 문서": ("shield", "orange", "#C2410C")}
 DEPT_BOX_CLASSES = ["select", "w-320"]
 DEPT_PLACEHOLDER = "부서 선택"
-OPTIONAL_DEPT_TYPE = "안전 문서"  # 이 문서 유형은 부서를 고르지 않아도 올릴 수 있다
-NO_DEPT = "-"  # 부서 없이 올린 문서를 목록에 보여 주는 글자
 
 
 @cache
@@ -138,13 +137,11 @@ def _reset() -> tuple:
 def _upload(state: dict, dept: str, store: dict):
     """필수값을 확인하고 문서 목록에 '처리 중' 으로 추가한다(목데이터).
 
-    필수값은 파일·문서 유형이고, 안전 문서가 아니면 소속 부서도 필요하다.
+    필수값은 파일·문서 유형·소속 부서이고, 문서 유형과 상관없이 모두 필요하다.
     올리는 동안 버튼이 '업로드 중' 으로 바뀌고 취소와 함께 잠긴다.
     문서 업로드 기능(features/documents)이 생기면 여기서 그 함수를 부른다.
     """
-    required = [("파일", state["file"]), ("문서 유형", state["type"])]
-    if state["type"] != OPTIONAL_DEPT_TYPE:
-        required.append(("소속 부서", dept))
+    required = [("파일", state["file"]), ("문서 유형", state["type"]), ("소속 부서", dept)]
     missing = [name for name, ok in required if not ok]
     if missing:
         ui.warn(f"아직 정하지 않았어요: {' · '.join(missing)}")
@@ -160,7 +157,7 @@ def _upload(state: dict, dept: str, store: dict):
     doc = {
         "title": title,
         "type": state["type"],
-        "dept": dept or NO_DEPT,
+        "dept": dept,
         "status": "처리 중",
         "date": datetime.now().strftime("%m/%d"),
     }
@@ -190,7 +187,7 @@ def build(store: gr.State) -> PageView:
         file_row = ui.click_list("")
         gr.HTML('<h4 class="step">2. 문서 유형</h4>', padding=False)
         types = ui.click_list(type_cards_html(""))
-        gr.HTML('<h4 class="step">3. 소속 부서 (안전 문서는 선택)</h4>', padding=False)
+        gr.HTML('<h4 class="step">3. 소속 부서</h4>', padding=False)
         dept = ui.select_box([], DEPT_PLACEHOLDER, classes=["w-320"])  # 메뉴로 들어올 때 DB 에서 채운다
         with gr.Row(elem_classes=["form-actions"]):
             cancel = gr.Button("취소", elem_classes=CANCEL_CLASSES, scale=0, min_width=0)
