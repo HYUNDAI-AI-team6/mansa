@@ -6,7 +6,7 @@ from typing import Literal
 
 import openai
 from langchain_core.messages import AIMessage
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from config import LLM_API_KEY, LLM_MODEL
 from core.exceptions import LlmError
@@ -91,15 +91,22 @@ def to_history(msgs: list[dict]) -> list[dict]:
 def _to_reply(message: AIMessage) -> dict:
     """LLM 응답을 화면 메시지 형식({"steps": [...]} 또는 {"text": ...})으로 바꾼다.
 
-    도구를 골랐으면 첫 번째 호출의 주제 안내를 원문 그대로, 아니면 응답 본문의 텍스트만 쓴다.
-    알 수 없는 주제나 빈 답변이면 FALLBACK 안내를 쓴다. 도구 이름·인자만 로그에 남기고 질문은 남기지 않는다.
+    도구를 골랐으면 첫 번째 호출의 인자를 GetGuide로 검증해 그 주제 안내를 원문 그대로, 아니면 응답 본문의 텍스트만 쓴다.
+    도구 이름이 다르거나 인자가 검증에 실패하거나 빈 답변이면 FALLBACK 안내를 쓴다.
+    로그에는 검증을 통과한 도구 이름과 주제만 남긴다. LLM이 보낸 인자 원문에는 질문 내용이 섞일 수 있어 남기지 않는다.
     """
     if message.tool_calls:
         call = message.tool_calls[0]
-        logger.info("support tool call: %s %s", call["name"], call["args"])
-        guide = GUIDES.get(call["args"].get("topic"))
-        if guide is None:
+        # bind_tools는 schema만 보내고 돌아온 인자를 검증하지 않는다.
+        try:
+            topic = GetGuide.model_validate(call["args"]).topic
+        except ValidationError:
+            topic = None
+        if call["name"] != GetGuide.__name__ or topic is None:
+            logger.warning("support tool call rejected: invalid tool name or arguments")
             return {"text": FALLBACK}
+        logger.info("support tool call: %s %s", GetGuide.__name__, topic)
+        guide = GUIDES[topic]
         return {"steps": list(guide)} if isinstance(guide, list) else {"text": guide}
     text = message.text.strip()
     return {"text": text or FALLBACK}

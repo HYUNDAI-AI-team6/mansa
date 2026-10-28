@@ -10,10 +10,11 @@ from features.support import service
 from features.support.service import FALLBACK, GUIDES, GetGuide, answer, to_history
 
 
-def _tool_reply(topic):
-    """LLM이 GetGuide(topic)를 고른 응답을 만든다."""
+def _tool_reply(topic, name="GetGuide", **extra):
+    """LLM이 도구 name(topic, **extra)를 고른 응답을 만든다."""
     return AIMessage(
-        content="", tool_calls=[{"name": "GetGuide", "args": {"topic": topic}, "id": "call_1"}]
+        content="",
+        tool_calls=[{"name": name, "args": {"topic": topic, **extra}, "id": "call_1"}],
     )
 
 
@@ -57,6 +58,27 @@ class AnswerTest(unittest.TestCase):
     def test_unknown_topic_returns_fallback(self):
         reply, _ = self.ask(_tool_reply("password"))
         self.assertEqual(reply, {"text": FALLBACK})
+
+    def test_invalid_tool_call_returns_fallback_without_logging_args(self):
+        cases = {
+            "list topic": _tool_reply(["upload"]),
+            "leaked topic": _tool_reply("개인정보가 담긴 질문"),
+            "wrong tool": _tool_reply("upload", name="개인정보가 담긴 질문"),
+        }
+        for label, message in cases.items():
+            with self.subTest(label):
+                with self.assertLogs(service.logger, "INFO") as logs:
+                    reply, _ = self.ask(message)
+                self.assertEqual(reply, {"text": FALLBACK})
+                output = "\n".join(logs.output)
+                self.assertIn("support tool call rejected", output)
+                self.assertNotIn("개인정보", output)
+
+    def test_extra_args_are_not_logged(self):
+        with self.assertLogs(service.logger, "INFO") as logs:
+            reply, _ = self.ask(_tool_reply("upload", note="개인정보가 담긴 질문"))
+        self.assertEqual(reply, {"steps": GUIDES["upload"]})
+        self.assertNotIn("개인정보", "\n".join(logs.output))
 
     def test_direct_answer_uses_text_of_content_blocks(self):
         message = AIMessage(content=[{"type": "text", "text": " 기술 Q&A에서 물어봐 주세요. ", "id": "m1"}])
