@@ -6,7 +6,25 @@ from core.schemas import Evidence, Intent, ScoredChunk
 
 # Intent를 받아 검색어에 덧붙일 단어 목록을 돌려주는 함수의 타입
 TermExpander = Callable[[Intent], list[str]]
+# util.rag_query.search_chunks와 같은 모양의 함수 타입
+VectorSearch = Callable[..., list[dict[str, Any]]]
+# util.rag_query.get_chunks와 같은 모양의 함수 타입
+ChunkGetter = Callable[..., list[dict[str, Any]]]
 
+CORPUS_PAGE_SIZE = 500
+
+SAFETY_DOC_TYPE = "secure"
+SAFETY_COLLECTION = "safety_docs"
+
+MANUAL_DOC_TYPE = "tech"
+# shortcut: 매뉴얼 컬렉션 이름이 정해지지 않아 임시 이름을 쓴다, 올린 컬렉션 이름을 받으면 바꾼다
+MANUAL_COLLECTION = "manual_docs"
+
+VECTOR_TOP_K = 20
+BM25_TOP_K = 20
+RESULT_TOP_K =20
+
+EVIDENCE_TOP_N = 8
 
 def default_safety_terms(intent: Intent) -> list[str]:
     """안전 문서 검색에 덧붙일 기본 단어로 작업 부위와 작업 내용을 반환한다.
@@ -33,16 +51,6 @@ def build_safety_query(
             extra.append(term)
     return " ".join([question.strip(), *extra])
 
-SAFETY_DOC_TYPE = "secure"
-SAFETY_COLLECTION = "safety_docs"
-MANUAL_DOC_TYPE = "tech"
-# shortcut: 매뉴얼 컬렉션 이름이 정해지지 않아 임시 이름을 쓴다, 올린 컬렉션 이름을 받으면 바꾼다
-MANUAL_COLLECTION = "manual_docs"
-VECTOR_TOP_K = 20
-
-# util.rag_query.search_chunks와 같은 모양의 함수 타입
-VectorSearch = Callable[..., list[dict[str, Any]]]
-
 
 def search_vector(
     query: str, search: VectorSearch, doc_type: str, collection: str, top_k: int = VECTOR_TOP_K
@@ -56,11 +64,9 @@ def search_vector(
     """
     return search(query, doc_type, collection, top_k=top_k)
 
-BM25_TOP_K = 20
-CORPUS_PAGE_SIZE = 500
 
-# util.rag_query.get_chunks와 같은 모양의 함수 타입
-ChunkGetter = Callable[..., list[dict[str, Any]]]
+
+
 
 
 def load_corpus(
@@ -138,7 +144,7 @@ def rank_ids(
         rankings.append(tag_ids)
     return [chunk_id for chunk_id, _ in rrf_merge(rankings)]
 
-RESULT_TOP_K =20
+
 
 def distance_to_similarity(distance: float) -> float:
     """Chroma 거리를 0~1 유사도로 바꾼다. 클수록 비슷하다."""
@@ -210,7 +216,7 @@ def search_safety(
     return to_scored_chunks(ids, vector_hits, corpus, SAFETY_DOC_TYPE)
 
 
-EVIDENCE_TOP_N = 8
+
 
 def merge_evidence(
     manual: list[ScoredChunk], safety: list[ScoredChunk], top_n: int = EVIDENCE_TOP_N
