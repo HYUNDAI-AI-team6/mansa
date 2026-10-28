@@ -85,14 +85,15 @@ def _check_required(meta: dict[str, Any], document_id: int, doc_type: str, label
 def _clean_metadata(meta: dict[str, Any], document_id: int, doc_type: str, label: str) -> dict:
     """청크 메타데이터를 검사하고 ChromaDB가 받는 값만 남겨 새 dict로 반환한다.
 
-    None 값은 뺀다. 나머지 값은 str·int·float·bool만 허용하며 리스트·dict 같은 다른 형식은
-    ValueError를 발생시킨다. 부위·작업 태그(part, task)는 쉼표로 이은 문자열이라 그대로 통과한다.
-    입력 dict는 바꾸지 않는다.
+    None과 빈 문자열(공백뿐인 문자열 포함)은 값이 없는 것이므로 키를 뺀다. 나머지 값은
+    str·int·float·bool만 허용하며 리스트·dict 같은 다른 형식은 ValueError를 발생시킨다.
+    부위·작업 태그(part, task)는 쉼표로 이은 문자열이라 값이 있으면 그대로 통과한다.
+    필수 키는 먼저 검사하므로 비어 있으면 뺄 수 없고 오류가 난다. 입력 dict는 바꾸지 않는다.
     """
     _check_required(meta, document_id, doc_type, label)
     cleaned: dict[str, Any] = {}
     for key, value in meta.items():
-        if value is None:
+        if value is None or (isinstance(value, str) and not value.strip()):
             continue
         elif isinstance(value, SCALAR_TYPES):
             cleaned[key] = value

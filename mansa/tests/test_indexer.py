@@ -35,6 +35,20 @@ class PrepareTest(unittest.TestCase):
         self.assertEqual(records[0].metadata["model"], "CR-100")
         self.assertIsNone(original["clause"])
 
+    def test_drops_blank_strings_but_keeps_values(self):
+        original = meta(1, 0, part="", task="   ", model="CR-100", clause="")
+        records = Indexer().prepare(7, "tech", [FakeChunk("본문", original)])
+        metadata = records[0].metadata
+        for key in ("part", "task", "clause"):
+            self.assertNotIn(key, metadata)
+        self.assertEqual(metadata["model"], "CR-100")
+        self.assertEqual(original["part"], "")
+
+    def test_keeps_zero_and_false_values(self):
+        records = Indexer().prepare(7, "tech", [FakeChunk("본문", meta(1, 0, score=0, flag=False))])
+        self.assertEqual(records[0].metadata["score"], 0)
+        self.assertIs(records[0].metadata["flag"], False)
+
     def test_rejects_list_tags(self):
         """태그는 쉼표로 이은 문자열이다. 옛 방식의 리스트는 저장하지 않는다."""
         with self.assertRaisesRegex(ValueError, "unsupported type"):
