@@ -43,30 +43,29 @@ Gradio 화면 연결과 ChromaDB 저장 파이프라인은 장영균 담당이 �
 | `tech` | 기술사양서 |
 | `secure` | 안전기준 문서 |
 
-`SPEC`, `SAFETY`, 한글 표기 등 다른 내부 값을 쓰지 않는다. 화면에는 "기술 문서"/"안전 문서"로 보이므로 서비스 경계에서 `tech`/`secure`로 변환한다.
+`SPEC`, `SAFETY`, 한글 표기 등 다른 내부 값을 쓰지 않는다. 화면에는 "기술 문서"/"안전 문서"로 보이므로 서비스 경계에서 `tech`/`secure`로 변환한다. DB의 `documents.doc_type`이 삭제·저장 대상 ChromaDB 서버를 정한다.
 
 ### 3.2 문서 등록과 중복
 
-> **변경 예정:** DB 담당과 협의해 중복 판단에 파일 해시를 저장하는 방향으로 결정했다. 세부 방식(해시 컬럼, 파일명 검사와의 병행 여부)은 DB 담당 안내 후 확정한다. 아래는 확정 전까지의 기준이며, 확정되면 이 절과 §7.2를 함께 고친다.
-
 - 버전 관리, 기존 문서 갱신, 별도 재처리 기능은 구현하지 않는다.
-- 현재 기준의 중복 판단은 **파일명 + 문서 유형**이다.
+- 중복 판정 키는 `documents.title_hash`(UNIQUE)다. `title`(확장자를 뺀 원래 파일명)의 해시이고, **PDF 내용의 해시가 아니다.** 파일 내용 해시(SHA-256)는 쓰지 않는다.
+- 해시 입력의 정확한 규칙(`doc_type` 포함 여부, 소문자 변환, 유니코드 NFC 정규화)은 DB 담당과 확정한다(§8). 서비스에서는 해시를 만드는 코드를 한 곳에만 두고, 규칙이 바뀌어도 그곳만 고친다.
 - `register_document()` 규칙:
-  1. 파일명과 문서 유형으로 기존 문서를 확인한다.
+  1. 파일명에서 `title`과 해시를 만들어 기존 문서를 확인한다.
   2. 중복이면 PDF 저장과 MySQL 신규 등록 **전에** 거절한다.
   3. 중복된 기존 문서의 ID를 반환한다.
   4. 기존 문서는 자동 삭제하지 않는다.
   5. 사용자가 문서관리 화면에서 직접 삭제한 뒤 다시 업로드한다.
-- 같은 파일명에 내용이 다른 파일이 들어오면 `source`(파일명)가 같은 문서가 둘 생겨 출처가 모호해질 수 있다. 해시만으로 중복을 판단하면 이 경우를 놓친다.
+- 같은 이름에 내용이 다른 파일을 올리면 중복으로 거절된다. 이름이 다르고 내용이 같은 파일은 중복으로 잡지 못한다.
 - 업로드 화면의 중복 안내는 박정환 담당이다.
 
 ### 3.3 처리 상태
 
-- `DocumentService.set_status(document_id, status, error=None)`로 상태와 실패 사유를 기록한다. 파이프라인이 호출한다.
-- 상태: `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`. 화면에서는 PENDING·PROCESSING이 "처리 중", COMPLETED가 "완료", FAILED가 "실패"로 보인다.
-- 허용 전이(제안): PENDING→PROCESSING|FAILED, PROCESSING→COMPLETED|FAILED. COMPLETED·FAILED는 끝 상태다. 박정환의 파이프라인과 협의 중이다.
-- `error`는 FAILED일 때만 값을 넣고 1,000자로 자른다. API 키나 스택 트레이스는 담지 않는다.
-- **실제 MySQL의 상태값과 컬럼명은 미확정이다**(§8).
+- 서비스 인터페이스에서는 `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`를 쓴다.
+- DB(`documents.status`, VARCHAR(10))에는 한글로 저장한다: `처리 중`, `완료`, `실패`. 서비스가 변환한다(PENDING·PROCESSING → `처리 중`, COMPLETED → `완료`, FAILED → `실패`). DB에서는 PENDING과 PROCESSING을 구분하지 않으므로 읽을 때는 `PROCESSING`으로 돌려준다. 화면 표시는 DB 값을 그대로 쓴다.
+- 허용 전이(제안): `처리 중` → `완료`|`실패`. `완료`·`실패`는 끝 상태다. 이 외의 전이는 `InvalidStatusTransition`이다.
+- `set_status(document_id, status, error=None, chunk_count=None)`: `COMPLETED`일 때 `chunk_count`(저장한 청크 수)를 `documents.chunk_count`에 기록한다.
+- **실패 사유:** 현재 `documents` 테이블에는 사유를 저장할 컬럼이 없다. `error_message` 컬럼 추가를 DB 담당에게 요청한다(`mansa/migrations/`에 새 번호 파일). 추가되기 전에는 `error`를 저장하지 않고 서버 로그에만 남긴다. `error`는 1,000자로 자르고 API 키나 스택 트레이스는 담지 않는다.
 
 ### 3.4 삭제
 
@@ -83,7 +82,7 @@ Gradio 화면 연결과 ChromaDB 저장 파이프라인은 장영균 담당이 �
 - 모델 `gpt-4o-mini`(`config.LLM_MODEL`)로 여러 청크를 배치로 분석해 두 종류를 생성한다.
   - `part`: 설비 부위 (예: 브레이크, 캘리퍼)
   - `task`: 작업 종류 (예: 교체, 점검)
-- **용어는 LLM이 본문에서 자유롭게 생성한다.** 기준정보에 등록된 용어 목록에 맞추는 방식은 목록을 받은 뒤 확장한다(§8).
+- 질의응답팀은 분류표의 부위·작업 표준 태그를 기준으로 읽는다. **분류표 목록을 받기 전에는 LLM이 본문에서 용어를 자유롭게 생성하고, 목록을 받으면 그 목록 안에서만 고르도록 확장한다**(`tag(chunks, vocabulary)`). 목록에 없는 용어는 태그에서 뺀다(§8).
 - ChromaDB에는 쉼표로 구분한 문자열로 저장한다: `{"part": "브레이크, 캘리퍼", "task": "교체, 점검"}`. 구분자는 `", "`이고, 태그 안에는 쉼표를 넣지 않는다.
 - 배치 결과는 **청크 ID로만** 대응시킨다. 모르는 ID, 중복 ID, 누락된 ID의 결과는 버린다.
 - 문자열만 남기고 앞뒤 공백·빈 값·중복을 제거한다. 결과가 비면 해당 키를 **생략**한다. 빈 문자열은 저장하지 않는다.
@@ -115,12 +114,12 @@ Gradio 화면 연결과 ChromaDB 저장 파이프라인은 장영균 담당이 �
 
 | 키 | 타입 | 대상 | 설명 |
 |---|---|---|---|
-| `source` | str | 전체 | PDF 파일명 (`documents.filename`과 같은 값, NFC 정규화) |
+| `source` | str | 전체 | PDF 파일명. `documents.title + ".pdf"`로 만든다 |
 | `page` | int | 전체 | PDF 페이지 번호 (1부터) |
 | `chunk` | int | 전체 | 해당 페이지 안에서의 청크 순번 (**0부터**, 임시 결정) |
 | `document_id` | int | 전체 | MySQL `documents.id` |
 | `document_type` | str | 전체 | `tech` 또는 `secure` |
-| `doc_name` | str | 전체 | 출처에 표시할 문서명. **파일명에서 확장자를 뺀 값** (예: `안전기준.pdf` → `안전기준`) |
+| `doc_name` | str | 전체 | 출처에 표시할 문서명. **파일명에서 확장자를 뺀 값** = `documents.title` (예: `안전기준`) |
 | `model` | str | `tech` | 차종·모델명. 청크당 하나. PDF 표기를 그대로 쓴다(§8) |
 | `clause` | str | `secure` | 조항·절 번호 (예: `6.6.4.1.2`) |
 | `section_title` | str | `secure` | 조항·절 제목. 선택 항목 |
@@ -129,7 +128,7 @@ Gradio 화면 연결과 ChromaDB 저장 파이프라인은 장영균 담당이 �
 
 - `source`, `page`, `chunk`의 키 이름과 자료형은 바꾸지 않는다. QA가 `(source, page, chunk)`로 정렬하고 출처를 구성한다.
 - **값이 없는 키는 생략한다.** ChromaDB 메타데이터는 `None`을 저장할 수 없다. 값은 `str`, `int`, `float`, `bool`만 가능하고 리스트·dict는 저장할 수 없다.
-- `department_id`는 ChromaDB 메타데이터에 넣지 않는다. 부서 정보는 MySQL(`documents`)에서 `document_id`로 찾는다.
+- `department_id`는 ChromaDB 메타데이터에 넣지 않는다. 부서 정보는 MySQL(`documents.dept_id`)에서 `document_id`로 찾는다.
 - 예전 키는 폐기했다: `product_model` → `model`, `section_number` → `clause`, `tags` → `part`·`task`.
 
 ### 4.2 청크 ID
@@ -152,7 +151,7 @@ uv run --locked python -B -m unittest discover -s tests -v
 | 청킹(기술사양서·안전기준), `Chunk` 구조 | 미구현 | |
 | 태그 생성 (`part`, `task`) | 미구현 | |
 | 임베딩 생성 (`core.llm.embed`) | 미구현 | QA와 합의 후 |
-| 문서 등록·중복 확인, 목록·상태·삭제 서비스 | 미구현 | `features/documents/`는 비어 있음. DB 확정 후 |
+| 문서 등록·중복 확인, 목록·상태·삭제 서비스 | 미구현 | `features/documents/`는 비어 있음 |
 
 ### 5.1 데이터 구조 (실제 코드 기준)
 
@@ -223,26 +222,29 @@ OCR과 Vision LLM 기반 도면·이미지 해석은 구현 범위에서 제외�
 - 현재 `features/processing/pipeline.py`(feat/50-ingest-pipeline)의 `IngestSteps`는 옛 시그니처(`is_scanned`, `extract_text`, `extract_tables`, `chunk(document, pages, tables)`)라서 위 합의에 맞게 박정환이 수정할 예정이다.
 - `Indexer.prepare()`가 청크에서 검사하는 조건: `text`는 공백이 아닌 문자열, `source`는 비어 있지 않은 `str`, `page`는 1 이상 `int`, `chunk`는 0 이상 `int`, `document_id`·`document_type`은 문서와 같은 값, 값은 `str/int/float/bool`만, 같은 `(page, chunk)`는 한 번만. 이 조건을 어기면 `ValueError`다.
 - 스캔본은 `ScannedPdfError`로 오고, `pipeline._error_text`는 `IngestError` 외 예외를 "예외이름 (see server log)"로만 기록한다. 박정환의 어댑터가 사용자용 문구로 바꾼다.
+- 완료할 때 `set_status(id, "COMPLETED", chunk_count=저장한 청크 수)`로 청크 수를 넘긴다.
 
 ### 7.2 문서관리 → 박정환 (`DocumentService`)
 
-이름과 입출력은 합의했고, 내부 컬럼은 DB 담당 확정 전이다. 아직 구현하지 않았다.
+이름과 입출력은 합의했고 아직 구현하지 않았다. 아래는 DB 담당이 만든 `documents` 테이블(§7.4)을 기준으로 한다.
 
 ```python
-register_document(source_path, filename, doc_type, department_id=None) -> int   # 새 문서 ID
+register_document(source_path, filename, doc_type, department_id) -> int        # 새 문서 ID
 list_documents(doc_type=None, department_id=None, status=None, keyword=None) -> list[DocumentRow]
 get_document(document_id) -> Document
-get_status(document_id) -> DocumentStatus        # status, error_message, updated_at
-set_status(document_id, status, error=None) -> None
-summary() -> DocumentSummary                     # total, by_status{4개}, by_type{tech,secure}
+get_status(document_id) -> DocumentStatus        # status, chunk_count, updated_at
+set_status(document_id, status, error=None, chunk_count=None) -> None
+summary() -> DocumentSummary                     # total, by_status, by_type{tech,secure}
 delete_pdf(document_id) -> bool                  # 파일이 이미 없으면 False. 재시도 가능
 delete_document_record(document_id) -> bool      # MySQL 행만 삭제. 반드시 마지막에 호출
 ```
 
-- `Document`: `id`, `filename`, `doc_type`, `department_id`, `department_name`, `status`, `error_message`, `created_at`, `updated_at`, `file_path`. `doc_type`은 `"tech"`/`"secure"`이고, `file_path`는 저장소 안으로 검증된 절대 `Path`다. 화면에 노출하지 않는다. `DocumentRow`는 `file_path`를 뺀 것이다.
-- 예외: `DuplicateDocumentError`(`.document_id`에 기존 문서 ID), `DocumentNotFoundError`, `DocumentStorageError`, `InvalidStatusTransition`, `ValueError`.
-- `register_document`의 `filename`은 원본 파일명이고, 서비스가 NFC로 정규화한다. 기술 문서는 `department_id`가 필수, 안전기준 문서는 선택이다(현재 업로드 화면은 안전문서에도 필수라 박정환의 수정이 필요하다).
-- 등록 순서: 입력 검증 → 중복 조회 → 임시 파일로 저장 후 `{유형}/{uuid}.pdf`로 교체 → `INSERT`. 실패하면 저장한 파일을 지운다. 사용자 파일명은 경로에 쓰지 않는다.
+- `Document`: `id`, `title`(= `doc_name`), `filename`(= `title + ".pdf"`, `source`용), `doc_type`, `department_id`, `department_name`, `status`, `chunk_count`, `created_at`, `updated_at`, `file_path`. `file_path`는 컬럼이 아니라 서비스가 계산한 저장소 안의 절대 `Path`다. 화면에 노출하지 않는다. `DocumentRow`는 `file_path`를 뺀 것이다.
+- `department_id`는 기술·안전 문서 모두 필수다(`dept_id NOT NULL`).
+- 예외: `DuplicateDocumentError`(`.document_id`에 기존 문서 ID), `DocumentNotFoundError`, `DocumentStorageError`, `InvalidStatusTransition`, `ValueError`(유형·파일 형식·파일명·부서 오류).
+- `filename`은 원본 파일명이고, 서비스가 NFC로 정규화한 뒤 확장자를 빼서 `title`을 만든다.
+- 등록 순서: 입력 검증(`%PDF-` 헤더, 크기) → `title`·해시 계산 → 중복 조회(중복이면 거절) → 임시 파일로 저장 → `INSERT`(상태 `처리 중`) → 임시 파일을 `{저장소}/{doc_type}/{id}.pdf`로 이름 변경. 실패하면 행과 파일을 정리한다. `execute`가 `lastrowid`를 주지 않으므로 새 ID는 `title_hash`로 다시 조회해서 얻는다. 사용자 파일명은 경로에 쓰지 않는다.
+- 저장소 기준 폴더는 환경변수로 관리하며, 위치는 미확정이다(§8).
 - 책임 구분: DocumentService는 MySQL 행과 원본 PDF 파일만 다루고 ChromaDB와 파이프라인을 호출하지 않는다. 파이프라인은 MySQL에 직접 접근하지 않고 `set_status`만 호출한다.
 
 ### 7.3 문서관리 → ChromaDB (`util/vector_upload.py`, 이미 있음)
@@ -254,17 +256,33 @@ n = upload_embeddings(doc_type, collection_name, ids, embeddings, documents, met
 ```
 
 - `doc_type`은 `"tech"` 또는 `"secure"`이고, 유형마다 접속하는 서버가 다르다. 컬렉션 이름은 인자로 받는다.
+- **컬렉션은 기술 `tech_docs`, 안전 `safety_docs`로 확정**됐다(박정환 전달). QA의 `retriever.py`는 기술 문서 컬렉션을 임시 이름 `manual_docs`로 쓰고 있어 `tech_docs`로 바꿔야 한다.
 - `ids`, `embeddings`, `documents`, `metadatas`는 같은 길이여야 하고, 같은 id를 다시 보내면 덮어쓴다(upsert).
 - 컬렉션은 처음 저장할 때 임베딩 차원이 고정된다. 다른 차원은 저장하지 않는다.
 - **거리 방식은 L2(Chroma 기본값)로 둔다.** QA의 `distance_to_similarity`가 `1 - d/2`로 L2를 가정하므로, cosine 컬렉션을 만들면 유사도가 틀려진다. 바꾸려면 QA와 먼저 합의한다.
-- 컬렉션 이름은 미확정이다. 박정환의 `Indexer`는 `tech_docs`/`safety_docs`, QA의 `retriever.py`는 임시로 `manual_docs`/`safety_docs`를 쓰고 있어 서로 다르다(§8).
 - 두 서버에는 현재 인증이 없다. 자세한 사용법은 `docs/VectorDBConnector.md`를 따른다.
 
 ### 7.4 문서관리 → MySQL
 
 - `util/mysql_connection.py`의 `fetch_all(sql, params)`, `execute(sql, params)`로 SQL을 직접 보낸다. 값은 `:이름` 자리표시자로 넘기고 SQL 문자열에 이어 붙이지 않는다. `execute`는 영향 행 수만 반환하고 `lastrowid`는 주지 않는다. 자세한 사용법은 `docs/MySqlConnector.md`를 따른다.
-- `core/models/`는 비어 있고 ORM 모델은 아직 쓰지 않는다.
-- **문서 테이블은 아직 없다.** `departments`(`id BIGINT`, `name`, `created_at`, `updated_at`)는 DB 담당의 설명으로만 확인했고 코드로는 확인하지 못했다. `documents` 테이블 설계안은 DB 담당에게 전달해 확정받는다(§8).
+- `core/models/`는 비어 있고 ORM 모델은 쓰지 않는다. raw SQL 방식을 따른다.
+- DB 담당이 만든 `documents` 테이블(`mansa/migrations/0001_create_documents.sql`, 수동 실행. 이후 변경은 기존 파일을 고치지 않고 새 번호 파일로 추가):
+
+| 컬럼 | 타입 | 비고 |
+|---|---|---|
+| `id` | INT PK AUTO_INCREMENT | 문서 ID. ChromaDB `document_id`로 사용 |
+| `title` | VARCHAR(255) NOT NULL | 원래 파일 이름(확장자 제외, 소문자 변환 전) |
+| `title_hash` | CHAR(64) NOT NULL UNIQUE | 중복 판정 키 |
+| `doc_type` | ENUM('tech','secure') NOT NULL | 삭제·저장할 DB를 정한다 |
+| `dept_id` | 부서 PK와 같은 타입, NOT NULL | FK → 부서 테이블 PK, ON DELETE RESTRICT |
+| `status` | VARCHAR(10) NOT NULL | `처리 중` / `완료` / `실패` |
+| `chunk_count` | INT NULL | 완료 시 기록 |
+| `created_at` | DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP | |
+| `updated_at` | DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | |
+
+- 이 테이블에는 **원본 PDF 경로 컬럼과 실패 사유 컬럼이 없다.** 경로는 문서 ID로 계산하고, 실패 사유 컬럼은 추가를 요청한다(§3.3).
+- 부서 삭제는 RESTRICT라서 문서가 있는 부서는 삭제할 수 없다. 기준정보 화면의 부서 삭제는 이 오류를 처리해야 한다.
+- 이 파일은 아직 저장소에서 확인하지 못했다. 컬럼명은 DB 담당이 전달한 표를 기준으로 한다.
 
 ### 7.5 문서관리 → 질의응답 (`util/rag_query.py`, `features/retrieval/`)
 
@@ -280,15 +298,15 @@ n = upload_embeddings(doc_type, collection_name, ids, embeddings, documents, met
 
 | 항목 | 확인할 곳 |
 |---|---|
-| 해시 저장 방식 세부(컬럼, 파일명 검사 병행 여부)와 `documents` 테이블 | DB 담당 |
-| MySQL 문서 테이블의 상태값·컬럼명, `departments.id`의 `UNSIGNED` 여부, MySQL 버전·타임존 | DB 담당 |
-| ChromaDB 컬렉션 이름(`tech`/`secure` 서버별)과 남아 있는 테스트 데이터의 차원(1536 vs 3072) | DB 담당 |
+| `title_hash`의 입력 규칙(`doc_type` 포함 여부, 소문자 변환, NFC 정규화) | DB 담당 |
+| `documents`에 `error_message` 컬럼 추가, `status` 한글 3값 확정, 마이그레이션 파일 위치·실행 시점 | DB 담당 |
 | 원본 PDF 저장 위치·방식(영속 볼륨 여부), 기준 폴더 환경변수 | DB 담당·박정환 |
+| 남아 있는 ChromaDB 테스트 데이터의 차원(1536 vs 3072) 정리 | DB 담당 |
+| 분류표의 **부위·작업 표준 태그 목록**. 받기 전에는 자유 생성, 받으면 목록 안에서만 선택 | QA·기준정보 담당 |
 | 기준정보의 **모델 ID 목록**. 받기 전에는 PDF 표기(예: `LUXEN`, `NEW YZER`)를 그대로 `model`에 넣는다 | QA·기준정보 담당 |
-| 기준정보의 부위·작업 목록과 동의어. 받으면 `part`·`task`를 등록 용어에 맞추는 방식으로 확장한다 | QA·기준정보 담당 |
 | `chunk`를 0부터 시작하는 것, `model`·`clause` 같은 키가 없는 청크의 처리 | QA |
-| `core.llm.embed` 추가, QA의 `embed` 기본값 교체 시점, 임베딩 모델명 설정 위치 | QA |
-| `IngestSteps`·`Indexer`를 합의한 시그니처로 바꾸는 시점, `set_status` 전이 검증 수용 여부, 삭제 중간 실패 처리 | 박정환 |
+| `core.llm.embed` 추가, QA의 `embed` 기본값 교체 시점, QA `retriever.py`의 `manual_docs` → `tech_docs` 변경 | QA |
+| `IngestSteps`·`Indexer`를 합의한 시그니처로 바꾸는 시점, 상태 전이 검증 수용 여부, `chunk_count` 전달, 삭제 중간 실패 처리 | 박정환 |
 | 신뢰도 낮은 표를 청크로 만들지 여부 | 장영균 |
 | 수식·도면 페이지에 OCR/Vision을 나중에 추가할지 | 팀 합의 |
 
@@ -296,7 +314,7 @@ n = upload_embeddings(doc_type, collection_name, ids, embeddings, documents, met
 
 1. 실제 저장소에서 확인하지 못한 파일, 함수, DB 필드를 있다고 가정하지 않는다. 필요한 정보가 없으면 보고하고 요청한다.
 2. 담당이 아닌 파일은 요청 없이 수정하지 않는다. 특히 박정환의 화면·파이프라인·`Indexer` 파일, QA의 `util/rag_*.py`와 `features/retrieval/`, 공용 DB 설정, `core/llm.py`는 담당자와 합의한 뒤에 바꾼다.
-3. ChromaDB 데이터 구조, 컬렉션 이름, MySQL 스키마를 독자적으로 정하거나 바꾸지 않는다. 기존 마이그레이션 파일을 고치지 않는다.
+3. ChromaDB 데이터 구조, 컬렉션 이름, MySQL 스키마를 독자적으로 정하거나 바꾸지 않는다. 기존 마이그레이션 파일을 고치지 않고 새 번호 파일로 추가한다.
 4. 문서 유형은 `tech`/`secure`, 메타데이터 키 `source`/`page`/`chunk`는 이름과 타입을 유지한다.
 5. 비밀값(API 키, DB 접속 정보)은 환경변수로만 다루고 코드·로그·커밋에 남기지 않는다.
 6. 구현 후에는 단위 테스트를 실행하고, 실행한 결과만 성공으로 보고한다.
