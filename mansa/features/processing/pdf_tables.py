@@ -13,7 +13,9 @@ TINY_TABLE_LIMIT = 2
 
 # 글자 없이 숫자·기호만 있는 셀이 줄바꿈 뒤 "." 또는 ","로 끝나는 경우(예: "0 37\n.")
 _LETTER = re.compile(r"[A-Za-z가-힣]")
-_TRAILING_PUNCT_LINE = re.compile(r"\n[.,]( [.,])*\s*$")
+# "." 또는 ","만 있는 줄과, 페이지 단어 안의 소수점·천 단위 구분 숫자(예: 0.16, 2,500)
+_PUNCT_ONLY_LINE = re.compile(r"[.,]( [.,])*")
+_PUNCTUATED_NUMBER = re.compile(r"\d+(?:[.,]\d+)+")
 
 
 @dataclass(frozen=True)
@@ -69,19 +71,55 @@ def point_in_box(word: tuple, box: tuple[float, float, float, float]) -> bool:
     return box[0] <= cx <= box[2] and box[1] <= cy <= box[3]
 
 
+def _digit_pattern(digits: str) -> re.Pattern:
+    """숫자열을 공백이 끼어 있어도 찾는 패턴으로 만든다. "1020"은 "1 020"에도 맞는다.
+
+    앞뒤가 다른 숫자의 일부면 맞지 않는다. "0 10" 안의 "10"을 잘못 찾지 않도록
+    공백 하나를 사이에 둔 숫자까지 앞뒤 경계로 본다.
+    """
+    body = r"\s?".join(digits)
+    return re.compile(r"(?<!\d)(?<!\d\s)" + body + r"(?!\s?\d)")
+
+
+def _repair_text_cell(cell_text: str, cell_words: list[tuple]) -> str:
+    """글자가 섞인 셀의 소수점·쉼표를 복원하고 떨어져 나온 기호 줄을 지운다.
+
+    셀을 통째로 다시 만들지 않는다. 여러 줄 문장은 단어를 좌표 순서로 이으면 순서가 뒤섞이고
+    띄어쓰기가 사라지기 때문이다. 대신 페이지 단어에 있는 "0.16", "2,500" 같은 숫자를 찾아,
+    셀 본문에서 구분 기호가 빠진 같은 숫자열("016", "2 500")을 그 값으로 바꾼다.
+    이미 본문에 있는 값은 건드리지 않고, 숫자 자체는 바꾸지 않으며 구분 기호만 채운다.
+    그 뒤 "."이나 ","만 남은 줄은 지운다. 이 기호들은 문장 부호라서 지워도 값은 변하지 않는다.
+    """
+    text = cell_text
+    for word in cell_words:
+        for match in _PUNCTUATED_NUMBER.finditer(word[4]):
+            number = match.group()
+            if number in text:
+                continue
+            digits = re.sub(r"\D", "", number)
+            text = _digit_pattern(digits).sub(number, text, count=1)
+    lines = [line for line in text.split("\n") if not _PUNCT_ONLY_LINE.fullmatch(line.strip())]
+    return "\n".join(lines)
+
+
 def restore_split_number(cell_text: str, cell_box, words: list[tuple]) -> str:
     """셀 안의 분리된 숫자("0 37\\n.")를 페이지의 글자 좌표로 복원한다("0.37").
 
-    글자 없이 숫자·기호만 있고 줄바꿈 뒤 ".", ","로 끝나는 셀만 대상으로 하고, 그 외 셀은 그대로 반환한다.
-    소수점 위치를 문자열 규칙으로 추정하면 "225\\n."가 2.25인지 22.5인지 알 수 없어서,
-    셀 영역 안의 단어를 위에서 아래, 왼쪽에서 오른쪽 순으로 이어 붙인다.
-    영역 안에 단어가 없으면 원문을 유지한다.
+    "."·","만 있는 줄이 없는 셀과 셀 영역이 없는 셀은 그대로 반환한다.
+    - 글자 없이 숫자·기호만 있는 셀: 소수점 위치를 문자열 규칙으로 추정하면 "225\\n."가
+      2.25인지 22.5인지 알 수 없어서, 셀 영역 안의 단어를 위에서 아래, 왼쪽에서 오른쪽 순으로
+      공백으로 이어 붙인다(값이 여러 줄이면 한 줄이 된다). 영역 안에 단어가 없으면 원문을 유지한다.
+    - 글자가 섞인 셀: 숫자의 구분 기호만 복원하고 기호만 남은 줄을 지운다(_repair_text_cell).
     """
-    if cell_box is None or _LETTER.search(cell_text) or not _TRAILING_PUNCT_LINE.search(cell_text):
+    if cell_box is None or not any(
+        _PUNCT_ONLY_LINE.fullmatch(line.strip()) for line in cell_text.split("\n")
+    ):
         return cell_text
     inside = sorted(
         (w for w in words if point_in_box(w, cell_box)), key=lambda w: (round(w[1]), w[0])
     )
+    if _LETTER.search(cell_text):
+        return _repair_text_cell(cell_text, inside)
     return " ".join(w[4] for w in inside) or cell_text
 
 

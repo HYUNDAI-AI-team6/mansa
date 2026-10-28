@@ -126,8 +126,39 @@ class RestoreSplitNumberTest(unittest.TestCase):
         words = [(5, 5, 40, 15, "1,000", 0, 0, 0)]
         self.assertEqual(restore_split_number("1 000\n,", self.BOX, words), "1,000")
 
-    def test_leaves_text_cell_unchanged(self) -> None:
-        self.assertEqual(restore_split_number("문장입니다\n.", self.BOX, self.WORDS), "문장입니다\n.")
+    def test_restores_multiline_number_cell(self) -> None:
+        words = [
+            (5, 2, 20, 8, "22.9", 0, 0, 0),
+            (5, 8, 20, 12, "26.2", 0, 1, 0),
+            (5, 12, 20, 18, "3.3", 0, 2, 0),
+        ]
+        self.assertEqual(restore_split_number("229\n.\n262\n.\n33", self.BOX, words), "22.9 26.2 3.3")
+
+    def test_text_cell_drops_punctuation_only_line(self) -> None:
+        self.assertEqual(restore_split_number("문장입니다\n.", self.BOX, self.WORDS), "문장입니다")
+
+    def test_text_cell_restores_separators_without_reordering(self) -> None:
+        words = [(5, 5, 20, 15, "2,500다)", 0, 0, 0), (25, 5, 45, 15, "0.16", 0, 0, 1)]
+        cell = "정격하중이 2500다) ㎏을 초과하면 016 ㎡를 더한다\n. , ."
+
+        self.assertEqual(
+            restore_split_number(cell, self.BOX, words), "정격하중이 2,500다) ㎏을 초과하면 0.16 ㎡를 더한다"
+        )
+
+    def test_text_cell_keeps_number_already_correct(self) -> None:
+        words = [(5, 5, 40, 15, "1,020", 0, 0, 0)]
+
+        self.assertEqual(restore_split_number("1,020 ㎜ 이하\n,", self.BOX, words), "1,020 ㎜ 이하")
+
+    def test_text_cell_number_match_ignores_part_of_other_number(self) -> None:
+        words = [(5, 5, 20, 15, "1.0", 0, 0, 0), (25, 5, 45, 15, "0.10", 0, 0, 1)]
+
+        self.assertEqual(restore_split_number("1 0 m ± 0 10 m\n. .", self.BOX, words), "1.0 m ± 0.10 m")
+
+    def test_text_cell_digits_are_never_changed(self) -> None:
+        words = [(5, 5, 40, 15, "9.99", 0, 0, 0)]
+
+        self.assertEqual(restore_split_number("무게 100 ㎏\n.", self.BOX, words), "무게 100 ㎏")
 
     def test_leaves_normal_number_unchanged(self) -> None:
         self.assertEqual(restore_split_number("0 37", self.BOX, self.WORDS), "0 37")
@@ -199,15 +230,24 @@ class RealPdfTablesTest(unittest.TestCase):
         cells = [c for c in (x for r in result.tables_on_page(51)[0].rows for x in r)]
         self.assertIn("0.37", cells)
         self.assertIn("2.20", cells)
-        split = re.compile(r"\n[.,]( [.,])*\s*$")
+        punct_only = re.compile(r"[.,]( [.,])*")
         leftover = [
             c
             for t in result.tables
             for row in t.rows
             for c in row
-            if split.search(c) and not re.search(r"[A-Za-z가-힣]", c)
+            if any(punct_only.fullmatch(line.strip()) for line in c.split("\n"))
         ]
         self.assertEqual(leftover, [])
+
+    @unittest.skipUnless(SAFETY_PDF.is_file(), "safety pdf not found")
+    def test_safety_text_cells_keep_decimal_points(self) -> None:
+        rows = extract_pdf_tables(SAFETY_PDF).tables_on_page(51)[0].rows
+
+        self.assertEqual(rows[0][0], "정격하중 무게\n(㎏)")
+        self.assertEqual(rows[14][2], "2,500다)")
+        self.assertIn("0.16 ㎡의 면적을 더한다", rows[15][0])
+        self.assertNotIn("016", rows[15][0])
 
     @unittest.skipUnless(
         SAFETY_PDF.is_file() and ELTRON_PDF.is_file() and LUXEN_PDF.is_file(), "pdfs not found"
