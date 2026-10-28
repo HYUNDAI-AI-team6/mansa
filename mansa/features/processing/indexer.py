@@ -1,13 +1,10 @@
 """청크를 ChromaDB에 저장·삭제하고 저장 결과를 확인한다."""
 
-import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-logger = logging.getLogger(__name__)
-
-# 문서 유형별 컬렉션. "tech" 쪽 이름은 벡터 DB 담당 확인 전의 계획값이다.
+# 문서 유형별 컬렉션. 기술 문서 tech_docs, 안전 문서 safety_docs로 확정됐다.
 COLLECTIONS = {"tech": "tech_docs", "secure": "safety_docs"}
 # 질의응답팀의 util/rag_query.py가 (source, page, chunk)로 정렬하고 출처를 만든다.
 REQUIRED_KEYS = ("source", "page", "chunk", "document_id", "document_type")
@@ -70,18 +67,6 @@ def _default_delete_document(doc_type: str, document_id: int) -> None:
     collection.delete(where={"document_id": document_id})
 
 
-def _clean_tags(value: Any) -> list[str] | None:
-    """문자열 태그만 남기고 중복을 제거한 목록을 반환한다. 남은 태그가 없으면 None이다.
-
-    ChromaDB 1.5.9는 빈 리스트와 문자열이 아닌 원소가 섞인 리스트를 거부한다. 태그는 부가 정보라
-    문서 처리를 멈추지 않고, 쓸 수 없는 태그는 버려 tags 키를 빼는 쪽으로 처리한다.
-    """
-    if not isinstance(value, list):
-        return None
-    tags = [tag for tag in value if isinstance(tag, str) and tag.strip()]
-    return list(dict.fromkeys(tags)) or None
-
-
 def _check_required(meta: dict[str, Any], document_id: int, doc_type: str, label: str) -> None:
     """필수 키의 존재와 자료형, 문서 ID·유형 일치를 확인한다. 어긋나면 ValueError를 발생시킨다."""
     missing = [key for key in REQUIRED_KEYS if meta.get(key) is None]
@@ -100,19 +85,14 @@ def _check_required(meta: dict[str, Any], document_id: int, doc_type: str, label
 def _clean_metadata(meta: dict[str, Any], document_id: int, doc_type: str, label: str) -> dict:
     """청크 메타데이터를 검사하고 ChromaDB가 받는 값만 남겨 새 dict로 반환한다.
 
-    None 값은 빼고, tags는 _clean_tags 결과가 없으면 뺀다. 그 밖의 값은 str·int·float·bool만
-    허용하며 다른 형식은 ValueError를 발생시킨다. 입력 dict는 바꾸지 않는다.
+    None 값은 뺀다. 나머지 값은 str·int·float·bool만 허용하며 리스트·dict 같은 다른 형식은
+    ValueError를 발생시킨다. 부위·작업 태그(part, task)는 쉼표로 이은 문자열이라 그대로 통과한다.
+    입력 dict는 바꾸지 않는다.
     """
     _check_required(meta, document_id, doc_type, label)
     cleaned: dict[str, Any] = {}
     for key, value in meta.items():
-        if key == "tags":
-            tags = _clean_tags(value)
-            if tags is None:
-                logger.warning("%s: tags dropped because it is empty or not a list of str", label)
-            else:
-                cleaned[key] = tags
-        elif value is None:
+        if value is None:
             continue
         elif isinstance(value, SCALAR_TYPES):
             cleaned[key] = value

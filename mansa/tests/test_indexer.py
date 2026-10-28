@@ -18,23 +18,27 @@ def meta(page=1, chunk=0, **extra):
 
 class PrepareTest(unittest.TestCase):
     def test_builds_ids_and_keeps_metadata(self):
-        chunks = [FakeChunk("본문1", meta(1, 0, tags=["모터", "전기"])), FakeChunk("본문2", meta(2, 0))]
+        chunks = [
+            FakeChunk("본문1", meta(1, 0, part="브레이크, 캘리퍼", task="교체, 점검")),
+            FakeChunk("본문2", meta(2, 0)),
+        ]
         records = Indexer().prepare(7, "tech", chunks)
         self.assertEqual([r.id for r in records], ["7:p1:0", "7:p2:0"])
-        self.assertEqual(records[0].metadata["tags"], ["모터", "전기"])
+        self.assertEqual(records[0].metadata["part"], "브레이크, 캘리퍼")
+        self.assertEqual(records[0].metadata["task"], "교체, 점검")
         self.assertEqual(records[1].text, "본문2")
 
-    def test_drops_none_and_empty_tags_without_changing_input(self):
-        original = meta(1, 0, tags=[], section_number=None, product_model="CR-100")
+    def test_drops_none_values_without_changing_input(self):
+        original = meta(1, 0, clause=None, model="CR-100")
         records = Indexer().prepare(7, "tech", [FakeChunk("본문", original)])
-        self.assertNotIn("tags", records[0].metadata)
-        self.assertNotIn("section_number", records[0].metadata)
-        self.assertEqual(records[0].metadata["product_model"], "CR-100")
-        self.assertEqual(original["tags"], [])
+        self.assertNotIn("clause", records[0].metadata)
+        self.assertEqual(records[0].metadata["model"], "CR-100")
+        self.assertIsNone(original["clause"])
 
-    def test_keeps_only_string_tags(self):
-        records = Indexer().prepare(7, "tech", [FakeChunk("본문", meta(tags=["모터", 3, "모터"]))])
-        self.assertEqual(records[0].metadata["tags"], ["모터"])
+    def test_rejects_list_tags(self):
+        """태그는 쉼표로 이은 문자열이다. 옛 방식의 리스트는 저장하지 않는다."""
+        with self.assertRaisesRegex(ValueError, "unsupported type"):
+            Indexer().prepare(7, "tech", [FakeChunk("본문", meta(part=["브레이크"]))])
 
     def test_rejects_missing_required_key(self):
         bad = meta()
