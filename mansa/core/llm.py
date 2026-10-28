@@ -1,4 +1,5 @@
 import openai
+from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import Runnable
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
@@ -91,3 +92,31 @@ def complete(workflow: str, prompt: str, schema: type[BaseModel], history: list[
         except _RETRYABLE_ERRORS as exc:
             last_error = exc
     raise LlmError(f"{workflow} LLM failed after {1 + LLM_MAX_RETRIES} attempts") from last_error
+
+def choose_tool(
+    workflow: str,
+    system: str,
+    question: str,
+    tools: list[type[BaseModel]],
+    history: list[dict] | None = None,
+) -> AIMessage:
+    """도구(tools)를 붙인 LLM에 system 지시, 이전 대화, 질문을 차례로 보내 응답 메시지를 반환한다.
+
+    LLM이 도구를 고르면 응답의 tool_calls에 도구 이름과 인자가 담기고, 고르지 않으면 본문에 답변이 담긴다.
+    도구를 실행하거나 결과를 다시 보내지 않는다(호출은 한 번). 본문은 문자열이 아니라 블록 목록일 수 있어
+    텍스트는 호출자가 AIMessage.text로 꺼낸다. history는 complete()와 같은 형식이며 변경하지 않는다.
+    시간 초과는 LLM_MAX_RETRIES번까지 다시 시도하고 그래도 실패하면 LlmError를 발생시킨다.
+    다른 오류는 openai 예외로 그대로 전달된다. 유료 외부 API(OpenAI)를 호출한다.
+    """
+    model = _get_model().bind_tools(tools)
+    messages = [
+        {"role": "system", "content": system},
+        *(history or []),
+        {"role": "user", "content": question},
+    ]
+    for _ in range(1 + LLM_MAX_RETRIES):
+        try:
+            return model.invoke(messages)
+        except openai.APITimeoutError as exc:
+            last_error = exc
+    raise LlmError(f"{workflow} LLM timed out after {1 + LLM_MAX_RETRIES} attempts") from last_error

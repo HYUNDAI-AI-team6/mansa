@@ -8,6 +8,7 @@ from html import escape
 
 import gradio as gr
 
+from features.support.service import answer as answer_support
 from ui import components as ui
 from ui import mock_data as mock
 
@@ -119,7 +120,7 @@ def _waiting(state: dict, typing: str) -> tuple:
 
 
 def _send(text: str, state: dict):
-    """질문을 보낸다. 관리자와 연결 중이면 관리자에게, 아니면 챗봇이 답한다(목데이터)."""
+    """질문을 보낸다. 관리자와 연결 중이면 관리자(목데이터)가, 아니면 LLM 챗봇이 답한다."""
     text = (text or "").strip()
     if not text:
         yield tuple(gr.skip() for _ in range(7))
@@ -129,12 +130,13 @@ def _send(text: str, state: dict):
         yield _render(state)  # 관리자는 처음 한 번만 자동으로 답한다(그 뒤는 사람이 답하는 자리)
         return
     yield _waiting(state, "admin" if state["connected"] else "bot")
-    mock.wait()
     if state["connected"]:
+        mock.wait()
         state["msgs"].append({"who": "admin", "text": "확인해 볼게요. 잠시만 기다려 주세요."})
         state["admin_replied"] = True
     else:
-        state["msgs"].append({"who": "bot", **mock.mock_support(text)})
+        # 방금 넣은 지금 질문은 이전 대화에서 뺀다.
+        state["msgs"].append({"who": "bot", **answer_support(text, state["msgs"][:-1])})
     yield _render(state)
 
 
