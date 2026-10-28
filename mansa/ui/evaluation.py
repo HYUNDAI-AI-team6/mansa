@@ -7,10 +7,10 @@ from html import escape
 
 import gradio as gr
 
+from config import LLM_API_KEY, LLM_MODEL
 from features.evaluation import storage
-from features.evaluation.answerer import CodexAnswerer
-from features.evaluation.codex_cli import CodexError, find_codex
-from features.evaluation.judge import CodexJudge
+from features.evaluation.answerer import LlmAnswerer
+from features.evaluation.judge import LlmJudge
 from features.evaluation.models import (
     LATENCY_UNITS,
     METRIC_NAMES,
@@ -45,7 +45,7 @@ TARGET_PERCENT = 60
 LOWER_IS_BETTER = {"과잉 첨부율": 40}
 NO_RESULT = "평가 결과가 없어요"
 
-# 평가 1회는 Codex를 문항 수 × 2번 부르므로 동시에 하나만 돌린다(세션이 달라도).
+# 평가 1회는 유료 LLM API를 문항 수 × 2번 부르므로 동시에 하나만 돌린다(세션이 달라도).
 _RUN_LOCK = threading.Lock()
 
 
@@ -218,16 +218,20 @@ def _progress(event: EvalProgress) -> tuple[str, int]:
 def _run():
     """평가를 실행하고 진행률과 결과를 화면에 내보낸다.
 
-    Codex를 문항 수 × 2번 실행한다. 다른 평가가 실행 중이면 시작하지 않는다.
+    유료 LLM API를 문항 수 × 2번 호출한다.
+    LLM 설정이 없거나 다른 평가가 실행 중이면 시작하지 않는다.
     """
     skip = (gr.skip(),) * 4
+    if not LLM_API_KEY or not LLM_MODEL:
+        ui.warn("LLM 설정(LLM_API_KEY, LLM_MODEL)이 없어 평가를 시작할 수 없어요")
+        yield gr.skip(), gr.skip(), *skip
+        return
     if not _RUN_LOCK.acquire(blocking=False):
         ui.warn("이미 평가가 실행 중이에요")
         yield gr.skip(), gr.skip(), *skip
         return
     try:
-        find_codex()
-        events = run_evaluation(CodexAnswerer(), CodexJudge())
+        events = run_evaluation(LlmAnswerer(), LlmJudge())
         for event in events:
             if isinstance(event, EvalProgress):
                 caption, percent = _progress(event)
@@ -239,7 +243,7 @@ def _run():
                 )
                 card, *rest = _view(event)
                 yield card, ui.idle_button("평가 실행", RUN_CLASSES), *rest
-    except (CodexError, TestSetError) as exc:
+    except TestSetError as exc:
         ui.warn(str(exc))
         yield run_card_html(storage.load_latest()), ui.idle_button(
             "평가 실행", RUN_CLASSES

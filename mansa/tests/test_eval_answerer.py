@@ -1,35 +1,57 @@
 import unittest
 
-from features.evaluation.answerer import CodexAnswerer
-from features.evaluation.codex_cli import CodexError, CodexResult
+import httpx
+import openai
+
+from core.exceptions import LlmError
+from features.evaluation.answerer import AnswerOutput, LlmAnswerer
 from features.evaluation.models import TestCase
 
 CASE = TestCase(id="T01", question="브레이크 갭은?", workflow="L2")
 
 
-class CodexAnswererTest(unittest.TestCase):
+def _api_error(cls, status):
+    """openai 상태 오류 예외를 만든다. 실제 응답 없이 테스트에서만 쓴다."""
+    response = httpx.Response(status, request=httpx.Request("POST", "https://example.invalid"))
+    return cls("error", response=response, body=None)
+
+
+class LlmAnswererTest(unittest.TestCase):
     def test_success_record(self):
-        prompts = []
+        calls = []
 
-        def call(prompt, model=None):
-            prompts.append(prompt)
-            return CodexResult(text="0.5 mm", tokens=120, latency_sec=1.5)
+        def call(workflow, prompt, schema):
+            calls.append((workflow, prompt, schema))
+            return {"answer": "0.5 mm"}
 
-        record = CodexAnswerer(call=call).answer(CASE)
-        self.assertIn("브레이크 갭은?", prompts[0])
+        record = LlmAnswerer(call=call).answer(CASE)
+        workflow, prompt, schema = calls[0]
+        self.assertEqual((workflow, schema), ("L2", AnswerOutput))
+        self.assertIn("브레이크 갭은?", prompt)
         self.assertEqual(record.answer_text, "0.5 mm")
-        self.assertEqual((record.latency_sec, record.tokens), (1.5, 120))
+        self.assertGreaterEqual(record.latency_sec, 0)
+        self.assertIsNone(record.tokens)
         self.assertIsNone(record.cited_ids)
         self.assertIsNone(record.retrieved_ids)
         self.assertIsNone(record.error)
 
     def test_failure_becomes_error_record(self):
-        def call(prompt, model=None):
-            raise CodexError("codex timed out after 180s")
+        for exc in (LlmError("L2 LLM failed after 3 attempts"),
+                    _api_error(openai.RateLimitError, 429),
+                    openai.ContentFilterFinishReasonError()):
+            def call(workflow, prompt, schema):
+                raise exc
 
-        record = CodexAnswerer(call=call).answer(CASE)
-        self.assertEqual(record.error, "codex timed out after 180s")
-        self.assertIsNone(record.latency_sec)
+            record = LlmAnswerer(call=call).answer(CASE)
+            self.assertEqual(record.error, str(exc))
+            self.assertIsNone(record.latency_sec)
+
+    def test_config_error_propagates(self):
+        def call(workflow, prompt, schema):
+            raise _api_error(openai.AuthenticationError, 401)
+
+        with self.assertRaises(openai.AuthenticationError):
+            LlmAnswerer(call=call).answer(CASE)
 
 
 if __name__ == "__main__":
