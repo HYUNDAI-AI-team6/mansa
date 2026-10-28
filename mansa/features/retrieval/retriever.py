@@ -25,8 +25,6 @@ VectorSearch = Callable[..., list[dict[str, Any]]]
 ChunkGetter = Callable[..., list[dict[str, Any]]]
 
 # 문서 종류·컬렉션 이름·검색 개수·태그 키는 환경변수로 바꿀 수 있다(config.py 에서 읽는다).
-# shortcut: 매뉴얼 컬렉션 이름이 정해지지 않아 임시 이름(manual_docs)이 기본값이다, 올린 컬렉션 이름을
-# 받으면 .env 의 MANUAL_COLLECTION 을 바꾼다
 
 def default_safety_terms(intent: Intent, lookup: Callable[[str], list[str]] | None = None) -> list[str]:
     """안전 문서 검색에 덧붙일 기본 단어로 작업 부위와 작업 내용을 반환한다.
