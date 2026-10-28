@@ -124,3 +124,20 @@ class ConversationSummary:
     updated_at: datetime
     question_count: int
     tags: list[str] = field(default_factory=list)
+
+
+@dataclass
+class SourceView:
+    """근거 원문 창에 보여 줄 근거 청크 하나. before·after는 같은 페이지의 바로 앞뒤 청크다.
+    
+    부서·조항은 청크 메타데이터에 아직 없어 빈 문자열이다. page는 CSV처럼 페이지가 없으면 None이다.
+    """
+
+    chunk_id: str
+    text: str
+    before: str
+    after: str
+    doc_name: str
+    page: int | None
+    department: str = ""
+    clause: str = ""
