@@ -59,7 +59,7 @@ from config import CHUNK_SIZE, VECTOR_TOP_K
 | `SAFETY_DOC_TYPE` | `secure` | 안전 문서가 있는 벡터 DB(`tech` 기술 DB / `secure` 안전 DB) | `features/retrieval/retriever.py` | `retriever.search_safety` |
 | `SAFETY_COLLECTION` | `safety_docs` | 안전 문서 컬렉션 이름 | `features/retrieval/retriever.py` | `retriever.search_safety` |
 | `MANUAL_DOC_TYPE` | `tech` | 매뉴얼이 있는 벡터 DB | `features/retrieval/retriever.py` | `retriever.search_manual` |
-| `MANUAL_COLLECTION` | `manual_docs` | 매뉴얼 컬렉션 이름 | `features/retrieval/retriever.py` | `retriever.search_manual` |
+| `MANUAL_COLLECTION` | `tech_docs` | 매뉴얼 컬렉션 이름 | `features/retrieval/retriever.py` | `retriever.search_manual` |
 | `CORPUS_PAGE_SIZE` | `500` | 말뭉치를 한 번에 읽어 오는 청크 수 | `features/retrieval/retriever.py` | `retriever.load_corpus` |
 | `VECTOR_TOP_K` | `20` | 벡터(의미) 검색 결과 개수 | `features/retrieval/retriever.py` | `retriever.search_vector` |
 | `BM25_TOP_K` | `20` | 키워드(BM25) 검색 결과 개수 | `features/retrieval/retriever.py` | `retriever.search_bm25` |
