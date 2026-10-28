@@ -220,3 +220,30 @@ def merge_evidence(
             best[chunk.chunk_id] = chunk
     ranked = sorted(best.values(), key=lambda c: c.score, reverse=True)
     return Evidence(chunks=ranked[:top_n])
+
+class HybridRetriever:
+    """QAService의 Retriever 구현. 벡터·BM25·태그 검색에 쓸 search와 청크 목록을 들고 있다.
+
+    명세서 services.qa.Retriever에 해당한다. 생성할 때 load_corpus로 매뉴얼·안전 문서 청크를
+    한 번 읽어 두므로 앱 시작 시 한 번만 만든다. 이후 올라온 문서는 새로 만들어야 BM25·태그에 반영된다.
+    """
+
+    def __init__(
+        self,
+        search: VectorSearch,
+        get: ChunkGetter,
+        expand_terms: TermExpander = default_safety_terms,
+    ) -> None:
+        """search는 util.rag_query.search_chunks, get은 get_chunks를 넘긴다. Chroma를 호출한다."""
+        self._search = search
+        self._expand_terms = expand_terms
+        self._manual_corpus = load_corpus(get, MANUAL_DOC_TYPE, MANUAL_COLLECTION)
+        self._safety_corpus = load_corpus(get, SAFETY_DOC_TYPE, SAFETY_COLLECTION)
+
+    def search_manual(self, question: str, intent: Intent) -> list[ScoredChunk]:
+        """매뉴얼·사양서 청크를 검색한다. 유료 임베딩 API와 Chroma를 호출한다."""
+        return search_manual(question, intent, self._search, self._manual_corpus)
+
+    def search_safety(self, question: str, intent: Intent) -> list[ScoredChunk]:
+        """안전 문서 청크를 검색한다. 유료 임베딩 API와 Chroma를 호출한다."""
+        return search_safety(question, intent, self._search, self._safety_corpus, self._expand_terms)
