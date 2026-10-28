@@ -14,9 +14,9 @@ uv sync --locked
 
 | 환경변수 | 값 | 설명 |
 |---|---|---|
-| `TECH_CHROMA_HOST` | `techchromadb-production.up.railway.app` | 기술 벡터 DB 주소 |
-| `SECURE_CHROMA_HOST` | `securechromadb-production.up.railway.app` | 안전 벡터 DB 주소 |
-| `CHROMA_PORT` | (생략 시 기본값) | HTTPS 포트. 8000은 Railway 내부 포트라 외부에서 접속되지 않는다 |
+| `TECH_CHROMA_HOST` | `tech-chromb-dk-production.up.railway.app` | 기술 벡터 DB 주소 |
+| `SECURE_CHROMA_HOST` | `secure-chroma-dk-production.up.railway.app` | 안전 벡터 DB 주소 |
+| `CHROMA_PORT` | `443` | HTTPS 포트. 비어 있으면 앱이 시작할 때 오류가 난다. 8000은 Railway 내부 포트라 외부에서 접속되지 않는다 |
 
 ## 함수
 
