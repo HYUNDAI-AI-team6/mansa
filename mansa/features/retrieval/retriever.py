@@ -3,6 +3,19 @@ from typing import Any
 from features.retrieval.bm25 import bm25_rank
 from features.retrieval.rrf import rrf_merge
 from core.schemas import Evidence, Intent, ScoredChunk
+from config import (
+    BM25_TOP_K,
+    CORPUS_PAGE_SIZE,
+    EVIDENCE_TOP_N,
+    MANUAL_COLLECTION,
+    MANUAL_DOC_TYPE,
+    RESULT_TOP_K,
+    SAFETY_COLLECTION,
+    SAFETY_DOC_TYPE,
+    TAG_KEYS,
+    TAG_TOP_K,
+    VECTOR_TOP_K,
+)
 
 # Intent를 받아 검색어에 덧붙일 단어 목록을 돌려주는 함수의 타입
 TermExpander = Callable[[Intent], list[str]]
@@ -11,21 +24,9 @@ VectorSearch = Callable[..., list[dict[str, Any]]]
 # util.rag_query.get_chunks와 같은 모양의 함수 타입
 ChunkGetter = Callable[..., list[dict[str, Any]]]
 
-CORPUS_PAGE_SIZE = 500
-
-SAFETY_DOC_TYPE = "secure"
-SAFETY_COLLECTION = "safety_docs"
-
-MANUAL_DOC_TYPE = "tech"
-# shortcut: 매뉴얼 컬렉션 이름이 정해지지 않아 임시 이름을 쓴다, 올린 컬렉션 이름을 받으면 바꾼다
-MANUAL_COLLECTION = "manual_docs"
-
-VECTOR_TOP_K = 20
-BM25_TOP_K = 20
-RESULT_TOP_K =20
-TAG_KEYS = ("part", "task")
-TAG_TOP_K =20
-EVIDENCE_TOP_N = 8
+# 문서 종류·컬렉션 이름·검색 개수·태그 키는 환경변수로 바꿀 수 있다(config.py 에서 읽는다).
+# shortcut: 매뉴얼 컬렉션 이름이 정해지지 않아 임시 이름(manual_docs)이 기본값이다, 올린 컬렉션 이름을
+# 받으면 .env 의 MANUAL_COLLECTION 을 바꾼다
 
 def default_safety_terms(intent: Intent) -> list[str]:
     """안전 문서 검색에 덧붙일 기본 단어로 작업 부위와 작업 내용을 반환한다.

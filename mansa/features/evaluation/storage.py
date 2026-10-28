@@ -17,6 +17,7 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
+from config import EVAL_ROOT, SAVE_DIR, TESTSET_PATH
 from features.evaluation.models import (
     LATENCY_UNITS,
     METRIC_NAMES,
@@ -29,10 +30,8 @@ from features.evaluation.models import (
 
 logger = logging.getLogger(__name__)
 
-# 저장소 루트의 eval/. 실행 위치(cwd)와 상관없이 이 파일 기준으로 계산한다.
-EVAL_ROOT = Path(__file__).resolve().parents[3] / "eval"
-TESTSET_PATH = EVAL_ROOT / "testsets" / "tech_qa.json"
-SAVE_DIR = EVAL_ROOT / "save"
+# EVAL_ROOT, TESTSET_PATH, SAVE_DIR 는 config.py 가 정한다. 기본은 저장소 루트의 eval/ 이고
+# 실행 위치(cwd)와 상관없다. 환경변수로 바꿀 수 있다(상대 경로는 저장소 루트 기준).
 
 NO_VALUE = "값 없음"
 

@@ -1,8 +1,8 @@
+from config import DEFAULT_CONTACT, MIN_EVIDENCE_SCORE
 from core.schemas import Evidence, Intent, NoAnswer, NoAnswerReason
 
-# shortcut: 임시 기준값이다. 실제 검색 점수 분포를 확인한 뒤 조정한다.
-MIN_EVIDENCE_SCORE = 0.3
-DEFAULT_CONTACT = "안전관리팀"
+# shortcut: MIN_EVIDENCE_SCORE(기본 0.3)는 임시 기준값이다. 실제 검색 점수 분포를 확인한 뒤
+# .env 로 조정한다. DEFAULT_CONTACT 도 .env 에서 바꿀 수 있다.
 
 _NO_ANSWER_MESSAGES: dict[NoAnswerReason, str] = {
     "insufficient_evidence": "문서에서 찾을 수 없습니다. {contact}에 확인해 주세요.",

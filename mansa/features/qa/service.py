@@ -15,8 +15,8 @@ from features.qa.answer_generator import attach_notice
 from features.qa.answer_guard import build_no_answer, is_sufficient
 from features.retrieval.retriever import merge_evidence
 
-# 첫 생성이 근거 검사에 실패하면 이 횟수만큼 다시 생성한다.
-MAX_REGENERATIONS = 2
+# 첫 생성이 근거 검사에 실패하면 MAX_REGENERATIONS(기본 2)번 다시 생성한다. 환경변수로 바꿀 수 있다.
+from config import MAX_REGENERATIONS
 
 
 class Analyzer(Protocol):
