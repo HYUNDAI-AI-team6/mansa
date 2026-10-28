@@ -1,6 +1,8 @@
 import unittest
+from functools import partial
 
 from core.schemas import Intent
+from features.master.taxonomy import TaxonomyService
 from features.retrieval.retriever import (
     MANUAL_COLLECTION,
     MANUAL_DOC_TYPE,
@@ -8,6 +10,7 @@ from features.retrieval.retriever import (
     SAFETY_DOC_TYPE,
     HybridRetriever,
     chunk_tags,
+    default_safety_terms,
     distance_to_similarity,
     load_corpus,
     merge_evidence,
@@ -16,7 +19,6 @@ from features.retrieval.retriever import (
     search_manual,
     search_safety,
 )
-
 
 MANUAL = [
     {"id": "m.pdf:p1:0", "text": "브레이크 패드 교체 절차", "metadata": {"source": "m.pdf", "page": 1}},
@@ -131,6 +133,39 @@ class TagTest(unittest.TestCase):
         result = search_manual("작업 순서", BOOM_CHECK, fake_search([]), TAGGED)
         self.assertEqual([c.chunk_id for c in result], ["b", "c"])
         self.assertEqual(result[0].score, 0.0)  # 벡터 유사도가 없어서 점수는 0이다 (알려진 한계)
+    
+    def test_chunk_tags_reads_list_values(self):
+        self.assertEqual(chunk_tags({"part": ["붐", " 와이어로프 "], "task": ["점검"]}), {"붐", "와이어로프", "점검"})
+
+    def test_chunk_tags_ignores_wrong_list_items(self):
+        self.assertEqual(chunk_tags({"part": [3, ""], "task": []}), set())
+
+class SafetyTermsTest(unittest.TestCase):
+    def test_without_lookup_uses_parts_and_task(self):
+        self.assertEqual(default_safety_terms(BOOM_CHECK), ["붐", "점검"])
+
+    def test_lookup_terms_are_added_after_default_terms(self):
+        expand = partial(default_safety_terms, lookup=lambda task: ["기계실", "끼임"])
+        self.assertEqual(expand(BOOM_CHECK), ["붐", "점검", "기계실", "끼임"])
+
+    def test_no_task_skips_lookup(self):
+        calls = []
+        expand = partial(default_safety_terms, lookup=lambda task: calls.append(task) or ["x"])
+        self.assertEqual(expand(Intent(intent="procedure", parts=["붐"])), ["붐"])
+        self.assertEqual(calls, [])  # 작업이 없으면 관계표를 찾지 않는다
+
+    def test_safety_query_includes_lookup_terms(self):
+        search = fake_search([])
+        expand = partial(default_safety_terms, lookup=lambda task: ["작업반경"])
+        search_safety("각도 확인", BOOM_CHECK, search, SAFETY, expand)
+        self.assertEqual(search.calls[0][0], "각도 확인 붐 점검 작업반경")
+
+    def test_with_real_taxonomy(self):
+        expand = partial(default_safety_terms, lookup=TaxonomyService.from_directory().expand_query_terms)
+        intent = Intent(intent="safety", parts=["메인 로프"], task="메인 로프 점검")
+        self.assertEqual(expand(intent), ["메인 로프", "메인 로프 점검", "카 상부", "기계실", "추락", "끼임"])
+
+
 
 
 class HelperTest(unittest.TestCase):
