@@ -6,7 +6,6 @@ from features.processing.indexer import Indexer
 from features.processing.pipeline import (
     STATUS_COMPLETED,
     STATUS_FAILED,
-    STATUS_PROCESSING,
     AlreadyProcessingError,
     IngestError,
     IngestPipeline,
@@ -112,18 +111,18 @@ class IngestPipelineTest(unittest.TestCase):
         pipeline.run(1)
         self.assertEqual(batches, [2, 2, 1])
         self.assertEqual(self.store.stored, {1: 5})
-        self.assertEqual([s for s, _ in self.documents.statuses], [STATUS_PROCESSING, STATUS_COMPLETED])
+        self.assertEqual([s for s, _ in self.documents.statuses], [STATUS_COMPLETED])
 
     def test_completion_records_the_number_of_stored_chunks(self):
         self.pipeline(chunk=lambda document, content: make_chunks(5)).run(1)
-        self.assertEqual(self.documents.chunk_counts, [None, 5])
+        self.assertEqual(self.documents.chunk_counts, [5])
 
     def test_failure_does_not_record_a_chunk_count(self):
         def extract(path):
             raise IngestError("실패")
 
         self.pipeline(extract=extract).run(1)
-        self.assertEqual(self.documents.chunk_counts, [None, None])
+        self.assertEqual(self.documents.chunk_counts, [None])
 
     def test_extraction_error_is_recorded_with_its_message_and_stops_early(self):
         def extract(path):
@@ -218,7 +217,7 @@ class IngestPipelineTest(unittest.TestCase):
     def test_run_does_not_raise_when_failure_cannot_be_recorded(self):
         self.documents.fail_on_status = STATUS_FAILED
         self.pipeline(chunk=lambda d, c: []).run(1)
-        self.assertEqual([s for s, _ in self.documents.statuses], [STATUS_PROCESSING])
+        self.assertEqual(self.documents.statuses, [])
 
 
 if __name__ == "__main__":

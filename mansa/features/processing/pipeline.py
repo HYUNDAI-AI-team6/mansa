@@ -10,8 +10,7 @@ from features.processing.indexer import Indexer, Record
 
 logger = logging.getLogger(__name__)
 
-# 처리 상태 값. DocStatus가 확정되면 이 세 상수만 바꾼다.
-STATUS_PROCESSING = "PROCESSING"
+# 파이프라인이 기록하는 처리 상태 값. 문서는 등록할 때 이미 '처리 중'이라 그 상태는 기록하지 않는다.
 STATUS_COMPLETED = "COMPLETED"
 STATUS_FAILED = "FAILED"
 
@@ -79,7 +78,7 @@ class IngestPipeline:
         self.batch_size = batch_size
 
     def run(self, document_id: int) -> None:
-        """문서를 처리하고 상태를 '처리 중' → '완료'로 바꾼다.
+        """문서를 처리하고 상태를 '완료'로 바꾼다. 문서는 등록할 때 이미 '처리 중'이다.
 
         처리 중 오류가 나면 이미 저장한 청크를 지우고 상태를 '실패'로 기록한 뒤 끝난다.
         이 경우 예외를 다시 던지지 않으므로 호출자는 상태로 결과를 확인한다.
@@ -101,7 +100,6 @@ class IngestPipeline:
         try:
             document = self.documents.get_document(document_id)
             doc_type = document.doc_type
-            self.documents.set_status(document_id, STATUS_PROCESSING)
             stored_count = self._process(document_id, doc_type, document)
             self.documents.set_status(document_id, STATUS_COMPLETED, chunk_count=stored_count)
         except Exception as exc:
