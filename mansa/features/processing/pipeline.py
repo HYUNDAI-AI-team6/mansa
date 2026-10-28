@@ -119,12 +119,22 @@ class IngestPipeline:
         return len(records)
 
     def _tag(self, chunks: list) -> list:
-        """태그를 붙인다. 태그 생성이 통째로 실패해도 문서 처리는 태그 없이 계속한다."""
+        """태그를 붙인다. 태그 단계가 실패하거나 청크 수가 달라진 결과를 주면 태그 없이 계속한다.
+
+        태그는 부가 정보라 문서 처리를 멈추지 않는다. 결과의 청크 수가 입력과 다르면 청크가
+        빠지거나 어긋났을 수 있어, 그 결과를 쓰지 않고 원래 청크로 진행한다.
+        """
         try:
-            return self.steps.tag(chunks)
+            tagged = self.steps.tag(chunks)
+            if len(tagged) == len(chunks):
+                return tagged
         except Exception:
             logger.warning("tagging failed; continuing without tags", exc_info=True)
             return chunks
+        logger.warning(
+            "tagging returned %d chunks for %d; continuing without tags", len(tagged), len(chunks)
+        )
+        return chunks
 
     def _embed_and_save(self, doc_type: str, records: list[Record]) -> None:
         """batch_size개씩 임베딩하고 바로 저장한다. 중간에 실패하면 앞 배치는 이미 저장된 상태다."""
