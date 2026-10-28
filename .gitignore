@@ -12,3 +12,4 @@ data/pdfs/*
 .claude
 graphify-out
 node_modules
+eval/save/

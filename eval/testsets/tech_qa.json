@@ -1,0 +1,146 @@
+{
+  "title": "기술 Q&A 테스트셋",
+  "description": "UI·채점 확인용 임시 문항 (질문에 규정 문장 포함, T03·T05·T09·T13·T17은 일부러 틀리게 설계)",
+  "cases": [
+    {
+      "id": "T01",
+      "question": "아래 규정에서 메인 로프 교체 기준이 되는 소선 단선율만 답해.\n규정: '메인 로프는 한 꼬임 피치 안의 소선 단선율이 10%를 넘으면 교체한다.'",
+      "workflow": "L2",
+      "expected_numbers": ["10%"],
+      "expected_sources": []
+    },
+    {
+      "id": "T02",
+      "question": "아래 규정에서 권상기 고정 볼트의 체결 토크를 답해. 단위는 반드시 'N-m'로 표기해.\n규정: '권상기 고정 볼트는 40 N·m로 체결한다.'",
+      "workflow": "L2",
+      "expected_numbers": ["40 N·m"],
+      "expected_sources": []
+    },
+    {
+      "id": "T03",
+      "question": "아래 규정에서 권상기 브레이크 갭 기준값만 답해.\n규정: '권상기 브레이크 갭은 0.7 mm 이하로 유지한다.'",
+      "workflow": "L2",
+      "expected_numbers": ["0.5 mm"],
+      "expected_sources": []
+    },
+    {
+      "id": "T04",
+      "question": "아래 사양표에서 모델 B의 정격하중만 답해.\n사양표: '모델 A 정격하중 750 kg / 모델 B 정격하중 1,000 kg'",
+      "workflow": "L3",
+      "expected_numbers": ["1000 kg"],
+      "expected_sources": []
+    },
+    {
+      "id": "T05",
+      "question": "아래 사양표에서 모델 A의 정격속도만 답해.\n사양표: '모델 A 정격속도 105 m/min / 모델 B 정격속도 60 m/min'",
+      "workflow": "L3",
+      "expected_numbers": ["1.75 m/s"],
+      "expected_sources": []
+    },
+    {
+      "id": "T06",
+      "question": "아래 규정을 한 문장으로 요약해.\n규정: '도어 센서 감도를 조정할 때는 승객 이용을 통제하고, 조정 후 차단물 검지 시험을 3회 실시한다.'",
+      "workflow": "L2",
+      "expected_numbers": ["3회"],
+      "expected_sources": []
+    },
+    {
+      "id": "T07",
+      "question": "아래 사양표에서 모델 B의 권상기 전동기 출력만 답해.\n사양표: '모델 A 전동기 출력 11 kW / 모델 B 전동기 출력 15 kW'",
+      "workflow": "L3",
+      "expected_numbers": ["15 kW"],
+      "expected_sources": []
+    },
+    {
+      "id": "T08",
+      "question": "아래 규정에서 유압 승강기 작동유의 최대 사용 압력을 답해.\n규정: '유압 회로의 최대 사용 압력은 4 MPa를 넘지 않아야 한다.'",
+      "workflow": "L2",
+      "expected_numbers": ["4 MPa"],
+      "expected_sources": []
+    },
+    {
+      "id": "T09",
+      "question": "아래 규정에서 접지 저항 기준값을 답해.\n규정: '제어반 접지 저항은 100 Ω 이하로 유지한다.'",
+      "workflow": "L2",
+      "expected_numbers": ["10 Ω"],
+      "expected_sources": []
+    },
+    {
+      "id": "T10",
+      "question": "아래 규정에서 기계실 온도 허용 범위를 답해.\n규정: '기계실 온도는 5 °C에서 40 °C 사이로 유지한다.'",
+      "workflow": "L2",
+      "expected_numbers": ["5 °C", "40 °C"],
+      "expected_sources": []
+    },
+    {
+      "id": "T11",
+      "question": "아래 규정에서 착상 오차 허용값을 답해.\n규정: '카 바닥과 승강장 바닥의 착상 오차는 ±10 mm 이내여야 한다.'",
+      "workflow": "L2",
+      "expected_numbers": ["±10 mm"],
+      "expected_sources": []
+    },
+    {
+      "id": "T12",
+      "question": "아래 규정에서 비상정지장치 작동 시험 절차가 적힌 절 번호만 답해.\n규정: '비상정지장치 작동 시험은 유지보수 지침 5.6절의 순서를 따른다.'",
+      "workflow": "L2",
+      "expected_numbers": ["5.6절"],
+      "expected_sources": []
+    },
+    {
+      "id": "T13",
+      "question": "아래 사양표에서 모델 C의 정격하중만 답해.\n사양표: '모델 B 정격하중 1,000 kg / 모델 C 정격하중 1,350 kg'",
+      "workflow": "L3",
+      "expected_numbers": ["1000 kg"],
+      "expected_sources": []
+    },
+    {
+      "id": "T14",
+      "question": "아래 사양표에서 모델 C의 정원과 정격속도를 답해.\n사양표: '모델 C 정원 20명, 정격속도 150 m/min'",
+      "workflow": "L3",
+      "expected_numbers": ["20명", "150 m/min"],
+      "expected_sources": []
+    },
+    {
+      "id": "T15",
+      "question": "아래 규정에서 도어 닫힘 힘의 최대값을 답해.\n규정: '도어가 닫힐 때 막는 힘은 150 N을 넘지 않아야 한다.'",
+      "workflow": "L2",
+      "expected_numbers": ["150 N"],
+      "expected_sources": []
+    },
+    {
+      "id": "T16",
+      "question": "아래 규정에서 완충기 행정 거리를 답해.\n규정: '유입 완충기의 최소 행정 거리는 420 mm로 한다.'",
+      "workflow": "L2",
+      "expected_numbers": ["420 mm"],
+      "expected_sources": []
+    },
+    {
+      "id": "T17",
+      "question": "아래 규정에서 메인 로프 공칭 지름 감소 한계를 답해.\n규정: '메인 로프 지름이 공칭 지름보다 7% 이상 줄면 교체한다.'",
+      "workflow": "L2",
+      "expected_numbers": ["10%"],
+      "expected_sources": []
+    },
+    {
+      "id": "T18",
+      "question": "아래 사양표에서 모델 A의 카 내부 크기(가로 × 세로)를 답해.\n사양표: '모델 A 카 내부 1600 mm × 1400 mm'",
+      "workflow": "L3",
+      "expected_numbers": ["1600 mm", "1400 mm"],
+      "expected_sources": []
+    },
+    {
+      "id": "T19",
+      "question": "아래 규정에서 정기 검사 주기를 답해.\n규정: '승객용 승강기는 1년마다 정기 검사를 받는다.'",
+      "workflow": "L2",
+      "expected_numbers": ["1년"],
+      "expected_sources": []
+    },
+    {
+      "id": "T20",
+      "question": "아래 규정에서 조속기 작동 속도를 답해.\n규정: '조속기는 정격속도의 115%를 넘기 전에 작동해야 한다.'",
+      "workflow": "L2",
+      "expected_numbers": ["115%"],
+      "expected_sources": []
+    }
+  ]
+}

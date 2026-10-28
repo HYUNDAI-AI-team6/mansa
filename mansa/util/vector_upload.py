@@ -1,12 +1,29 @@
 from collections.abc import Sequence
 from typing import Literal
 
-from mansa.util.server_connection import get_secure_client, get_tech_client
+from chromadb import Collection
+from chromadb.errors import NotFoundError
+
+from util.server_connection import get_secure_client, get_tech_client
 
 DocType = Literal["tech", "secure"]
 
 # 문서 종류별로 접속할 벡터 DB를 정한다. 새 종류가 생기면 여기에 추가한다.
 _CLIENT_GETTERS = {"tech": get_tech_client, "secure": get_secure_client}
+
+
+def get_collection(doc_type: DocType, collection_name: str) -> Collection:
+    """doc_type에 맞는 벡터 DB에서 이미 있는 컬렉션을 가져온다. 새로 만들지 않는다.
+
+    알 수 없는 doc_type이면 DB에 접속하기 전에, 컬렉션이 없으면 접속 후에 ValueError를 발생시킨다.
+    서버 접속 실패는 그대로 전달된다.
+    """
+    if doc_type not in _CLIENT_GETTERS:
+        raise ValueError(f"unknown doc_type: {doc_type!r}, expected one of {list(_CLIENT_GETTERS)}")
+    try:
+        return _CLIENT_GETTERS[doc_type]().get_collection(collection_name, embedding_function=None)
+    except NotFoundError as exc:
+        raise ValueError(f"collection not found in {doc_type} DB: {collection_name!r}") from exc
 
 
 def upload_embeddings(

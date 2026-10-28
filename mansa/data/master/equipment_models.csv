@@ -1,0 +1,4 @@
+maker,name,rated_speed,rated_load,usage,drive_type
+[제조사],[모델 A],105,750,승객용,
+[제조사],[모델 B],60,1000,화물용,
+[제조사],[모델 C],150,1350,승객용,
