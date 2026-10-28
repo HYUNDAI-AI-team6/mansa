@@ -1,5 +1,7 @@
 import unittest
 
+import openai
+
 from core.exceptions import LlmError
 from features.evaluation.judge import JudgeOutput, LlmJudge
 from features.evaluation.models import AnswerRecord, Judgement, NumberCheck, TestCase
@@ -272,6 +274,14 @@ class JudgeTest(unittest.TestCase):
         failed = LlmJudge(call=failing).judge(L2, AnswerRecord("T1", "a"))
         self.assertEqual((failed.consistent, failed.error, failed.numbers),
                          (None, "L2 LLM failed after 3 attempts", []))
+
+    def test_llm_judge_handles_content_filter(self):
+        def filtered(workflow, prompt, schema):
+            raise openai.ContentFilterFinishReasonError()
+
+        failed = LlmJudge(call=filtered).judge(L2, AnswerRecord("T1", "a"))
+        self.assertIsNone(failed.consistent)
+        self.assertTrue(failed.error)
 
 
 if __name__ == "__main__":

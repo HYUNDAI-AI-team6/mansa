@@ -37,7 +37,8 @@ class LlmAnswererTest(unittest.TestCase):
 
     def test_failure_becomes_error_record(self):
         for exc in (LlmError("L2 LLM failed after 3 attempts"),
-                    _api_error(openai.RateLimitError, 429)):
+                    _api_error(openai.RateLimitError, 429),
+                    openai.ContentFilterFinishReasonError()):
             def call(workflow, prompt, schema):
                 raise exc
 

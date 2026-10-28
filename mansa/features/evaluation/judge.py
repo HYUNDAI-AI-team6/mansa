@@ -84,7 +84,8 @@ class LlmJudge:
             data = self._call(case.workflow, prompt, JudgeOutput)
         except (openai.AuthenticationError, openai.PermissionDeniedError, openai.NotFoundError):
             raise
-        except (LlmError, openai.APIError) as exc:
+        # ContentFilterFinishReasonError는 APIError가 아니라 OpenAIError 하위라 따로 잡는다.
+        except (LlmError, openai.APIError, openai.ContentFilterFinishReasonError) as exc:
             return Judgement(consistent=None, error=str(exc))
         return Judgement(
             consistent=data["consistent"],

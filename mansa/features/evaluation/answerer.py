@@ -58,7 +58,8 @@ class LlmAnswerer:
             result = self._call(case.workflow, prompt, AnswerOutput)
         except (openai.AuthenticationError, openai.PermissionDeniedError, openai.NotFoundError):
             raise
-        except (LlmError, openai.APIError) as exc:
+        # ContentFilterFinishReasonError는 APIError가 아니라 OpenAIError 하위라 따로 잡는다.
+        except (LlmError, openai.APIError, openai.ContentFilterFinishReasonError) as exc:
             return AnswerRecord(case_id=case.id, error=str(exc))
         # shortcut: complete()가 토큰 사용량을 돌려주지 않아 tokens=None("값 없음")이다.
         # 실제 Q&A 파이프라인 어댑터를 붙일 때 토큰 측정을 추가한다.
