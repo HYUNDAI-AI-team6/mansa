@@ -61,8 +61,10 @@ class FakeStore:
     def __init__(self):
         self.stored = {}
         self.deleted = []
+        self.metadatas = []
 
     def upload(self, doc_type, collection, ids, vectors, texts, metadatas):
+        self.metadatas.extend(metadatas)
         for meta in metadatas:
             self.stored[meta["document_id"]] = self.stored.get(meta["document_id"], 0) + 1
         return len(ids)
@@ -193,6 +195,28 @@ class IngestPipelineTest(unittest.TestCase):
             raise RuntimeError("tag api down")
 
         self.pipeline(tag=tag).run(1)
+        self.assertEqual(self.documents.statuses[-1][0], STATUS_COMPLETED)
+        self.assertEqual(self.store.stored, {1: 5})
+
+    def test_tags_from_the_tag_step_are_saved(self):
+        def tag(chunks):
+            return [FakeChunk(c.text, {**c.metadata, "part": "브레이크"}) for c in chunks]
+
+        self.pipeline(tag=tag).run(1)
+        self.assertEqual({m.get("part") for m in self.store.metadatas}, {"브레이크"})
+
+    def test_tag_result_with_a_different_length_is_ignored(self):
+        def tag(chunks):
+            return [FakeChunk(c.text, {**c.metadata, "part": "브레이크"}) for c in chunks[:3]]
+
+        self.pipeline(tag=tag).run(1)
+        self.assertEqual(self.documents.statuses[-1][0], STATUS_COMPLETED)
+        self.assertEqual(self.documents.chunk_counts, [5])
+        self.assertEqual(self.store.stored, {1: 5})
+        self.assertTrue(all("part" not in m for m in self.store.metadatas))
+
+    def test_tag_result_that_is_not_a_list_is_ignored(self):
+        self.pipeline(tag=lambda chunks: None).run(1)
         self.assertEqual(self.documents.statuses[-1][0], STATUS_COMPLETED)
         self.assertEqual(self.store.stored, {1: 5})
 
