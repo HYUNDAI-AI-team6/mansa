@@ -23,7 +23,8 @@ MANUAL_COLLECTION = "manual_docs"
 VECTOR_TOP_K = 20
 BM25_TOP_K = 20
 RESULT_TOP_K =20
-
+TAG_KEYS = ("part", "task")
+TAG_TOP_K =20
 EVIDENCE_TOP_N = 8
 
 def default_safety_terms(intent: Intent) -> list[str]:
@@ -51,7 +52,6 @@ def build_safety_query(
             extra.append(term)
     return " ".join([question.strip(), *extra])
 
-
 def search_vector(
     query: str, search: VectorSearch, doc_type: str, collection: str, top_k: int = VECTOR_TOP_K
 ) -> list[dict[str, Any]]:
@@ -63,11 +63,6 @@ def search_vector(
     접속 실패와 함께 그대로 호출자에게 전달한다. 결과가 없으면 빈 리스트다.
     """
     return search(query, doc_type, collection, top_k=top_k)
-
-
-
-
-
 
 def load_corpus(
     get: ChunkGetter, doc_type: str, collection: str, page_size: int = CORPUS_PAGE_SIZE
@@ -97,9 +92,6 @@ def search_bm25(
     검색어 단어가 하나도 없는 청크는 빠지며, corpus가 비어 있으면 빈 리스트다. 외부 호출은 없다.
     """
     return bm25_rank(query, [(chunk["id"], chunk["text"]) for chunk in corpus])[:top_k]
-
-TAG_KEYS = ("part", "task")
-TAG_TOP_K =20
 
 def chunk_tags(metadata: dict[str, Any]) -> set[str]:
     """청크 메타데이터의 태그 값을 모아 집합으로 반환한다. 태그가 없으면 빈 집합이다."""
@@ -143,8 +135,6 @@ def rank_ids(
     if tag_ids:
         rankings.append(tag_ids)
     return [chunk_id for chunk_id, _ in rrf_merge(rankings)]
-
-
 
 def distance_to_similarity(distance: float) -> float:
     """Chroma 거리를 0~1 유사도로 바꾼다. 클수록 비슷하다."""
@@ -214,9 +204,6 @@ def search_safety(
     tag_ids = rank_by_tags(intent, corpus)
     ids = rank_ids(vector_hits, bm25_hits, tag_ids)
     return to_scored_chunks(ids, vector_hits, corpus, SAFETY_DOC_TYPE)
-
-
-
 
 def merge_evidence(
     manual: list[ScoredChunk], safety: list[ScoredChunk], top_n: int = EVIDENCE_TOP_N
