@@ -28,6 +28,7 @@ from util.rag_query import get_chunks, search_chunks
 def build_qa_service(
         search: VectorSearch = search_chunks,
         complete: Callable[..., dict] = llm.complete,
+        history: HistoryService | None = None,
 ) -> QAService:
     """실제 부품으로 QAService를 만든다. 앱을 시작할 때 한 번만 부른다.
 
@@ -51,7 +52,7 @@ def build_qa_service(
         clarify_policy=RuleClarifyPolicy(taxonomy),
         retriever=retriever,
         generator=AnswerGenerator(complete),
-        history=HistoryService(MemoryHistoryStore()),
+        history=history or HistoryService(MemoryHistoryStore()),
     )
 
 
