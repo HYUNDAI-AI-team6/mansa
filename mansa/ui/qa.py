@@ -10,16 +10,18 @@ from html import escape
 
 import gradio as gr
 
-from core.schemas import Answer, AnswerSection, Clarify, NoAnswer
+from core.schemas import Answer, AnswerSection, Clarify, NoAnswer, SourceView
 from features.qa.answer_guard import build_no_answer
-from features.qa.factory import build_qa_service
+from features.qa.factory import build_qa_service, build_source_service
 from features.qa.service import QAService
+from features.qa.source_service import SourceService
 from ui import components as ui
 from ui import icons
 from ui import mock_data as mock
 from ui.theme import BRAND, TEXT2
 
-DEPT_COLOR = {"유지보수팀": "blue", "안전팀": "orange", "검사·품질팀": "teal"}
+SOURCE_KINDS = {"tech": "매뉴얼", "secure": "안전 조항"} # 근거 원문 창 탭 이름
+KIND_COLOR = {"매뉴얼": "blue", "안전 조항": "orange"}
 QUIET = {"show_progress": "hidden"}  # 로딩은 우리가 그린 '찾는 중' 표시로 보여 준다
 THINKING_TEXT = "문서에서 답을 찾고 있어요"
 OUTPUT_COUNT = 15  # _render() 가 돌려주는 값 개수 = build() 의 outs 개수
@@ -90,13 +92,30 @@ def recent_questions_html() -> str:
     )
 
 
-def source_list_html() -> str:
-    """'근거 목록' 카드. 줄을 누르면 위 '근거 원문' 창에 그 근거를 띄운다."""
-    rows = "".join(
-        f'<button type="button" class="src-row" data-i="{i}">{ui.tag(s.dept, DEPT_COLOR[s.dept])}'
-        f"<b>{escape(s.title)}</b><span>{escape(s.loc)}</span></button>"
-        for i, s in enumerate(mock.SOURCES)
-    )
+def _kind(src: SourceView) -> str:
+    """근거의 탭 이름(매뉴얼 / 안전 조항). 문서 종류를 모르면 매뉴얼로 본다."""
+    return SOURCE_KINDS.get(src.doc_type, "매뉴얼")
+
+
+def _loc(src: SourceView) -> str:
+    """근거 위치 글자: 페이지 · 조항(있는 것만)."""
+    page = f"p.{src.page}" if src.page is not None else ""
+    return " · ".join(part for part in (page, src.clause) if part)
+
+
+def source_list_html(sources: list[SourceView] | None) -> str:
+    """'근거 목록' 카드. 줄을 누르면 위 '근거 원문' 창에 그 근거를 띄운다. None 이면 불러오기 실패다"""
+    if sources is None:
+        rows = '<p class="note">근거를 불러오지 못했어요</p>'
+    elif not sources:
+        rows = '<p class="note">표시할 근거가 없어요</p>'
+    else:
+        rows = "".join(
+            f'<button type="button" class="src-row" data-i="{i}">'
+            f"{ui.tag(_kind(s), KIND_COLOR[_kind(s)])}"
+            f"<b>{escape(s.doc_name)}</b><span>{escape(_loc(s))}</span></button>"
+            for i, s in enumerate(sources)
+        )
     return f'<div class="card source-list"><h3>근거 목록</h3>{rows}</div>'
 
 
@@ -226,17 +245,18 @@ def rules_html() -> str:
     return f'<div class="card rules"><h3>이럴 때 되묻거나 답하지 않아요</h3>{rows}</div>'
 
 
-def source_html(src: mock.Source) -> str:
-    """오른쪽 '근거 원문' 창 내용."""
-    paras = [f"<p>{escape(t)}</p>" for t in src.lines]
-    highlight = f'<div class="hl">{escape(src.highlight)}</div>'
-    body = "".join(paras[:1]) + highlight + "".join(paras[1:])
-    where = f"{escape(src.title)} · {escape(src.loc)}"
-    meta = (
-        f'<div class="src-meta">{ui.tag(src.dept, DEPT_COLOR[src.dept])}<span>{where}</span></div>'
-    )
-    heading = f'<span class="src-heading">{escape(src.heading)}</span>'
-    return f'{meta}<div class="src-body">{heading}{body}</div>'
+def source_html(src: SourceView | None, empty: str = "근거를 고르면 원문이 여기에 보여요") -> str:
+    """오른쪽 '근거 원문' 창 내용: 근거 청크(강조)와 같은 페이지의 앞뒤 문단."""
+    if src is None:
+        return f'<p class="note">{escape(empty)}</p>'
+    before = f"<p>{escape(src.before)}</p>" if src.before else ""
+    after = f"<p>{escape(src.after)}</p>" if src.after else ""
+    body = f'{before}<div class="hl">{escape(src.text)}</div>{after}'
+    kind = _kind(src)
+    where = " · ".join(part for part in (src.doc_name, _loc(src)) if part)
+    meta = f'<div class="src-meta">{ui.tag(kind, KIND_COLOR[kind])}<span>{escape(where)}</span></div>'
+    return f'{meta}<div class="src-body">{body}</div>'
+
 
 
 def turns_html(turns: list[dict]) -> str:
@@ -271,6 +291,8 @@ def _render(state: dict, thinking: str = "") -> tuple:
     in_conv = bool(turns) or pending is not None or bool(thinking)
     show_answer = not thinking and pending is None and bool(turns) and turns[-1]["kind"] == "answer"
     convo = turns_html(turns) + (ui.user_bubble(pending["q"]) if pending else "")
+    sources = _load_sources(state) if show_answer else []
+    first = sources[0] if sources else None
     if thinking:
         convo += ui.user_bubble(thinking) + ui.typing_html(THINKING_TEXT)
     return (
@@ -280,10 +302,10 @@ def _render(state: dict, thinking: str = "") -> tuple:
         convo,
         gr.Row(visible=pending is not None),
         gr.Column(visible=show_answer),
-        gr.HTML(visible=show_answer),
+        gr.HTML(source_list_html(sources), visible=show_answer),
         gr.HTML(visible=in_conv and not show_answer and not thinking),
-        source_html(mock.SOURCES[0]),
-        "매뉴얼",
+        source_html(first),
+        _kind(first) if first else "매뉴얼",
         "",
         "",
         None,  # 되묻기 카드: 모델·부위는 매번 새로 고르고
@@ -301,6 +323,36 @@ def _thinking(state: dict, question: str) -> tuple:
 def _service() -> QAService:
     """기술 Q&A 서비스. Chroma 청크를 모두 읽어 느리므로 처음 질문할 때 한 번만 만든다."""
     return build_qa_service()
+
+
+@cache
+def _sources() -> SourceService:
+    """근거 원문 서비스. Chroma 청크를 모두 읽어 느리므로 처음 쓸 때 한번만 만든다."""
+    return build_source_service()
+
+
+def _load_sources(state: dict) -> list[SourceView] | None:
+    """마지막 답변의 근거 ID(영역 순서, 중복 제거)로 근거 원문을 찾는다. 불러오지 못하면 None 이다.
+    
+    지워진 청크처럼 찾을 수 없는 근거는 뺴고 보여 준다. 목데이터 답변은 근거 ID가 없어 빈 리스트다.
+    """
+    answer = state["turns"][-1].get("answer") if state["turns"] else None
+    if not isinstance(answer, Answer):
+        return []
+    sections = (answer.procedure, answer.spec, answer.safety, answer.diff)
+    ids = list(dict.fromkeys(i for s in sections for i in s.source_ids))
+    try:
+        service = _sources()
+    except Exception:
+        logging.getLogger(__name__).exception("failed to load source chunks")
+        return None
+    found = []
+    for chunk_id in ids:
+        try:
+            found.append(service.get_source(chunk_id))
+        except LookupError:
+            continue
+    return found
 
 
 def _query(question: str, state: dict, *hints: str) -> Answer | Clarify | NoAnswer:
@@ -359,10 +411,13 @@ def _cancel(state: dict) -> tuple:
     return _render({**state, "pending": None})
 
 
-def _pick_source(evt: gr.SelectData) -> tuple[str, str]:
+def _pick_source(state: dict, evt: gr.SelectData) -> tuple:
     """근거 목록에서 누른 근거를 원문 창에 띄우고 탭(매뉴얼/안전 조항)을 맞춘다."""
-    src = mock.SOURCES[evt.index]
-    return source_html(src), src.kind
+    sources = _load_sources(state) or []
+    if evt.index >= len(sources):
+        return source_html(None), gr.skip()
+    src = sources[evt.index]
+    return source_html(src), _kind(src)
 
 
 def _pick_recent(state: dict, evt: gr.SelectData):
@@ -375,10 +430,10 @@ def _model_classes(model: str) -> gr.Dropdown:
     return gr.Dropdown(elem_classes=["model-select", "filled"] if model else ["model-select"])
 
 
-def _pick_tab(kind: str) -> str:
+def _pick_tab(kind: str, state: dict) -> str:
     """원문 창 탭을 바꾸면 그 종류의 첫 근거를 보여 준다."""
-    src = next(s for s in mock.SOURCES if s.kind == kind)
-    return source_html(src)
+    src = next((s for s in _load_sources(state) or [] if _kind(s) == kind), None)
+    return source_html(src, f"이 답변에는 {kind} 근거가 없어요")
 
 
 # ------------------------------------------------------------------ 화면 구성
@@ -511,8 +566,9 @@ def _source_panel(c: dict) -> None:
             container=False,
             elem_classes=["chip-radio"],
         )
-        c["viewer"] = gr.HTML(source_html(mock.SOURCES[0]), padding=False)
-    c["src_list"] = ui.click_list(source_list_html())
+        c["viewer"] = gr.HTML(source_html(None), padding=False)
+    c["src_list"] = ui.click_list(source_list_html([]))
+
 
 
 def build(test_mode: bool = False) -> QAView:
@@ -538,7 +594,7 @@ def build(test_mode: bool = False) -> QAView:
     ui.enable_when_chosen([conv["clar_model"], conv["clar_part"]], conv["cont"])
     conv["cont"].click(_continue, [conv["clar_model"], conv["clar_part"], state], outs, **QUIET)
     conv["cancel"].click(_cancel, state, outs)
-    conv["src_list"].select(_pick_source, None, [conv["viewer"], conv["src_tab"]])
-    conv["src_tab"].input(_pick_tab, conv["src_tab"], conv["viewer"])
+    conv["src_list"].select(_pick_source, state, [conv["viewer"], conv["src_tab"]])
+    conv["src_tab"].input(_pick_tab, [conv["src_tab"], state], conv["viewer"])
     ask["model"].change(_model_classes, ask["model"], ask["model"])
     return QAView(reset_outputs=[*outs, ask["model"]])
