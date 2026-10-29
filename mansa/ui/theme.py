@@ -80,6 +80,12 @@ def _tag_css() -> str:
     )
 
 
+def build_head() -> str:
+    """페이지 <head>에 넣을 스크립트. 한글 조합 중 엔터가 전송되지 않게 하는 chat_keys.js 를 싣는다."""
+    script = (ASSETS / "chat_keys.js").read_text(encoding="utf-8")
+    return f"<script>{script}</script>"
+
+
 def build_css() -> str:
     """앱 전체 CSS를 하나로 묶는다: assets/*.css + 태그 색 + 아이콘."""
     files = [(ASSETS / name).read_text(encoding="utf-8") for name in CSS_FILES]
