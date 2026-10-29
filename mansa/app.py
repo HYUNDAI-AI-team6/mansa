@@ -312,7 +312,7 @@ def main():
     demo.launch(
         theme=theme.build_theme(),
         css=theme.build_css(),
-        head=FONT_HEAD,
+        head=FONT_HEAD + theme.build_head(),
         allowed_paths=[str(SAVE_DIR)],
     )
 

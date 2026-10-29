@@ -111,6 +111,61 @@ footer {
   color: #fff !important;
 }
 
+/* ---------- 버튼 호버: 살짝 떠오르며 음영이 생긴다 ----------
+   눌 수 없는 버튼(:disabled)은 움직이지 않는다. 파란 버튼은 파란 그림자, 나머지는 회색 그림자. */
+.gradio-container button.btn-primary,
+.gradio-container button.primary,
+.gradio-container button.btn-secondary,
+.gradio-container button.chip,
+.gradio-container button.soft-btn,
+.gradio-container button.send-btn,
+.gradio-container .sidebar button.nav-btn {
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+.gradio-container button.btn-primary:not(:disabled):hover,
+.gradio-container button.primary:not(:disabled):hover,
+.gradio-container button.send-btn:not(:disabled):hover {
+  box-shadow: 0 6px 16px rgba(59, 91, 246, 0.3) !important;
+  transform: translateY(-1px);
+}
+.gradio-container button.btn-secondary:not(:disabled):hover,
+.gradio-container button.chip:not(:disabled):hover,
+.gradio-container button.soft-btn:not(:disabled):hover {
+  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.1) !important;
+  transform: translateY(-1px);
+}
+.gradio-container button.btn-primary:not(:disabled):active,
+.gradio-container button.primary:not(:disabled):active,
+.gradio-container button.send-btn:not(:disabled):active,
+.gradio-container button.btn-secondary:not(:disabled):active,
+.gradio-container button.chip:not(:disabled):active,
+.gradio-container button.soft-btn:not(:disabled):active {
+  box-shadow: 0 2px 6px rgba(17, 24, 39, 0.12) !important;
+  transform: none;
+}
+/* 메뉴 버튼은 떠오르지 않고 바탕색만 살짝 깔린다 */
+.gradio-container .sidebar button.nav-btn:not(.active):hover {
+  background: rgba(17, 24, 39, 0.05) !important;
+}
+.gradio-container .sidebar.admin button.nav-btn:not(.active):hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+/* 파란 바탕의 관리자 로그인 카드: 그림자를 어둡게 해서 보이게 한다 */
+.gradio-container .admin-card button.btn-primary:not(:disabled):hover,
+.gradio-container .admin-card button.btn-secondary:not(:disabled):hover {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gradio-container button {
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
 /* ---------- 입력 ---------- */
 .gradio-container textarea,
 .gradio-container input[type="text"],

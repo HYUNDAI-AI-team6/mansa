@@ -467,7 +467,7 @@ def _question_card(c: dict) -> None:
         with gr.Column(elem_classes=["question-box"]):
             c["text"] = gr.Textbox(
                 placeholder="예: [모델 A] 메인 로프 점검할 때 기준이 뭐야?",
-                lines=2,
+                lines=1,  # 1줄이어야 엔터로 전송된다(줄바꿈은 Shift+엔터). 2줄 높이는 CSS가 맞춘다.
                 max_lines=5,
                 show_label=False,
                 container=False,
