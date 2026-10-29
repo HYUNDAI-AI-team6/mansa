@@ -54,7 +54,7 @@ def _build_page(key: str, store: gr.State, user: gr.State):
     """메뉴 key 에 맞는 화면 파일의 build() 를 부른다.
 
     메뉴로 다시 들어올 때 다시 그릴 화면이면 그 정보(PageView/QAView)를 돌려준다.
-    store 는 로그인 세션의 목데이터(문서·부서·회원), user 는 로그인한 계정이다.
+    store 는 로그인 세션의 목데이터(문서·부서), user 는 로그인한 계정이다.
     """
     builders = {
         "qa": lambda: qa.build(),
@@ -66,7 +66,7 @@ def _build_page(key: str, store: gr.State, user: gr.State):
         "master": lambda: master.build(store),
         "evaluation": lambda: evaluation.build(),
         "question_test": lambda: qa.build(test_mode=True),
-        "members": lambda: members.build(store, user),
+        "members": lambda: members.build(store),
     }
     return builders[key]()
 

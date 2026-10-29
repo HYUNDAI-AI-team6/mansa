@@ -32,11 +32,12 @@ from config import CHUNK_SIZE, VECTOR_TOP_K
 | 종류 | 변수 | 허용 범위 |
 |---|---|---|
 | 1 이상의 정수 | `CHUNK_SIZE`, `BATCH_SIZE`, `CORPUS_PAGE_SIZE`, `VECTOR_TOP_K`, `BM25_TOP_K`, `RESULT_TOP_K`, `TAG_TOP_K`, `EVIDENCE_TOP_N` | 1 이상 |
+| 1~50의 정수 | `MEMBER_MAX_LENGTH` | 1 이상 50 이하 (DB 칸 길이가 50) |
 | 0 이상의 정수 | `CHUNK_OVERLAP`, `MAX_REGENERATIONS` | 0 이상. `CHUNK_OVERLAP`은 `CHUNK_SIZE`보다 작아야 한다 |
 | 실수 | `MIN_EVIDENCE_SCORE` | 0 이상 1 이하 |
 | 둘 중 하나 | `SAFETY_DOC_TYPE`, `MANUAL_DOC_TYPE` | `tech` 또는 `secure` |
 | 쉼표로 나눈 이름 | `TAG_KEYS` | 빈 이름 없이 `part,task`처럼 적는다 |
-| 문자열 | `EMBEDDING_MODEL`, `SAFETY_COLLECTION`, `MANUAL_COLLECTION`, `DEFAULT_CONTACT` | 비어 있지 않은 글자 |
+| 문자열 | `EMBEDDING_MODEL`, `SAFETY_COLLECTION`, `MANUAL_COLLECTION`, `DEFAULT_CONTACT`, `ADMIN_DEPT_LABEL` | 비어 있지 않은 글자 |
 | 경로 | `EVAL_ROOT`, `TESTSET_PATH`, `SAVE_DIR` | 절대 경로 또는 저장소 루트 기준 상대 경로 |
 
 ## 바뀐 변수 목록
@@ -75,6 +76,13 @@ from config import CHUNK_SIZE, VECTOR_TOP_K
 | `MIN_EVIDENCE_SCORE` | `0.3` | 근거가 충분하다고 보는 최소 점수(0~1) | `features/qa/answer_guard.py` | `answer_guard.is_sufficient` |
 | `DEFAULT_CONTACT` | `안전관리팀` | 답변할 수 없을 때 안내하는 담당 부서 이름 | `features/qa/answer_guard.py` | `answer_guard.build_no_answer` |
 | `MAX_REGENERATIONS` | `2` | 근거 검사에 실패했을 때 답변을 다시 만드는 횟수 | `features/qa/service.py` | `service._generate_verified` |
+
+### 회원 관리
+
+| 변수 | 기본값 | 설명 | 이전 위치 | 값을 읽는 곳 |
+|---|---|---|---|---|
+| `MEMBER_MAX_LENGTH` | `50` | 회원 아이디·이름의 최대 글자 수(DB 칸 길이 50 이하) | `features/auth/membersmanage.py` | `membersmanage._clean` |
+| `ADMIN_DEPT_LABEL` | `관리자` | 부서가 없는 관리자를 목록에 보여 줄 부서 이름 | `features/auth/membersmanage.py` | `membersmanage.list_members` |
 
 ### 평가 파일 위치
 

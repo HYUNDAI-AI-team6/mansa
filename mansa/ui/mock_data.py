@@ -297,51 +297,13 @@ SYNONYMS = [
     ("브레이크 슈", "브레이크 라이닝"),
 ]
 
-MEMBERS = [
-    {
-        "name": "이OO",
-        "id": "admin01",
-        "dept": "안전팀",
-        "role": "관리자",
-        "date": "10/20",
-    },
-    {
-        "name": "박OO",
-        "id": "user01",
-        "dept": "유지보수팀",
-        "role": "사용자",
-        "date": "10/21",
-    },
-    {
-        "name": "김OO",
-        "id": "user02",
-        "dept": "유지보수팀",
-        "role": "사용자",
-        "date": "10/21",
-    },
-    {
-        "name": "최OO",
-        "id": "user03",
-        "dept": "검사·품질팀",
-        "role": "사용자",
-        "date": "10/22",
-    },
-    {
-        "name": "정OO",
-        "id": "user04",
-        "dept": "유지보수팀",
-        "role": "사용자",
-        "date": "10/22",
-    },
-]
-
 
 def new_store() -> dict:
-    """로그인한 사람마다 따로 쓰는 목데이터 묶음(문서·부서·회원).
+    """로그인한 사람마다 따로 쓰는 목데이터 묶음(문서·부서).
 
     화면에서 추가·삭제해도 다른 사람 화면에는 영향이 없다. DB 가 붙으면 없어진다.
     """
-    return copy.deepcopy({"docs": DOCUMENTS, "depts": DEPT_INFO, "members": MEMBERS})
+    return copy.deepcopy({"docs": DOCUMENTS, "depts": DEPT_INFO})
 
 
 # ---------------------------------------------------------------- 고객센터

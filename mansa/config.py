@@ -133,6 +133,10 @@ MAX_REGENERATIONS = _env_int("MAX_REGENERATIONS", 2, minimum=0)  # 근거 검사
 MIN_EVIDENCE_SCORE = _env_float("MIN_EVIDENCE_SCORE", 0.3, minimum=0.0, maximum=1.0)
 DEFAULT_CONTACT = _env_str("DEFAULT_CONTACT", "안전관리팀")
 
+# 회원 관리. 아이디·이름 칸은 users·admins 테이블의 varchar(50)이라 50보다 크게 잡을 수 없다.
+MEMBER_MAX_LENGTH = _env_int("MEMBER_MAX_LENGTH", 50, minimum=1, maximum=50)
+ADMIN_DEPT_LABEL = _env_str("ADMIN_DEPT_LABEL", "관리자")  # admins 테이블에는 부서가 없어 목록에 이 이름으로 보인다
+
 # 평가 파일 위치. 기본은 저장소 루트의 eval/ 이고 실행 위치(cwd)와 상관없다.
 # 상대 경로로 적으면 저장소 루트 기준이다. TESTSET_PATH, SAVE_DIR 는 따로 적지 않으면 EVAL_ROOT 를 따라간다.
 EVAL_ROOT = _env_path("EVAL_ROOT", REPO_ROOT / "eval")
