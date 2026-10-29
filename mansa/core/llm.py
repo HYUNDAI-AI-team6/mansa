@@ -31,16 +31,30 @@ def _get_embeddings() -> OpenAIEmbeddings: #임베딩 모델 객체를 꺼내 �
         _embeddings = OpenAIEmbeddings(model=EMBEDDING_MODEL, api_key=LLM_API_KEY)
     return _embeddings
 
+def _check_texts(texts: list[str]) -> None:
+    """embed에 넣을 값을 API를 부르기 전에 확인한다.
+
+    문자열 목록이 아니거나 빈·공백 문자열이 있으면 ValueError를 발생시킨다.
+    오류 메시지에는 몇 번째 값인지만 넣고 본문은 넣지 않는다.
+    """
+    if not isinstance(texts, (list, tuple)):
+        raise ValueError("texts must be a list of str")
+    for index, text in enumerate(texts):
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError(f"texts[{index}] must be a non-empty str")
+
 def embed(texts: list[str]) -> list[list[float]]:
     """텍스트 목록을 임베딩 벡터 목록으로 바꾼다. 결과는 입력과 같은 순서다.
 
-    빈 목록이면 API를 부르지 않고 빈 목록을 반환한다. 유료 외부 API(OpenAI)를 호출한다.
+    빈 목록이면 API를 부르지 않고 빈 목록을 반환한다. 문자열 목록이 아니거나 빈·공백 문자열이 있으면
+    API를 부르기 전에 ValueError를 발생시킨다. 유료 외부 API(OpenAI)를 호출한다.
     벡터 DB에 올린 문서와 같은 모델이어야 검색이 맞는다. 모델을 바꾸면 문서를 다시 임베딩해야 한다.
     인증 실패·네트워크 오류는 openai 예외로 그대로 전달된다. texts는 변경하지 않는다.
     """
+    _check_texts(texts)
     if not texts: #보낼 문장이 없으면 돈 드는 호출을 하지 않는다.
         return []
-    return _get_embeddings().embed_documents(texts)
+    return _get_embeddings().embed_documents(list(texts))
 
 # 다시 시도하면 나아질 수 있는 오류. pydantic ValidationError(응답이 형식과 다름)도 ValueError의 한 종류다.
 _RETRYABLE_ERRORS = (ValueError, openai.LengthFinishReasonError, openai.APITimeoutError)
