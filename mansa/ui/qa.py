@@ -202,6 +202,7 @@ def no_answer_html(message: str = "", reason: str = "") -> str:
         '<div class="card no-answer"><div class="na-head">'
         f'<span class="na-icon">{icons.svg("alert", TEXT2, 18)}</span>'
         f"<h4>{title}</h4></div>"
+        f"<p>{escape(text)}</p></div>"
     )
     return f'<div class="bot-row">{ui.ai_avatar()}{card}</div>'
 
