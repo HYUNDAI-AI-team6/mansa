@@ -1,6 +1,12 @@
+import re
 import unittest
+from dataclasses import dataclass
+from pathlib import Path
 
 from features.master.taxonomy import TaxonomyService
+from features.processing.chunker import chunk
+from features.processing.indexer import Indexer
+from features.processing.pdf_content import extract_pdf_content
 from features.processing.models import Chunk
 from features.processing.tagger import (
     BATCH_SIZE,
@@ -14,6 +20,10 @@ from features.processing.tagger import (
     request_tags,
     tag,
 )
+
+PDF_DIR = Path(__file__).resolve().parents[2] / "data" / "pdfs"
+SAFETY_PDF = PDF_DIR / "안전기준.pdf"
+LUXEN_PDF = PDF_DIR / "Passenger Elevator_LUXEN NEW YZER_2406.pdf"
 
 PARTS = ("메인 로프", "승강기 칸", "완충기")
 TASKS = ("메인 로프 점검", "승강기 칸 점검", "완충기 시험")
@@ -425,6 +435,70 @@ class TagFailureTest(unittest.TestCase):
 
         with self.assertRaises(KeyboardInterrupt):
             tag(self.chunks(1), vocabulary(), complete)
+
+
+@dataclass
+class RealDocument:
+    doc_type: str
+    id: int
+    title: str
+    filename: str
+
+
+class RealPdfTaggingTest(unittest.TestCase):
+    """실제 PDF 청크를 가짜 LLM으로 태깅해 검증·형식·Indexer 호환을 확인한다. 실제 LLM은 부르지 않는다."""
+
+    @staticmethod
+    def fake_llm(vocab: Vocabulary, chunks: list[Chunk]):
+        """청크에 표준 이름이 그대로 있는 부위와 모든 작업을 후보로 낸다. 작업은 검증이 걸러야 한다."""
+        by_id = {c.chunk_id: c for c in chunks}
+
+        def complete(workflow, prompt, schema):
+            ids = re.findall(r"\[청크 id=(.+?)\]", prompt)
+            return {
+                "chunks": [
+                    {"id": i, "part": [p for p in vocab.parts if p in by_id[i].text], "task": list(vocab.tasks)}
+                    for i in ids
+                ]
+            }
+
+        return complete
+
+    def check(self, document: RealDocument, pdf: Path, models: list[str] | None) -> list[Chunk]:
+        vocab = Vocabulary.from_taxonomy(TaxonomyService.from_directory())
+        chunks = chunk(document, extract_pdf_content(pdf), models)
+
+        result = tag(chunks, vocab, self.fake_llm(vocab, chunks))
+
+        self.assertEqual([c.chunk_id for c in result], [c.chunk_id for c in chunks])
+        for before, after in zip(chunks, result):
+            self.assertEqual(after.text, before.text)
+            parts = after.metadata["part"].split(", ") if "part" in after.metadata else []
+            tasks = after.metadata["task"].split(", ") if "task" in after.metadata else []
+            self.assertLessEqual(len(parts), MAX_PART_TAGS)
+            self.assertLessEqual(len(tasks), MAX_TASK_TAGS)
+            self.assertTrue(set(parts) <= set(vocab.parts), after.chunk_id)
+            self.assertTrue(set(tasks) <= set(vocab.tasks), after.chunk_id)
+            self.assertTrue(all(p == p.strip() and p for p in parts + tasks), after.chunk_id)
+            if parts or tasks:  # 부위가 본문에 없는 청크에는 태그가 붙지 않는다
+                self.assertTrue(any(vocab.supports_part(before.text, p) for p in vocab.parts), after.chunk_id)
+        Indexer().prepare(document.id, document.doc_type, result)
+        return result
+
+    @unittest.skipUnless(SAFETY_PDF.is_file(), "safety pdf not found")
+    def test_safety_pdf_tags_pass_indexer_prepare(self) -> None:
+        result = self.check(RealDocument("secure", 12, "안전기준", "안전기준.pdf"), SAFETY_PDF, None)
+
+        tagged = [c for c in result if "part" in c.metadata]
+        self.assertGreater(len(tagged), len(result) // 2)
+
+    @unittest.skipUnless(LUXEN_PDF.is_file(), "LUXEN pdf not found")
+    def test_catalog_pdf_tags_pass_indexer_prepare(self) -> None:
+        document = RealDocument("tech", 8, "LUXEN", "LUXEN.pdf")
+
+        result = self.check(document, LUXEN_PDF, ["LUXEN", "NEW YZER"])
+
+        self.assertTrue(any("part" in c.metadata for c in result))
 
 
 if __name__ == "__main__":
