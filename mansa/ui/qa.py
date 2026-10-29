@@ -14,6 +14,7 @@ from core.schemas import Answer, AnswerSection, Clarify, NoAnswer, SourceView
 from features.history.service import HistoryService
 from features.history.store import MemoryHistoryStore
 from features.qa.answer_guard import build_no_answer
+from features.qa.clarify_policy import MODEL_QUESTION
 from features.qa.factory import build_qa_service, build_source_service
 from features.qa.service import QAService
 from features.qa.source_service import SourceService
@@ -183,6 +184,16 @@ def no_answer_html(message: str = "", reason: str = "") -> str:
     return f'<div class="bot-row">{ui.ai_avatar()}{card}</div>'
 
 
+def clarify_head_html(ask: str) -> str:
+    """되묻기 카드 윗부분: 서비스가 물은 질문(모델 또는 부위)과 선택지 이름표."""
+    label = "설비 모델" if ask == MODEL_QUESTION else "부위"
+    return (
+        "<h4>조금만 더 알려주세요</h4>"
+        f"<p>{escape(ask)} 고르면 바로 찾아볼께요.</p>"
+        f'<span class="label">{label}</span>'
+    )
+
+
 def skipped_clarify_html() -> str:
     """되묻기에 답하지 않고 다음 질문으로 넘어간 경우, 그 되묻기를 기록으로만 남긴다."""
     card = (
@@ -264,9 +275,9 @@ def _render(state: dict, thinking: str = "") -> tuple:
         _kind(first) if first else "매뉴얼",
         "",
         "",
-        None,  # 되묻기 카드: 모델·부위는 매번 새로 고르고
-        None,
-        gr.Button(interactive=False),  # 둘 다 고르기 전에는 '선택하고 계속'을 막는다
+        clarify_head_html(pending["ask"]) if pending else "",
+        gr.Radio(choices=pending["options"] if pending else [], value=None), # 서비스가 준 후보로 매번 새로 고른다
+        gr.Button(interactive=False),  # 고르기 전에는 '선택하고 계속'을 막는다
     )
 
 
@@ -340,9 +351,9 @@ def _query(question: str, state: dict, *hints: str, test_mode: bool = False) -> 
 
 
 def _apply(state: dict, question: str, result: Answer | Clarify | NoAnswer) -> dict:
-    """서비스 결과를 더한 새 대화 상태. 되묻기면 질문을 보류해 두고 선택을 기다린다."""
+    """서비스 결과를 더한 새 대화 상태. 되묻기면 질문을 보류하고 되물은 내용·선택지와 함께 선택을 기다린다."""
     if isinstance(result, Clarify):
-        return {**state, "pending": {"q": question}}
+        return {**state, "pending": {"q": question, "ask": result.question, "options": result.options}}
     if isinstance(result, Answer):
         turn = {"q": question, "kind": "answer", "answer": result}
         state = {**state, "conversation_id": result.conversation_id}
@@ -368,15 +379,17 @@ def _ask(question: str, model: str, state: dict, test_mode: bool = False):
     yield _render(_apply(state, question, _query(question, state, state["model"], test_mode=test_mode)))
 
 
-def _continue(model: str, part: str, state: dict, test_mode: bool = False):
-    """되묻기에서 고른 모델·부위를 질문에 붙여 다시 묻는다."""
-    if state["pending"] is None:
+def _continue(choice: str, state: dict, test_mode: bool = False):
+    """되묻기에서 고른 값(모델 또는 부위)을 질문에 붙여 다시 묻는다. 모델을 골랐으면 다음 질문에도 쓴다."""
+    pending = state["pending"]
+    if pending is None:
         yield _render(state)
         return
-    question = state["pending"]["q"]
-    state = {**state, "pending": None, "model": model or state["model"]}
-    yield _thinking(state, question)
-    yield _render(_apply(state, question, _query(question, state, state["model"], part, test_mode=test_mode)))
+    is_model = pending["ask"] == MODEL_QUESTION
+    state = {**state, "pending": None, "model": choice if is_model else state["model"]}
+    part = "" if is_model else choice
+    yield _thinking(state, pending["q"])
+    yield _render(_apply(state, pending["q"], _query(pending["q"], state, state["model"], part, test_mode=test_mode)))
 
 
 def _cancel(state: dict) -> tuple:
@@ -502,19 +515,13 @@ def _build_conv(test_mode: bool) -> dict:
 
 
 def _clarify_card(c: dict) -> None:
-    """되묻기 카드(U3): 모델·부위 후보를 골라 이어서 찾는다."""
+    """되묻기 카드(U3): 서비스가 되물은 모델 또는 부위 후보 하나를 골라 이어서 찾는다."""
     with gr.Row(visible=False, elem_classes=["bot-row", "clarify-row"]) as c["clarify"]:
         gr.HTML(ui.ai_avatar(), padding=False, scale=0, min_width=32)
         with gr.Column(elem_classes=["card", "clarify-card"]):
-            gr.HTML(
-                "<h4>조금만 더 알려 주세요</h4>"
-                "<p>어느 모델의 어떤 부위인가요? 고르면 바로 찾아볼게요.</p>"
-                '<span class="label">설비 모델</span>',
-                padding=False,
-            )
-            c["clar_model"] = ui.chip_radio(mock.MODELS, empty=True)
-            gr.HTML('<span class="label">부위</span>', padding=False)
-            c["clar_part"] = ui.chip_radio(mock.CLARIFY_PARTS, empty=True)
+            c["clar_head"]= gr.HTML(padding=False)
+            # 선택지는 되묻기마다 _render가 Clarify.options로 바꿔 넣는다.
+            c["clar_pick"] = ui.chip_radio(mock.MODELS, empty=True)
             with gr.Row(elem_classes=["clarify-actions"]):
                 c["cont"] = gr.Button(
                     "선택하고 계속",
@@ -552,7 +559,7 @@ def build(test_mode: bool = False) -> QAView:
     outs = [state, ask["view"], conv["view"], conv["turns"], conv["clarify"]]
     outs += [conv["src_panel"], conv["src_list"], conv["rules"], conv["viewer"], conv["src_tab"]]
     outs += [ask["text"], conv["follow"]]
-    outs += [conv["clar_model"], conv["clar_part"], conv["cont"]]
+    outs += [conv["clar_head"], conv["clar_pick"], conv["cont"]]
     ask_fn = partial(_ask, test_mode=test_mode) # 질문 테스트 화면은 질문 기록에 남지 않는 서비스로 묻는다
     ask["ask"].click(ask_fn, [ask["text"], ask["model"], state], outs, **QUIET)
     ask["text"].submit(ask_fn, [ask["text"], ask["model"], state], outs, **QUIET)
@@ -564,8 +571,8 @@ def build(test_mode: bool = False) -> QAView:
         ask["recent"].select(_pick_recent, state, outs, **QUIET)
     ui.enable_when_filled(ask["text"], ask["ask"])
     ui.enable_when_filled(conv["follow"], conv["send"])
-    ui.enable_when_chosen([conv["clar_model"], conv["clar_part"]], conv["cont"])
-    conv["cont"].click(partial(_continue, test_mode= test_mode), [conv["clar_model"], conv["clar_part"], state], outs, **QUIET)
+    ui.enable_when_chosen([conv["clar_pick"]], conv["cont"])
+    conv["cont"].click(partial(_continue, test_mode= test_mode), [conv["clar_pick"], state], outs, **QUIET)
     conv["cancel"].click(_cancel, state, outs)
     conv["src_list"].select(_pick_source, state, [conv["viewer"], conv["src_tab"]])
     conv["src_tab"].input(_pick_tab, [conv["src_tab"], state], conv["viewer"])
