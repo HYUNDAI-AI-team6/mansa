@@ -98,7 +98,10 @@ Gradio 화면 연결과 ChromaDB 저장 파이프라인은 장영균 담당이 �
 
 - 모델 `text-embedding-3-large`, 차원 3072. 문서 청크와 질문 임베딩은 **같은 모델**이어야 한다.
 - 공통 함수는 `core.llm.embed(texts: list[str]) -> list[list[float]]`이며 `core/llm.py`에 **구현되어 있다**. 입력과 같은 순서로 벡터를 돌려주고, 모델은 `config.EMBEDDING_MODEL`(기본 `text-embedding-3-large`)이다. QA의 `Embedder` 타입(`Callable[[list[str]], list[list[float]]]`)과 같아서 `search_chunks(..., embed=embed)`에 그대로 넘길 수 있다.
-- 동작: `LLM_API_KEY`가 없으면 `RuntimeError`, 빈 목록이면 API를 부르지 않고 `[]`, API 실패는 openai 예외로 그대로 전달한다(임베딩 없이는 저장할 수 없다). **빈 문자열 검사와 응답 차원(3072) 검사는 코드에 없다.** 실제 API 호출로 차원을 확인하지는 않았다.
+- 동작: `LLM_API_KEY`가 없으면 `RuntimeError`, 빈 목록이면 API를 부르지 않고 `[]`, API 실패는 openai 예외로 그대로 전달한다(임베딩 없이는 저장할 수 없다).
+- **입력 검사:** 문자열 목록(튜플 포함)이 아니거나 빈·공백 문자열이 있으면 API를 부르기 전에 `ValueError`다. 메시지에는 몇 번째 값인지만 넣고 본문은 넣지 않는다.
+- **결과 검사:** 돌려받은 벡터의 개수가 입력과 같고, 모두 비어 있지 않은 숫자 목록이며 길이가 서로 같아야 한다. `EMBEDDING_MODEL`이 모델별 차원 표(`text-embedding-3-large` 3072, `text-embedding-3-small` 1536, `text-embedding-ada-002` 1536)에 있으면 그 차원과도 같아야 하고, 표에 없는 모델은 길이 일치만 확인한다. 어긋나면 `LlmError`다. 메시지에는 개수와 길이만 넣고 입력 본문과 벡터 값은 넣지 않는다.
+- 단위 테스트는 가짜 임베딩 객체로 작성했다(`tests/test_llm_embed.py`). **실제 API로 차원을 확인하는 일은 아직 하지 못했다**(호출했을 때 API가 키를 거절해서 401이 났다).
 - `core/llm.py`와 `config.py`는 QA와 공유하는 파일이다. 수정할 때는 최소 변경으로 하고 QA와 먼저 합의한다.
 - QA의 `util/rag_ingest.py`·`rag_query.py`의 기본 임베딩 함수(`test_embed_with_openai`)도 같은 `config.EMBEDDING_MODEL`을 쓰므로 모델과 차원은 `core.llm.embed`와 같다. 다만 함수가 따로 있어서, 통일할 시점은 QA와 맞춘다. 임베딩 모델을 바꾸면 벡터 차원이 달라져(small 1536, large 3072) 이미 만든 컬렉션에는 넣거나 검색할 수 없다.
 - 컬렉션은 처음 저장할 때 차원이 고정된다. 기존 `rag_ingest` 테스트 데이터(1536차원)가 남은 컬렉션에는 저장하지 않는다.
