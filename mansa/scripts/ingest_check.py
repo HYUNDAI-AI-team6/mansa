@@ -10,10 +10,16 @@ import argparse
 import logging
 from collections import Counter
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
-from features.processing.factory import ModelNames, build_ingest_pipeline, build_steps, registered_model_names
+from features.processing.factory import (
+    ModelNames,
+    Tagger,
+    build_ingest_pipeline,
+    build_steps,
+    registered_model_names,
+)
 from features.processing.indexer import IndexingError, Indexer
 from features.processing.pipeline import STATUS_COMPLETED, IngestError, IngestSteps
 
@@ -88,10 +94,11 @@ def run(
     model_names: ModelNames = registered_model_names,
     embed: Embed | None = None,
     indexer: Indexer | None = None,
+    tagger: Tagger | None = None,
 ) -> list[str]:
     """PDF 한 개를 확인하고 결과를 한 줄씩 돌려준다. apply가 아니면 외부 서비스를 부르지 않는다."""
     document = make_document(path, doc_type, document_id)
-    steps = build_steps(model_names, embed=embed if apply else _no_embed)
+    steps = build_steps(model_names, embed=embed if apply else _no_embed, tagger=tagger)
     indexer = indexer or Indexer()
 
     try:
@@ -115,6 +122,13 @@ def run(
     return lines + _apply(document, steps, indexer, keep)
 
 
+def _tag_summary(chunks: list) -> str:
+    """태그가 붙은 청크 수를 한 줄로 만든다. 태그는 일부 청크에만 붙는 것이 정상이다."""
+    parts = sum(1 for chunk in chunks if chunk.metadata.get("part"))
+    tasks = sum(1 for chunk in chunks if chunk.metadata.get("task"))
+    return f"tags: part on {parts} of {len(chunks)} chunks, task on {tasks}"
+
+
 def _has_chunks(indexer: Indexer, doc_type: str, document_id: int) -> bool:
     """이 문서 ID로 저장된 청크가 있는지 확인한다. Indexer.verify의 기대 개수 0으로 확인한다."""
     try:
@@ -129,11 +143,19 @@ def _apply(document: LocalDocument, steps: IngestSteps, indexer: Indexer, keep: 
     if _has_chunks(indexer, document.doc_type, document.id):
         return [f"stopped: document id {document.id} already has chunks in ChromaDB; nothing was changed"]
     store = LocalStore(document)
-    build_ingest_pipeline(store, indexer, steps).run(document.id)
+    tagged: list = []
+
+    def watch_tags(chunks):
+        """태그 단계의 결과를 보관해 둔다. 몇 개에 태그가 붙었는지 보여 주기 위해서다."""
+        tagged[:] = steps.tag(chunks)
+        return tagged
+
+    build_ingest_pipeline(store, indexer, replace(steps, tag=watch_tags)).run(document.id)
     status, error, chunk_count = store.statuses[-1]
     if status != STATUS_COMPLETED:
         return [f"pipeline status: {status} ({error})"]
     lines = [f"pipeline status: {status} (chunk_count: {chunk_count})"]
+    lines.append(_tag_summary(tagged))
     indexer.verify(document.doc_type, document.id, chunk_count)
     lines.append(f"stored in ChromaDB and counted: {chunk_count}")
     if keep:
