@@ -1,11 +1,10 @@
-"""문서 관리(A1): 문서 현황 + 목록(처리 상태: 처리 중 · 완료 · 실패) + 휴지통으로 삭제."""
+"""문서 관리(A1): documents_info 테이블의 문서 현황 + 목록(처리 상태: 처리 중 · 완료 · 실패)."""
 
 from html import escape
 
 import gradio as gr
 
 from ui import components as ui
-from ui import mock_data as mock
 from ui.doc_view import OPEN_PDF_JS, title_button
 from ui.page import PageView
 from ui.theme import TEXT3
@@ -26,6 +25,35 @@ STATS = [
     ("실패", "다시 올려 주세요", "alert", "red"),
 ]
 ICON_COLOR = {"blue": "#2F54EB", "orange": "#C2410C", "red": "#B91C1C"}
+
+# documents_info 값 -> 화면에 보이는 이름
+TYPE_LABEL = {"tech": "기술 문서", "secure": "안전 문서"}
+STATUS_LABEL = {"PROCESSING": "처리 중", "COMPLETED": "완료", "FAILED": "실패"}
+
+REFRESH_SECONDS = 5  # 처리 상태를 다시 읽는 간격
+
+SELECT_DOCS = (
+    "SELECT d.id, d.filename, d.document_type, d.status, d.upload_at, p.name AS dept "
+    "FROM documents_info d LEFT JOIN departments p ON p.id = d.department_id "
+    "ORDER BY d.upload_at DESC, d.id DESC"
+)
+
+
+def load_docs() -> list[dict]:
+    """documents_info 를 부서명과 함께 읽어 화면용 dict 목록으로 만든다. DB 연결이 필요해 호출할 때 불러온다."""
+    from util.mysql_connection import fetch_all
+
+    return [
+        {
+            "id": r["id"],
+            "title": r["filename"],
+            "type": TYPE_LABEL[r["document_type"]],
+            "dept": r["dept"] or "-",
+            "status": STATUS_LABEL[r["status"]],
+            "date": r["upload_at"].strftime("%m/%d"),
+        }
+        for r in fetch_all(SELECT_DOCS)
+    ]
 
 
 def stats_html(docs: list[dict]) -> str:
@@ -51,14 +79,14 @@ def _title(doc: dict) -> str:
 
 
 def table(docs: list[dict], keyword: str = "") -> str:
-    """문서 표. 휴지통 버튼의 data-i 는 docs 의 번호다."""
+    """문서 표. 휴지통 버튼의 data-i 는 documents_info 의 id 다."""
     word = (keyword or "").strip()
     rows = []
-    for i, d in enumerate(docs):
+    for d in docs:
         if word not in d["title"]:
             continue
         trash = (
-            f'<button type="button" class="icon-btn" data-i="{i}" '
+            f'<button type="button" class="icon-btn" data-i="{d["id"]}" '
             f'aria-label="{escape(d["title"])} 삭제">{ui.icon("trash", TEXT3, 18)}</button>'
         )
         rows.append(
@@ -74,33 +102,51 @@ def table(docs: list[dict], keyword: str = "") -> str:
     return ui.table_html(COLUMNS, rows, "조건에 맞는 문서가 없어요")
 
 
-def _delete(store: dict, keyword: str, evt: gr.SelectData) -> tuple:
-    """휴지통을 누른 문서를 지운다(목데이터). 문서 삭제 기능이 생기면 그 함수를 부른다."""
-    docs = list(store["docs"])
-    removed = docs.pop(evt.index)
-    ui.notify(f"‘{removed['title']}’ 문서를 삭제했어요")
-    store = {**store, "docs": docs}
-    return store, stats_html(docs), table(docs, keyword)
+def _busy(docs: list[dict]) -> bool:
+    """처리 중인 문서가 하나라도 있으면 True."""
+    return any(d["status"] == "처리 중" for d in docs)
 
 
-def build(store: gr.State) -> PageView:
+def _delete(keyword: str, evt: gr.SelectData) -> tuple:
+    """휴지통을 누른 문서의 documents_info 행을 id 로 지운다. 벡터DB 청크는 지우지 않는다."""
+    from util.mysql_connection import execute
+
+    execute("DELETE FROM documents_info WHERE id = :id", {"id": evt.index})
+    ui.notify("문서를 삭제했어요")
+    docs = load_docs()
+    return stats_html(docs), table(docs, keyword)
+
+
+def build() -> PageView:
     """문서 관리 화면을 만든다. '문서 업로드' 버튼은 app.py 에서 업로드 화면으로 연결한다."""
-    docs = mock.DOCUMENTS
     with gr.Row(elem_classes=["section-row"]):
         gr.HTML(ui.section_title("현황"), padding=False, scale=1)
         upload = gr.Button(
             "문서 업로드", elem_classes=["btn-primary", "sm-btn"], scale=0, min_width=0
         )
-    stats = gr.HTML(stats_html(docs), padding=False)
+    stats = gr.HTML(stats_html([]), padding=False)
     with gr.Column(elem_classes=["card"]):
         keyword = ui.search_box("문서명 검색", ["w-280"])
-        result = gr.HTML(table(docs), js_on_load=ui.CLICK_JS + "\n" + OPEN_PDF_JS, padding=False)
+        result = gr.HTML(table([]), js_on_load=ui.CLICK_JS + "\n" + OPEN_PDF_JS, padding=False)
 
-    keyword.change(lambda s, k: table(s["docs"], k), [store, keyword], result)
-    result.select(_delete, [store, keyword], [store, stats, result])
+    keyword.change(lambda k: table(load_docs(), k), keyword, result)
+    result.select(_delete, keyword, [stats, result])
 
-    def reset(data: dict) -> tuple:
-        """메뉴로 들어오면 검색어를 비우고 지금 문서 목록으로 다시 그린다."""
-        return "", stats_html(data["docs"]), table(data["docs"])
+    # 처리 중인 문서가 있을 때만 켜 두고, 다른 화면으로 가면 app.py 가 끈다.
+    timer = gr.Timer(REFRESH_SECONDS, active=False)
 
-    return PageView(reset, [store], [keyword, stats, result], links={"upload": upload})
+    def refresh(word: str) -> tuple:
+        """DB 의 지금 상태로 현황·표를 다시 그린다. 처리 중인 문서가 없으면 타이머를 끈다."""
+        docs = load_docs()
+        return stats_html(docs), table(docs, word), gr.Timer(active=_busy(docs))
+
+    timer.tick(refresh, keyword, [stats, result, timer])
+
+    def reset() -> tuple:
+        """메뉴로 들어오면 검색어를 비우고 DB 의 지금 문서 목록으로 다시 그린다."""
+        docs = load_docs()
+        return "", stats_html(docs), table(docs), gr.Timer(active=_busy(docs))
+
+    return PageView(
+        reset, [], [keyword, stats, result, timer], links={"upload": upload, "timer": timer}
+    )
