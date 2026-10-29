@@ -1,14 +1,13 @@
 import unittest
 from functools import partial
 
-from core.schemas import Intent
+from core.schemas import Intent, ScoredChunk
 from features.master.taxonomy import TaxonomyService
 from features.retrieval.retriever import (
     MANUAL_COLLECTION,
     MANUAL_DOC_TYPE,
     SAFETY_COLLECTION,
     SAFETY_DOC_TYPE,
-    HybridRetriever,
     chunk_tags,
     default_safety_terms,
     distance_to_similarity,
@@ -182,53 +181,33 @@ class HelperTest(unittest.TestCase):
         self.assertEqual(distance_to_similarity(2.0), 0.0)
         self.assertEqual(distance_to_similarity(3.0), 0.0)  # 범위를 넘어도 0~1로 자른다
 
-def fake_get(corpora):
-    """get_chunks 대신 쓰는 가짜 함수. (DB, 컬렉션)별 청크를 페이지로 잘라 돌려주고 호출을 calls에 기록한다."""
-    calls = []
-
-    def get(doc_type, collection, limit=10, offset=0, where=None):
-        calls.append((doc_type, collection))
-        return corpora[(doc_type, collection)][offset:offset + limit]
-
-    get.calls = calls
-    return get
+def chunk(chunk_id, score=0.0):
+    """merge_evidence 입력용 ScoredChunk."""
+    return ScoredChunk(chunk_id=chunk_id, text="t", score=score, doc_type="tech")
 
 
-CORPORA = {(MANUAL_DOC_TYPE, MANUAL_COLLECTION): MANUAL, (SAFETY_DOC_TYPE, SAFETY_COLLECTION): SAFETY}
+class MergeEvidenceTest(unittest.TestCase):
+    def test_keeps_search_order_instead_of_score(self):
+        # BM25·태그로만 찾아 1등인 A(0.0)가 벡터 점수 높은 V보다 앞에 남는다
+        evidence = merge_evidence([chunk("A"), chunk("V", 0.9)], [])
+        self.assertEqual([c.chunk_id for c in evidence.chunks], ["A", "V"])
 
+    def test_alternates_manual_and_safety(self):
+        evidence = merge_evidence([chunk("m1"), chunk("m2"), chunk("m3")], [chunk("s1")])
+        self.assertEqual([c.chunk_id for c in evidence.chunks], ["m1", "s1", "m2", "m3"])
 
-class HybridRetrieverTest(unittest.TestCase):
-    def test_loads_each_corpus_once(self):
-        get = fake_get(CORPORA)
-        retriever = HybridRetriever(fake_search([]), get)
-        retriever.search_manual("브레이크", NO_TAGS)
-        retriever.search_safety("크레인", NO_TAGS)
-        # 생성할 때 한 번씩만 읽고 질문할 때는 다시 읽지 않는다
-        self.assertEqual(get.calls, [(MANUAL_DOC_TYPE, MANUAL_COLLECTION), (SAFETY_DOC_TYPE, SAFETY_COLLECTION)])
+    def test_keeps_first_of_duplicates_and_cuts_top_n(self):
+        evidence = merge_evidence([chunk("x"), chunk("y")], [chunk("x"), chunk("z")], top_n=2)
+        self.assertEqual([c.chunk_id for c in evidence.chunks], ["x", "y"])
 
-    def test_search_manual_uses_manual_corpus(self):
-        retriever = HybridRetriever(fake_search([]), fake_get(CORPORA))
-        result = retriever.search_manual("브레이크", NO_TAGS)
-        self.assertEqual([c.chunk_id for c in result], ["m.pdf:p1:0"])
-        self.assertEqual(result[0].doc_type, MANUAL_DOC_TYPE)
+    def test_bm25_only_answer_survives_with_real_search(self):
+        corpus = [{"id": "A", "text": "HX-200A 메인 로프 교체 기준", "metadata": {"part": "메인 로프"}}]
+        corpus += [{"id": f"V{i}", "text": f"일반 안내 {i}", "metadata": {}} for i in range(1, 10)]
+        vector_only = fake_search([{**c, "distance": 0.9} for c in corpus if c["id"] != "A"])
+        intent = Intent(intent="spec", parts=["메인 로프"])
+        manual = search_manual("HX-200A 메인 로프 교체 기준", intent, vector_only, corpus)
+        self.assertEqual(merge_evidence(manual, []).chunks[0].chunk_id, "A")
 
-    def test_search_safety_uses_safety_corpus_and_expander(self):
-        search = fake_search([])
-        retriever = HybridRetriever(search, fake_get(CORPORA))
-        result = retriever.search_safety("각도 확인", BOOM_CHECK)
-        self.assertEqual(search.calls, [("각도 확인 붐 점검", SAFETY_DOC_TYPE, SAFETY_COLLECTION)])
-        self.assertEqual([c.chunk_id for c in result], ["s.pdf:p2:0"])
-
-    def test_custom_expander_is_used(self):
-        retriever = HybridRetriever(fake_search([]), fake_get(CORPORA), expand_terms=lambda _: ["작업반경"])
-        self.assertEqual([c.chunk_id for c in retriever.search_safety("크레인", NO_TAGS)], ["s.pdf:p1:0"])
-
-    def test_results_feed_merge_evidence(self):
-        retriever = HybridRetriever(fake_search([]), fake_get(CORPORA))
-        evidence = merge_evidence(
-            retriever.search_manual("브레이크", NO_TAGS), retriever.search_safety("크레인", NO_TAGS)
-        )
-        self.assertEqual([c.chunk_id for c in evidence.chunks], ["m.pdf:p1:0", "s.pdf:p1:0"])
 
 if __name__ == "__main__":
     unittest.main()
