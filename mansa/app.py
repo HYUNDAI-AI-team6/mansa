@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import gradio as gr
 
+from features.auth.service import AuthService
 from features.evaluation.storage import SAVE_DIR
 from ui import components as ui
 from ui import (
@@ -172,6 +173,13 @@ def _layout(role: str | None) -> tuple:
     )
 
 
+def _auth() -> AuthService:
+    """DB 연결이 필요해 로그인할 때 서비스를 만든다."""
+    from util.mysql_connection import execute, fetch_all
+
+    return AuthService(fetch_all, execute)
+
+
 def _wire_login(
     role: str, form: login.LoginForm, shell: Shell, user: gr.State, layout_outputs: list
 ) -> None:
@@ -180,8 +188,8 @@ def _wire_login(
     outputs = [form.error, user, *layout_outputs, *shell.nav_outputs()]
 
     def handle(user_id: str, password: str) -> tuple:
-        """목데이터로 로그인하고 화면을 바꾼다. 실패하면 안내 상자만 보여 준다."""
-        account, message = mock.mock_login(user_id, password, role)
+        """users·admins 테이블로 로그인하고 화면을 바꾼다. 실패하면 안내 상자만 보여 준다."""
+        account, message = _auth().login(role, user_id, password)
         if account is None:
             skips = [gr.skip()] * (len(outputs) - 1)
             return (gr.HTML(login.error_html(message), visible=True), *skips)

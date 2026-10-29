@@ -12,4 +12,5 @@ dependencies = [
     "pypdf>=6.21.2",
     "python-dotenv>=1.2.4",
     "sqlalchemy>=2.1.6",
+    "argon2-cffi>=25.1.0",
 ]
