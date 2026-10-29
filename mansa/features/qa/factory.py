@@ -27,6 +27,7 @@ def build_qa_service(
         search: VectorSearch = search_chunks,
         get: ChunkGetter = get_chunks,
         complete: Callable[..., dict] = llm.complete,
+        history: HistoryService | None = None,
 ) -> QAService:
     """실제 부품으로 QAService를 만든다. 앱을 시작할 때 한 번만 부른다.
 
@@ -34,6 +35,7 @@ def build_qa_service(
     컬렉션이 없거나 서버에 접속할 수 없으면 예외가 그대로 전달된다.
     search·get은 보통 util.rag_query 함수를 쓰고, 확인용으로 로컬 Chroma 함수를 넣을 수 있다.
     complete는 질문 분석과 답변 생성이 함께 쓰는 LLM 호출 함수다.
+    history를 주면 그 대화 기록에 저장하고(질문 기록 화면과 공유), 없으면 새 메모리 기록을 만든다.
     대화 기록은 메모리에 저장하므로 앱을 다시 켜면 사라진다.
     """
     taxonomy = TaxonomyService.from_directory()
@@ -44,7 +46,7 @@ def build_qa_service(
         clarify_policy=RuleClarifyPolicy(taxonomy),
         retriever=HybridRetriever(search, get, expand_terms),
         generator=AnswerGenerator(complete),
-        history=HistoryService(MemoryHistoryStore()),
+        history=history or HistoryService(MemoryHistoryStore()),
     )
 
 

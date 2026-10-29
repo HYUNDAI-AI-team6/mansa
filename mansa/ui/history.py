@@ -1,32 +1,37 @@
 """질문 기록(U5): 지난 기술 Q&A 대화 목록. 항목을 누르면 기술 Q&A 에서 그 대화가 열린다."""
 
+from datetime import date
 from html import escape
 
 import gradio as gr
 
 from ui import components as ui
-from ui import mock_data as mock
+from ui.qa import MEMBER_ID, history_service
 from ui.page import PageView
 from ui.theme import TEXT3
 
 PERIODS = ["오늘", "전체"]
+HISTORY_LIMIT = 100 #목록에 보여 줄 최근 대화수
 
 
 def rows_html(keyword: str = "", period: str = "오늘") -> str:
-    """검색어·기간에 맞는 대화 목록. data-i 는 mock.HISTORY 의 번호다."""
+    """검색어·기간에 맞는 대화 목록(최근 질문 순). data-i 는 대화 ID라 누르면 그 대화가 열린다."""
     word = (keyword or "").strip()
+    today = date.today()
     rows = []
-    for i, item in enumerate(mock.HISTORY):
-        if period == "오늘" and item["day"] != "오늘":
+    for item in history_service().list_conversations(MEMBER_ID, HISTORY_LIMIT):
+        is_today = item.updated_at.date() == today
+        if period == "오늘" and not is_today:
             continue
-        if word and word not in item["title"]:
+        if word and word not in item.title:
             continue
-        tags = (ui.tag(item["model"], "blue") if item["model"] else "") + ui.tag(item["task"])
+        time = item.updated_at.strftime("%H:%M" if is_today else "%m/%d")
+        tags = "".join(ui.tag(tag) for tag in item.tags)
         rows.append(
-            f'<button type="button" class="hist-row" data-i="{i}">'
-            f'<span class="time">{escape(item["time"])}</span>'
-            f'<span class="body"><b>{escape(item["title"])}</b>'
-            f'<span class="meta">{tags}<em>질문 {item["count"]}개</em></span></span>'
+            f'<button type="button" class="hist-row" data-i="{item.id}">'
+            f'<span class="time">{time}</span>'
+            f'<span class="body"><b>{escape(item.title)}</b>'
+            f'<span class="meta">{tags}<em>질문 {item.question_count}개</em></span></span>'
             f"{ui.icon('chevron-right', TEXT3, 18)}</button>"
         )
     if not rows:

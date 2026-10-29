@@ -5,12 +5,14 @@
 import logging # 질문 처리에 실패한 원인을 서버 로그에 남기려고 쓴다
 
 from dataclasses import dataclass, field
-from functools import cache
+from functools import cache, partial
 from html import escape
 
 import gradio as gr
 
 from core.schemas import Answer, AnswerSection, Clarify, NoAnswer, SourceView
+from features.history.service import HistoryService
+from features.history.store import MemoryHistoryStore
 from features.qa.answer_guard import build_no_answer
 from features.qa.factory import build_qa_service, build_source_service
 from features.qa.service import QAService
@@ -52,9 +54,17 @@ class QAView:
         """대화를 비우고 모델 선택까지 처음으로 돌린 질문 전 화면 값을 돌려준다."""
         return (*_render(_empty_state()), "")
 
-    def open_history(self, index: int) -> tuple:
-        """질문 기록 index 번 대화를 펼쳐 대화 화면으로 보여 준다."""
-        state = {**_empty_state(), "turns": mock.history_turns(index)}
+    def open_history(self, conversation_id: int) -> tuple:
+        """질문 기록에서 고른 대화를 저장된 질문·답변 그대로 펼친다. 이어서 질문하면 같은 대화에 저장된다.
+        
+        앱을 다시 켜 기록이 사라진 대화처럼 찾을 수 없으면 질문 전 화면을 보여 준다.
+        """
+        try:
+            conversation = history_service().get_conversation(MEMBER_ID, conversation_id)
+        except LookupError:
+            return self.reset()
+        turns = [{"q": t.question, "kind": "answer", "answer": t.answer} for t in conversation.turns]
+        state = {**_empty_state(), "turns": turns, "conversation_id" :conversation.id}
         return (*_render(state), "")
 
 
@@ -119,13 +129,6 @@ def source_list_html(sources: list[SourceView] | None) -> str:
     return f'<div class="card source-list"><h3>근거 목록</h3>{rows}</div>'
 
 
-def _rows(items: list[tuple[str, str]]) -> str:
-    """'이름 ··· 값' 줄 목록을 만든다."""
-    return "".join(
-        f'<div class="kv"><span>{escape(k)}</span><b>{escape(v)}</b></div>' for k, v in items
-    )
-
-
 def _source_link(text: str) -> str:
     """파란 출처 링크 한 줄."""
     return f'<div class="src-link">{icons.svg("link", BRAND, 16)}{escape(text)}</div>'
@@ -135,23 +138,6 @@ def _section(title: str, dept_tag: str, body: str, extra_class: str = "") -> str
     """답변 카드 안의 영역 상자(① 절차, ② 사양 등)."""
     head = f'<div class="sec-head"><h4>{title}</h4>{dept_tag}</div>'
     return f'<div class="ans-sec {extra_class}">{head}{body}</div>'
-
-
-def _safety_html(safety: list[tuple[str, str]]) -> str:
-    """③ 안전 요건 상자: 안전 조항 목록 + 안전관리자 확인 안내."""
-    items = "".join(
-        f'<div class="safe-item"><b>{escape(t)}</b><span>{escape(s)}</span></div>'
-        for t, s in safety
-    )
-    notice = (
-        f'<div class="safe-notice">{icons.svg("info", "#C2410C", 16)}'
-        "AI가 문서에서 찾은 참고 정보입니다. 최종 판단은 안전관리자 확인이 필요합니다.</div>"
-    )
-    head = f"{icons.svg('shield', '#C2410C', 18)}<h4>③ 안전 요건</h4>"
-    return (
-        f'<div class="ans-sec safety"><div class="sec-head">{head}'
-        f"{ui.tag('안전팀', 'orange')}</div>{items}{notice}</div>"
-    )
 
 
 def _section_body(section: AnswerSection) -> str:
@@ -178,35 +164,6 @@ def answer_html(ans: Answer) -> str:
         f'<span class="meta">근거 {count}개</span></div>'
     )
     body = f'{proc}<div class="ans-grid">{spec}{diff}</div>{safety}'
-    return f'<div class="card answer-card">{head}{body}{DISCLAIMER}</div>'
-
-
-def _mock_answer_html(ans: mock.Answer) -> str:
-    """질문 기록에서 연 지난 대화(목데이터)의 답변 카드. 질문 기록이 실제 저장소로 바뀌면 지운다."""
-    steps = "".join(f"<li>{escape(s)}</li>" for s in ans.procedure)
-    proc = _section(
-        "① 작업 절차",
-        ui.tag("유지보수팀", "blue"),
-        f"<ol>{steps}</ol>{_source_link('[매뉴얼명] 5.3.2 · p.42')}",
-    )
-    spec = _section(
-        "② 사양 수치",
-        ui.tag("유지보수팀", "blue"),
-        _rows(ans.specs) + _source_link("[매뉴얼명] 표 5-2 · p.44"),
-    )
-    diff = _section(
-        "④ 기준 차이",
-        ui.tag("기준 차이", "yellow"),
-        _rows(ans.diffs)
-        + '<p class="note">조건이 다르면 단정해서 비교하지 않아요</p>'
-        + _source_link("산업안전보건기준 규칙 제○○조"),
-    )
-    head = (
-        f'<div class="ans-head">{ui.ai_avatar()}<h3>답변</h3>{ui.tag(ans.model, "blue")}'
-        f'{ui.tag(ans.place)}<span class="grow"></span>'
-        '<span class="meta">근거 4개 · 2개 부서</span></div>'
-    )
-    body = f'{proc}<div class="ans-grid">{spec}{diff}</div>{_safety_html(ans.safety)}'
     return f'<div class="card answer-card">{head}{body}{DISCLAIMER}</div>'
 
 
@@ -270,8 +227,7 @@ def turns_html(turns: list[dict]) -> str:
         if turn["kind"] != "answer":
             out.append(no_answer_html(turn.get("message", ""), turn.get("reason", "")))
             continue
-        ans = turn["answer"]
-        out.append(answer_html(ans) if isinstance(ans, Answer) else _mock_answer_html(ans))
+        out.append(answer_html(turn["answer"]))
     return "".join(out)
 
 
@@ -320,9 +276,22 @@ def _thinking(state: dict, question: str) -> tuple:
 
 
 @cache
+def history_service() -> HistoryService:
+    """기술 Q&A가 저장하고 질문 기록 화면이 읽는 대화 기록. 둘이 같은 기록을 쓰도록 하나만 만든다."""
+    return HistoryService(MemoryHistoryStore())
+
+
+@cache
 def _service() -> QAService:
     """기술 Q&A 서비스. Chroma 청크를 모두 읽어 느리므로 처음 질문할 때 한 번만 만든다."""
-    return build_qa_service()
+    return build_qa_service(history=history_service())
+
+
+@cache
+def _test_service() -> QAService:
+    """관리자 '질문 테스트'용 서비스. 질문 기록에 남지 않게 따로 만든 기록에 저장한다."""
+    # shortcut: 기록만 다른데 Chroma 청크를 한 번 더 읽는다, 질문 테스트 첫 질문이 느리면 검색 부품을 공유한다
+    return build_qa_service(history=HistoryService(MemoryHistoryStore()))
 
 
 @cache
@@ -355,11 +324,15 @@ def _load_sources(state: dict) -> list[SourceView] | None:
     return found
 
 
-def _query(question: str, state: dict, *hints: str) -> Answer | Clarify | NoAnswer:
-    """고른 모델·부위(hints)를 질문 앞에 붙여 Q&A 서비스에 묻는다. 유료 LLM API를 호출한다."""
+def _query(question: str, state: dict, *hints: str, test_mode: bool = False) -> Answer | Clarify | NoAnswer:
+    """고른 모델·부위(hints)를 질문 앞에 붙여 Q&A 서비스에 묻는다. 유료 LLM API를 호출한다.
+    
+    test_mode면 질문 기록에 남지 않는 질문 테스트용 서비스에 묻는다.
+    """
     text = " ".join([*(h for h in hints if h), question])
     try:
-        return _service().answer(text, state["conversation_id"], MEMBER_ID)
+        service = _test_service() if test_mode else _service()
+        return service.answer(text, state["conversation_id"], MEMBER_ID)
     except Exception:
         # Chroma·DB 접속이나 설정 오류가 나도 '찾는 중'에 멈추지 않게 답변 불가로 바꾼다
         logging.getLogger(__name__).exception("qa answer failed")
@@ -378,7 +351,7 @@ def _apply(state: dict, question: str, result: Answer | Clarify | NoAnswer) -> d
     return {**state, "turns": [*state["turns"], turn]}
 
 
-def _ask(question: str, model: str, state: dict):
+def _ask(question: str, model: str, state: dict, test_mode: bool = False):
     """질문을 보내고 결과(답변·되묻기·답변 불가)를 대화에 더한다. 빈 질문은 무시한다.
 
     먼저 '찾는 중' 화면을 보여 주고, 결과가 나오면 그 화면으로 바꾼다.
@@ -392,10 +365,10 @@ def _ask(question: str, model: str, state: dict):
         turns.append({"q": state["pending"]["q"], "kind": "clarify"})
     state = {**state, "turns": turns, "pending": None, "model": model or state["model"]}
     yield _thinking(state, question)
-    yield _render(_apply(state, question, _query(question, state, state["model"])))
+    yield _render(_apply(state, question, _query(question, state, state["model"], test_mode=test_mode)))
 
 
-def _continue(model: str, part: str, state: dict):
+def _continue(model: str, part: str, state: dict, test_mode: bool = False):
     """되묻기에서 고른 모델·부위를 질문에 붙여 다시 묻는다."""
     if state["pending"] is None:
         yield _render(state)
@@ -403,7 +376,7 @@ def _continue(model: str, part: str, state: dict):
     question = state["pending"]["q"]
     state = {**state, "pending": None, "model": model or state["model"]}
     yield _thinking(state, question)
-    yield _render(_apply(state, question, _query(question, state, state["model"], part)))
+    yield _render(_apply(state, question, _query(question, state, state["model"], part, test_mode=test_mode)))
 
 
 def _cancel(state: dict) -> tuple:
@@ -580,11 +553,11 @@ def build(test_mode: bool = False) -> QAView:
     outs += [conv["src_panel"], conv["src_list"], conv["rules"], conv["viewer"], conv["src_tab"]]
     outs += [ask["text"], conv["follow"]]
     outs += [conv["clar_model"], conv["clar_part"], conv["cont"]]
-
-    ask["ask"].click(_ask, [ask["text"], ask["model"], state], outs, **QUIET)
-    ask["text"].submit(_ask, [ask["text"], ask["model"], state], outs, **QUIET)
-    conv["send"].click(_ask, [conv["follow"], ask["model"], state], outs, **QUIET)
-    conv["follow"].submit(_ask, [conv["follow"], ask["model"], state], outs, **QUIET)
+    ask_fn = partial(_ask, test_mode=test_mode) # 질문 테스트 화면은 질문 기록에 남지 않는 서비스로 묻는다
+    ask["ask"].click(ask_fn, [ask["text"], ask["model"], state], outs, **QUIET)
+    ask["text"].submit(ask_fn, [ask["text"], ask["model"], state], outs, **QUIET)
+    conv["send"].click(ask_fn, [conv["follow"], ask["model"], state], outs, **QUIET)
+    conv["follow"].submit(ask_fn, [conv["follow"], ask["model"], state], outs, **QUIET)
     for btn, text in zip(ask["examples"], mock.EXAMPLE_QUESTIONS, strict=True):
         btn.click(lambda t=text: t, None, ask["text"])
     if "recent" in ask:
@@ -592,7 +565,7 @@ def build(test_mode: bool = False) -> QAView:
     ui.enable_when_filled(ask["text"], ask["ask"])
     ui.enable_when_filled(conv["follow"], conv["send"])
     ui.enable_when_chosen([conv["clar_model"], conv["clar_part"]], conv["cont"])
-    conv["cont"].click(_continue, [conv["clar_model"], conv["clar_part"], state], outs, **QUIET)
+    conv["cont"].click(partial(_continue, test_mode= test_mode), [conv["clar_model"], conv["clar_part"], state], outs, **QUIET)
     conv["cancel"].click(_cancel, state, outs)
     conv["src_list"].select(_pick_source, state, [conv["viewer"], conv["src_tab"]])
     conv["src_tab"].input(_pick_tab, [conv["src_tab"], state], conv["viewer"])
