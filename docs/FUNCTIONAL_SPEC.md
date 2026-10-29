@@ -83,23 +83,24 @@ Gradio 화면 연결과 ChromaDB 저장 파이프라인은 장영균 담당이 �
 
 기존 `tags` 리스트 방식은 폐기했다.
 
-- 모델 `gpt-4o-mini`(`config.LLM_MODEL`)로 여러 청크를 배치로 분석해 두 종류를 생성한다.
-  - `part`: 설비 부위 (예: 브레이크, 캘리퍼)
-  - `task`: 작업 종류 (예: 교체, 점검)
-- 질의응답팀은 분류표의 부위·작업 표준 태그를 기준으로 읽는다. **분류표 목록을 받기 전에는 LLM이 본문에서 용어를 자유롭게 생성하고, 목록을 받으면 그 목록 안에서만 고르도록 확장한다**(`tag(chunks, vocabulary)`). 목록에 없는 용어는 태그에서 뺀다(§8).
-- ChromaDB에는 쉼표로 구분한 문자열로 저장한다: `{"part": "브레이크, 캘리퍼", "task": "교체, 점검"}`. 구분자는 `", "`이고, 태그 안에는 쉼표를 넣지 않는다.
+- 모델 `gpt-4o-mini`(`config.LLM_MODEL`)로 여러 청크를 배치(`BATCH_SIZE` 5개)로 분석해 두 종류를 생성한다. 15개씩 보내면 LLM이 뒤쪽 청크의 태그를 비워서 돌려주는 일이 많아 5개로 줄였다. 구현은 `features/processing/tagger.py`의 `tag(chunks, vocabulary, complete=llm.complete)`이다.
+  - `part`: 설비 부위 (분류표 부위의 표준 이름, 예: 메인 로프, 완충기)
+  - `task`: 작업 (분류표 작업의 표준 이름. **부위와 동작을 합친 이름**, 예: 메인 로프 점검)
+- 질의응답이 질문에서 뽑은 부위·작업(분류표 이름)과 청크의 태그가 글자까지 같아야 순위에 반영되므로, 태그는 **분류표 목록 안의 표준 이름만** 쓴다. 어휘(`Vocabulary`)는 `TaxonomyService`의 부위·작업·동의어를 복사해 만든다(`Vocabulary.from_taxonomy`). 분류표 파일은 읽기만 한다. 동의어는 표준 이름으로 바꾼 뒤 판단하고, 목록에 없는 용어는 태그에서 뺀다(§8).
+- ChromaDB에는 **문자열 목록**으로 저장한다: `{"part": ["메인 로프", "완충기"], "task": ["메인 로프 점검"]}`. QA의 `util/tag_search.py`가 `{"part": {"$contains": "메인 로프"}}` 필터로 목록 원소와 정확히 같은 값을 찾기 때문이다(로컬 ChromaDB 1.5.9에서 저장과 `$contains` 필터, 빈 목록 저장 불가를 확인했다). 쉼표 문자열은 이 필터에 걸리지 않는다. 예전 쉼표 구분 문자열 방식은 폐기했다.
+- 부위(또는 그 동의어)가 본문에 하나도 없는 청크는 LLM을 부르지 않는다(제목만 있는 청크, 디자인 설명 등).
 - 배치 결과는 **청크 ID로만** 대응시킨다. 모르는 ID, 중복 ID, 누락된 ID의 결과는 버린다.
-- 문자열만 남기고 앞뒤 공백·빈 값·중복을 제거한다. 결과가 비면 해당 키를 **생략**한다. 빈 문자열은 저장하지 않는다.
-- 원문에 근거한 태그만 생성한다. 임의로 만들어 넣지 않는다.
-- 배치 하나가 실패해도 문서 처리는 중단하지 않고, 그 배치의 청크는 태그 없이 둔다. 함수 전체도 예외를 내지 않는다.
+- 문자열만 남기고 앞뒤 공백·빈 값·중복을 제거한다. 청크당 `part`는 최대 3개, `task`는 최대 2개(`MAX_PART_TAGS`, `MAX_TASK_TAGS`)만 LLM이 준 순서대로 남긴다. 결과가 비면 해당 키를 **생략**한다. ChromaDB가 빈 목록을 저장하지 못한다.
+- 원문에 근거한 태그만 남긴다. `part`는 부위 이름이나 동의어가 본문에 있어야 하고, `task`는 작업 이름의 앞부분(부위)과 마지막 단어(동사)가 모두 본문에 있어야 한다. 공백·영문 대소문자 차이는 무시하고, 한 글자 동의어(`카`)는 `카문`·`카드`에 걸리지 않게 단어 경계를 본다.
+- 배치 하나가 실패해도 문서 처리는 중단하지 않고, 그 배치의 청크는 태그 없이 둔다. 함수 전체도 예외를 내지 않는다. 로그에는 예외 종류와 배치 위치만 남긴다.
 
 ### 3.6 임베딩
 
 - 모델 `text-embedding-3-large`, 차원 3072. 문서 청크와 질문 임베딩은 **같은 모델**이어야 한다.
-- 공통 함수는 `core.llm.embed(texts: list[str]) -> list[list[float]]`이다(**아직 없음**). 입력과 같은 순서로 3072차원 벡터를 돌려준다. QA의 `Embedder` 타입(`Callable[[list[str]], list[list[float]]]`)과 같아서 `search_chunks(..., embed=embed)`에 그대로 넘길 수 있다.
-- `LLM_API_KEY`가 없으면 `RuntimeError`, 빈 문자열이 있으면 `ValueError`, 빈 목록이면 `[]`, 응답 차원이 3072가 아니면 예외다. API 실패는 예외로 전달한다(임베딩 없이는 저장할 수 없다).
-- `core/llm.py`와 `config.py`는 QA와 공유하는 파일이다. `embed`는 파일 끝에 추가하는 최소 변경으로 하고, 추가 전에 QA와 합의한다.
-- **병합 시점 주의:** QA의 `util/rag_ingest.py`·`rag_query.py` 기본 임베딩은 `text-embedding-3-small`(1536차원)이다. 3072차원 컬렉션에 1536차원으로 질문하면 차원 불일치 오류가 난다. QA 쪽 기본값을 `core.llm.embed`로 바꾸는 시점을 QA와 맞춘다.
+- 공통 함수는 `core.llm.embed(texts: list[str]) -> list[list[float]]`이며 `core/llm.py`에 **구현되어 있다**. 입력과 같은 순서로 벡터를 돌려주고, 모델은 `config.EMBEDDING_MODEL`(기본 `text-embedding-3-large`)이다. QA의 `Embedder` 타입(`Callable[[list[str]], list[list[float]]]`)과 같아서 `search_chunks(..., embed=embed)`에 그대로 넘길 수 있다.
+- 동작: `LLM_API_KEY`가 없으면 `RuntimeError`, 빈 목록이면 API를 부르지 않고 `[]`, API 실패는 openai 예외로 그대로 전달한다(임베딩 없이는 저장할 수 없다). **빈 문자열 검사와 응답 차원(3072) 검사는 코드에 없다.** 실제 API 호출로 차원을 확인하지는 않았다.
+- `core/llm.py`와 `config.py`는 QA와 공유하는 파일이다. 수정할 때는 최소 변경으로 하고 QA와 먼저 합의한다.
+- QA의 `util/rag_ingest.py`·`rag_query.py`의 기본 임베딩 함수(`test_embed_with_openai`)도 같은 `config.EMBEDDING_MODEL`을 쓰므로 모델과 차원은 `core.llm.embed`와 같다. 다만 함수가 따로 있어서, 통일할 시점은 QA와 맞춘다. 임베딩 모델을 바꾸면 벡터 차원이 달라져(small 1536, large 3072) 이미 만든 컬렉션에는 넣거나 검색할 수 없다.
 - 컬렉션은 처음 저장할 때 차원이 고정된다. 기존 `rag_ingest` 테스트 데이터(1536차원)가 남은 컬렉션에는 저장하지 않는다.
 
 ### 3.7 청킹 원칙
@@ -152,8 +153,8 @@ Gradio 화면 연결과 ChromaDB 저장 파이프라인은 장영균 담당이 �
 | `model` | str | `tech` | 차종·모델명. 청크당 하나. 기준정보 모델 이름 중 페이지에 나온 것을 **목록의 철자 그대로** 쓴다(§3.7, §8) |
 | `clause` | str | `secure` | 조항·절 번호 (예: `6.6.4.1.2`). 표 청크는 첫 열이 조항 번호일 때만, 부속서는 없음 |
 | `section_title` | str | `secure` | 조항·절 제목, 부속서는 부속서 제목. 선택 항목 |
-| `part` | str | 태그 있을 때 | 부위 태그, 쉼표 구분 (§3.5) |
-| `task` | str | 태그 있을 때 | 작업 태그, 쉼표 구분 (§3.5) |
+| `part` | list[str] | 태그 있을 때 | 부위 태그(분류표 표준 이름) 목록 (§3.5) |
+| `task` | list[str] | 태그 있을 때 | 작업 태그(분류표 표준 이름) 목록 (§3.5) |
 
 - `source`, `page`, `chunk`의 키 이름과 자료형은 바꾸지 않는다. QA가 `(source, page, chunk)`로 정렬하고 출처를 구성한다.
 - **값이 없는 키는 생략한다.** ChromaDB 메타데이터는 `None`을 저장할 수 없다. 값은 `str`, `int`, `float`, `bool`만 가능하고 리스트·dict는 저장할 수 없다.
@@ -180,8 +181,8 @@ uv run --locked python -B -m unittest discover -s tests -v
 | 청킹 진입점 `chunk()` | 완료 | `chunker.py` |
 | 안전기준 청킹, `Chunk` 구조 | 완료 | `chunker_secure.py`, `models.py`, `chunk_utils.py` |
 | 기술사양서 청킹 | 완료 | `chunker_tech.py`. 모델 이름 목록(`models`)이 있어야 `model`이 채워짐 |
-| 태그 생성 (`part`, `task`) | 미구현 | |
-| 임베딩 생성 (`core.llm.embed`) | 미구현 | QA와 합의 후 |
+| 태그 생성 (`part`, `task`) | 완료 | `tagger.py`. 실제 LLM(`gpt-4o-mini`)으로 PDF 3개를 태깅해 확인했다. 배치 5개 기준 안전기준 호출 대상 274개 중 150개에 부위, 13개에 작업 태그가 붙었다 |
+| 임베딩 생성 (`core.llm.embed`) | 구현됨 | `core/llm.py`. 실제 API 호출로 차원을 확인하지 않았고, 빈 문자열·차원 검사는 없다 |
 | 문서 등록·중복 확인, 목록·상태·삭제 서비스 | 미구현 | `features/documents/`는 비어 있음 |
 
 ### 5.1 데이터 구조 (실제 코드 기준)
@@ -251,13 +252,13 @@ OCR과 Vision LLM 기반 도면·이미지 해석은 구현 범위에서 제외�
 |---|---|---|
 | 추출 | `extract_pdf_content(path) -> PdfContent` | 완료 |
 | 청킹 | `chunk(document, content, models=None) -> list[Chunk]` | 완료 |
-| 태그 | `tag(chunks: Sequence[Chunk]) -> list[Chunk]` | 미구현 |
-| 임베딩 | `embed(texts: list[str]) -> list[list[float]]` | 미구현 |
+| 태그 | `tag(chunks: Sequence[Chunk], vocabulary: Vocabulary, complete=llm.complete) -> list[Chunk]` | 완료 |
+| 임베딩 | `embed(texts: list[str]) -> list[list[float]]` | 구현됨(`core.llm.embed`) |
 
-- `tag`는 입력과 같은 순서·길이로 돌려주고, 태그가 있는 청크만 `metadata`에 `part`·`task`를 추가한 새 `Chunk`를 돌려준다.
+- `tag`는 입력과 같은 순서·길이로 돌려주고, 태그가 있는 청크만 `metadata`에 `part`·`task`를 추가한 새 `Chunk`를 돌려준다. `IngestSteps.tag`는 청크 목록 하나만 받으므로, 박정환이 `chunk`와 같은 방식으로 `functools.partial(tag, vocabulary=Vocabulary.from_taxonomy(TaxonomyService.from_directory()))`로 감싸서 연결한다.
 - `IngestSteps`는 합의한 시그니처(`extract`, `chunk`, `tag`, `embed`)로 develop에 반영됐다(PR #52). `chunk`의 `models`는 박정환이 문서를 처리할 때마다 `EquipmentModelService().list_models()`의 이름을 읽어 넘기는 함수로 감싸서 `IngestSteps.chunk`에 연결한다. 청킹 쪽은 `chunk(document, content, models=None)` 시그니처를 유지한다. `document`는 `id`, `title`, `filename`, `doc_type`과 함께 파이프라인이 읽는 `file_path`를 모두 가져야 한다(`get_document()`가 제공).
 - 실제 PDF 3개의 청크가 `Indexer.prepare()` 검증을 통과하고, 가짜 저장소로 `IngestPipeline`이 완료 기록까지 가는 것을 테스트로 확인했다. 실제 ChromaDB 서버 저장과 실제 임베딩 호출은 확인하지 않았다.
-- `Indexer.prepare()`가 청크에서 검사하는 조건: `text`는 공백이 아닌 문자열, `source`는 비어 있지 않은 `str`, `page`는 1 이상 `int`, `chunk`는 0 이상 `int`, `document_id`·`document_type`은 문서와 같은 값, 값은 `str/int/float/bool`만, 같은 `(page, chunk)`는 한 번만. 이 조건을 어기면 `ValueError`다.
+- `Indexer.prepare()`가 청크에서 검사하는 조건: `text`는 공백이 아닌 문자열, `source`는 비어 있지 않은 `str`, `page`는 1 이상 `int`, `chunk`는 0 이상 `int`, `document_id`·`document_type`은 문서와 같은 값, 값은 `str/int/float/bool`만(**`part`·`task`는 비어 있지 않은 문자열 목록도 허용하도록 수정해야 한다. 박정환 요청 중이며, 고치기 전에는 태그가 붙은 청크가 `ValueError`로 거절된다**), 같은 `(page, chunk)`는 한 번만. 이 조건을 어기면 `ValueError`다.
 - 스캔본은 `ScannedPdfError`로 오고, `pipeline._error_text`는 `IngestError` 외 예외를 "예외이름 (see server log)"로만 기록한다. 박정환의 어댑터가 사용자용 문구로 바꾼다.
 - 완료할 때 `set_status(id, "COMPLETED", chunk_count=저장한 청크 수)`로 청크 수를 넘긴다.
 
@@ -283,7 +284,7 @@ delete_document_record(document_id) -> bool      # MySQL 행만 삭제. 반드�
 - 예외: `DuplicateDocumentError`(`.document_id`에 기존 문서 ID), `DocumentNotFoundError`, `DocumentStorageError`, `InvalidStatusTransition`, `ValueError`(유형·파일 형식·파일명·부서 오류).
 - `filename`은 원본 파일명이고, 서비스가 NFC로 정규화한 뒤 확장자를 빼서 `title`을 만든다.
 - 등록 순서: 입력 검증(`%PDF-` 헤더, 크기) → `title`·해시 계산 → 중복 조회(중복이면 거절) → 임시 파일로 저장 → `INSERT`(상태 `처리 중`) → 임시 파일을 `{저장소}/{doc_type}/{id}.pdf`로 이름 변경. 실패하면 행과 파일을 정리한다. `execute`가 `lastrowid`를 주지 않으므로 새 ID는 `title_hash`로 다시 조회해서 얻는다. 사용자 파일명은 경로에 쓰지 않는다.
-- 저장소 기준 폴더는 환경변수로 관리하며, 위치는 미확정이다(§8).
+- 저장소 기준 폴더는 환경변수 `PDF_STORAGE_DIR`로 관리하고 기본값은 `mansa/data/documents`다(제안. 박정환·DB 담당 확인 전이며 `config.py`에는 아직 없다). 기존 `data/pdfs`는 개발용 샘플이 한글 파일명으로 들어 있어서 분리했다. 영속 볼륨 여부는 미확정이다(§8). `file_path`는 `Path(PDF_STORAGE_DIR) / doc_type / f"{id}.pdf"`로 계산한다.
 - 책임 구분: DocumentService는 MySQL 행과 원본 PDF 파일만 다루고 ChromaDB와 파이프라인을 호출하지 않는다. 파이프라인은 MySQL에 직접 접근하지 않고 `set_status`만 호출한다.
 
 ### 7.3 문서관리 → ChromaDB (`util/vector_upload.py`, 이미 있음)
@@ -330,7 +331,9 @@ n = upload_embeddings(doc_type, collection_name, ids, embeddings, documents, met
 문서관리가 질의응답에 넘기는 것은 ChromaDB에 저장된 청크(텍스트·임베딩·§4 메타데이터)뿐이다. 함수를 직접 호출하는 연결은 없다. 문서관리가 알아야 할 QA의 동작은 아래와 같다.
 
 - `search_chunks()`, `get_chunks()`의 결과는 `{"id", "text", "metadata", "distance"}`(`get_chunks`는 `distance` 없음) 형식이다. 검색 로직은 QA 담당이라 수정하지 않는다.
-- `retriever.py`는 `part`·`task`를 쉼표로 쪼개 질문의 `Intent` 부위·작업과 겹치는 개수로 순위를 정한다. 문자열이 아니거나 비어 있으면 태그가 없는 것으로 본다.
+- `retriever.py`는 `part`·`task`(문자열 목록이나 쉼표 문자열)를 질문의 `Intent` 부위·작업과 겹치는 개수로 순위를 정한다. 그 밖의 값이거나 비어 있으면 태그가 없는 것으로 본다. `util/tag_search.py`는 `part`·`task`가 문자열 목록이어야 `$contains` 필터가 걸린다.
+- 질문에 부위·작업이 없으면 분류표 부위를 선택지로 되묻는다(`clarify_policy.py`). 분류표가 35개로 늘어서 선택지는 분류표 앞쪽 `MAX_PART_OPTIONS`(8)개까지만 보여주도록 장영균이 수정했다(QA 확인 필요, §8).
+- 태그는 안전 문서와 매뉴얼 모두에 붙지만 **일부 청크에만** 붙는다(실제 LLM, 배치 5개 기준: 안전기준 349개 중 부위 43%·작업 4%, 엘트론 11%, LUXEN 27%). 태그를 검색 조건(필터)으로 걸면 태그 없는 청크가 모두 빠지므로, 일치하면 순위를 올리는 신호(RRF 등)로만 쓰고 태그 없는 청크도 후보에 남기기를 권한다. 작업(`task`) 태그는 특히 적다.
 - `Intent`의 모델·부위는 기준정보에 **등록된 값만** 남긴다. 모델은 `where` 필터로 거를 예정이라, 청크의 `model`이 등록된 모델 ID와 철자가 같아야 한다.
 - BM25는 `get_chunks`로 읽은 청크 원문(`text`)만 사용한다. 메타데이터는 BM25에 쓰이지 않는다.
 - 청크를 `(source, page, chunk)`로 정렬한다. 키가 없으면 빈 문자열이나 0으로 취급한다.
@@ -341,14 +344,20 @@ n = upload_embeddings(doc_type, collection_name, ids, embeddings, documents, met
 |---|---|
 | `title_hash`의 입력 규칙(`doc_type` 포함 여부, 소문자 변환, NFC 정규화) | DB 담당 |
 | `documents`에 `error_message` 컬럼 추가, `status` 한글 3값 확정, 마이그레이션 파일 위치·실행 시점 | DB 담당 |
-| 원본 PDF 저장 위치·방식(영속 볼륨 여부), 기준 폴더 환경변수 | DB 담당·박정환 |
+| 원본 PDF 저장 위치·방식(영속 볼륨 여부). 기준 폴더 환경변수는 `PDF_STORAGE_DIR`(기본 `mansa/data/documents`)로 제안했다. 서버를 다시 시작할 때 디스크가 지워지면 원본 PDF가 사라져 재처리·삭제가 안 된다 | DB 담당·박정환 |
 | 남아 있는 ChromaDB 테스트 데이터의 차원(1536 vs 3072) 정리 | DB 담당 |
-| 분류표의 **부위·작업 표준 태그 목록**. 받기 전에는 자유 생성, 받으면 목록 안에서만 선택 | QA·기준정보 담당 |
+| 분류표를 실제 PDF 3개 용어 기준으로 확장했다(부위 37개, 작업 49개, 작업 위치 7개). 엘트론 용어로 부위 2개(적재하중 검출 모니터링 장치, 안전봉)와 동의어 `Car Door → 카문`을 더하고, `가버너 → 과속조절기`로 고쳤다. 관계표(`task_relations.json`)에는 새 작업 33개를 같은 청크에서 함께 나온 작업 위치·위험 유형 횟수로 채웠다(근거가 4개 미만인 작업과 `권상기` 계열은 비어 있다). 태그는 이 목록 안에서만 고른다. 확정 여부와 어색한 조합 정리, `task`를 **부위+동작 합친 이름**으로 유지하는 것(명세 예시의 동사 단위 `점검`과 다름) | QA·기준정보 담당 |
+| 분류표 확장으로 되묻기 선택지가 37개가 되어 `clarify_policy.py`의 `build_options`를 앞쪽 8개로 줄이고 테스트를 고쳤다. 상한·자르는 방식(앞쪽부터)이 맞는지 | QA |
+| 동의어 `가버너 → 조속기`의 표준 태그가 분류표에 없어서 `가버너 → 과속조절기`로 고쳤다(LLM이 `조속기`를 태그로 만들어내던 문제). 분류표의 `비상정지장치`는 PDF에 거의 안 나오고(1건) PDF는 `추락방지안전장치`(43건)를 쓴다. `조속기`·`비상정지장치`를 동의어로 넣을지 | 기준정보 담당 |
+| `config.py`의 `CHUNK_SIZE`(800)·`CHUNK_OVERLAP`(100)은 QA의 `util/rag_ingest.py`(테스트용 적재)만 쓴다. 문서관리 청킹(`features/processing/`)은 300~1,200자, 겹침 없음으로 따로 정했다. 두 기준 중 정식 기준과 설정 정리 방법 | QA |
 | `chunk`를 0부터 시작하는 것, `model`·`clause` 같은 키가 없는 청크의 처리 | QA |
-| `core.llm.embed` 추가, QA의 `embed` 기본값 교체 시점 | QA |
+| QA의 `util/rag_*` 기본 임베딩(`test_embed_with_openai`)을 `core.llm.embed`로 통일할 시점, `core.llm.embed`에 빈 문자열·차원(3072) 검사를 추가할지 | QA |
 | 상태 전이 검증 수용 여부, 삭제 중간 실패 처리 | 박정환 |
 | `data/master/equipment_models.csv`에 실제 설비 모델(제조사·모델명·정격 속도·하중·용도·구동 방식) 채우기. 지금은 자리표시자라 `model` 없이 저장된다 | 박정환(CSV 작성), 장영균(PDF에서 인식되는 표기 제공) |
-| `model` 키가 없는 청크(모델이 안 나오는 페이지)를 모델 필터가 제외해도 되는지. 모델별 복제 청크는 그대로 두기로 합의함 | QA |
+| `model` 키가 없는 청크(모델이 안 나오는 페이지)를 모델 필터가 제외해도 되는지. 모델별 복제 청크는 그대로 두기로 합의함. 복제로 늘어난 청크는 엘트론 27개 중 2개, LUXEN 81개 중 8개(7~10%)이고 모두 두 모델이 같이 나오는 공통 페이지다. 모델을 지정하지 않은 질문에서 같은 문장이 두 번 나올 수 있으므로, 모델 머리말을 뺀 본문이 같은 검색 결과를 합치는 것을 제안한다 | QA |
+| 태그(`part`·`task`)를 문자열 목록으로 저장하기로 바꿨다. `features/processing/indexer.py`의 `_clean_metadata`가 목록을 `ValueError`로 막고 있어서, `part`·`task`만 비어 있지 않은 문자열 목록을 통과시켜야 한다(빈 목록은 키를 뺀다). 고치기 전에 `tag`를 파이프라인에 연결하면 모든 문서가 실패로 끝난다 | 박정환 |
+| QA의 `util/tag_search.py`는 태그가 있는데 결과가 0건이면 필터 없는 검색으로 넘어가지 않는다. 태그가 붙는 청크는 안전기준 43%, 엘트론 11%, LUXEN 27%뿐이라 필터로만 쓰면 태그 없는 청크가 모두 빠진다 | QA |
+| 표 안에만 모델명이 있는 페이지는 `model`이 비지만(모델 이름을 본문에서만 찾는다), 가진 PDF 2개에는 그런 페이지가 없다. 그런 PDF가 나오면 표에서도 찾도록 추가한다 | 장영균 |
 | 안전기준 수식(`HyhwpEQ` 글리프) 복원 방식과 시점 | 장영균 |
 | 도면 페이지에 OCR/Vision을 추가할지 | 팀 합의 |
 

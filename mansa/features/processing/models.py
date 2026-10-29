@@ -16,7 +16,8 @@ class DocumentLike(Protocol):
 
 @dataclass(frozen=True)
 class Chunk:
-    """ChromaDB에 저장할 청크 하나. metadata는 str·int·float·bool 값만 갖고 값이 없는 키는 두지 않는다."""
+    """ChromaDB에 저장할 청크 하나. metadata는 str·int·float·bool 값을 갖고, 부위·작업 태그(part, task)만
+    문자열 목록이다. 값이 없는 키는 두지 않는다."""
 
     text: str
     metadata: dict[str, Any]
