@@ -72,6 +72,14 @@ class ExtractPdfTablesTest(unittest.TestCase):
         self.assertEqual(table.empty_ratio, 0.0)
         self.assertEqual(result.tables_on_page(1), [])
 
+    def test_merged_marks_have_same_shape_as_rows(self) -> None:
+        pdf = make_pdf(self.tmp / "m.pdf", [True])
+
+        table = extract_pdf_tables(pdf).tables[0]
+
+        self.assertEqual([len(row) for row in table.merged], [len(row) for row in table.rows])
+        self.assertFalse(any(any(row) for row in table.merged))
+
     def test_pdf_without_tables_returns_empty_list(self) -> None:
         result = extract_pdf_tables(make_pdf(self.tmp / "n.pdf", [False, False]))
 
@@ -203,6 +211,15 @@ class RealPdfTablesTest(unittest.TestCase):
         first = result.tables_on_page(6)[0]
         self.assertEqual(first.rows[0][0], "Model No")
         self.assertIn("GF207632US", [row[0] for row in first.rows])
+
+    @unittest.skipUnless(ELTRON_PDF.is_file(), "Eltron pdf not found")
+    def test_eltron_merged_cells_are_marked(self) -> None:
+        table = extract_pdf_tables(ELTRON_PDF).tables_on_page(6)[0]
+
+        self.assertEqual(table.rows[3][2], "")
+        self.assertTrue(table.merged[3][2])
+        self.assertFalse(table.merged[2][2])
+        self.assertEqual(len(table.merged), len(table.rows))
 
     @unittest.skipUnless(LUXEN_PDF.is_file(), "LUXEN pdf not found")
     def test_luxen_spec_tables(self) -> None:

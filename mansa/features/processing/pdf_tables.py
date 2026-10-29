@@ -23,6 +23,8 @@ class TableBlock:
     """find_tables()가 감지한 표 한 개. page_no는 1부터, table_index는 페이지 안에서 0부터 시작한다.
 
     is_reliable이 False인 표는 구조가 틀렸을 가능성이 있어 본문 텍스트에서 표 영역을 지우지 않는다.
+    merged는 rows와 같은 크기의 표시로, True인 칸은 병합된 셀에 가려진 칸(PyMuPDF가 None으로 준 칸)이다.
+    실제로 비어 있는 칸(False)과 구분하려고 둔다. 값을 주지 않으면 빈 목록이다.
     """
 
     page_no: int
@@ -33,6 +35,7 @@ class TableBlock:
     col_count: int
     empty_ratio: float
     is_reliable: bool = True
+    merged: list[list[bool]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -129,7 +132,9 @@ def build_table(page_no: int, table_index: int, table, words: list[tuple] | None
     words(해당 페이지의 get_text("words"))를 주면 분리된 숫자 셀을 복원한다.
     empty_ratio는 빈 셀 비율이고, is_reliable은 is_reliable_table()의 판단이다.
     """
-    rows = [[cell or "" for cell in row] for row in table.extract()]
+    raw = table.extract()
+    rows = [[cell or "" for cell in row] for row in raw]
+    merged = [[cell is None for cell in row] for row in raw]
     if words:
         for r, row in enumerate(table.rows):
             for c, box in enumerate(row.cells):
@@ -147,6 +152,7 @@ def build_table(page_no: int, table_index: int, table, words: list[tuple] | None
         col_count=table.col_count,
         empty_ratio=empty_ratio,
         is_reliable=is_reliable_table(len(rows), table.col_count, empty_ratio),
+        merged=merged,
     )
 
 
