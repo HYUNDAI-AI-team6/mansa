@@ -2,7 +2,18 @@ import unittest
 
 from features.master.taxonomy import TaxonomyService
 from features.processing.models import Chunk
-from features.processing.tagger import Vocabulary, build_prompt, candidate_indexes, request_tags
+from features.processing.tagger import (
+    BATCH_SIZE,
+    MAX_PART_TAGS,
+    MAX_TASK_TAGS,
+    Vocabulary,
+    apply_tags,
+    build_prompt,
+    candidate_indexes,
+    match_items,
+    request_tags,
+    tag,
+)
 
 PARTS = ("메인 로프", "승강기 칸", "완충기")
 TASKS = ("메인 로프 점검", "승강기 칸 점검", "완충기 시험")
@@ -179,6 +190,182 @@ class RequestTagsTest(unittest.TestCase):
 
         with self.assertRaises(RuntimeError):
             request_tags(vocabulary(), [make_chunk("메인 로프")], complete)
+
+
+def item(chunk_id: str, part=(), task=()) -> dict:
+    return {"id": chunk_id, "part": list(part), "task": list(task)}
+
+
+class ApplyTagsTest(unittest.TestCase):
+    TEXT = "메인 로프와 완충기를 점검한다. 와이어로프 상태를 확인한다."
+
+    def apply(self, part=(), task=(), text: str = TEXT, vocab: Vocabulary | None = None) -> Chunk:
+        return apply_tags(make_chunk(text), item("1:p1:0", part, task), vocab or vocabulary())
+
+    def test_valid_tags_are_joined_with_comma_and_space(self) -> None:
+        chunk = self.apply(["메인 로프", "완충기"], ["메인 로프 점검"])
+
+        self.assertEqual(chunk.metadata["part"], "메인 로프, 완충기")
+        self.assertEqual(chunk.metadata["task"], "메인 로프 점검")
+
+    def test_original_metadata_and_text_are_kept(self) -> None:
+        original = make_chunk(self.TEXT)
+
+        chunk = apply_tags(original, item("1:p1:0", ["완충기"]), vocabulary())
+
+        self.assertEqual(chunk.text, original.text)
+        self.assertEqual({k: v for k, v in chunk.metadata.items() if k != "part"}, original.metadata)
+        self.assertNotIn("part", original.metadata)
+
+    def test_synonym_is_converted_to_the_standard_name(self) -> None:
+        self.assertEqual(self.apply(["와이어로프"]).metadata["part"], "메인 로프")
+
+    def test_values_outside_the_vocabulary_are_dropped(self) -> None:
+        chunk = self.apply(["엘리베이터", "완충기"], ["완충기", "청소"])
+
+        self.assertEqual(chunk.metadata["part"], "완충기")
+        self.assertNotIn("task", chunk.metadata)
+
+    def test_part_without_evidence_in_the_text_is_dropped(self) -> None:
+        chunk = self.apply(["메인 로프", "승강기 칸"], text="메인 로프를 점검한다")
+
+        self.assertEqual(chunk.metadata["part"], "메인 로프")
+
+    def test_task_without_evidence_in_the_text_is_dropped(self) -> None:
+        chunk = self.apply(["메인 로프"], ["메인 로프 점검", "완충기 시험"], text="메인 로프의 재질과 완충기 설명")
+
+        self.assertNotIn("task", chunk.metadata)
+
+    def test_duplicates_are_removed(self) -> None:
+        chunk = self.apply(["메인 로프", "와이어로프", "메인 로프"])
+
+        self.assertEqual(chunk.metadata["part"], "메인 로프")
+
+    def test_tag_counts_are_capped_in_the_order_given(self) -> None:
+        vocab = Vocabulary(tuple(f"부위{i}" for i in range(6)), tuple(f"부위{i} 점검" for i in range(6)))
+        text = " ".join(f"부위{i}" for i in range(6)) + " 점검"
+
+        chunk = self.apply([f"부위{i}" for i in range(6)], [f"부위{i} 점검" for i in range(6)], text, vocab)
+
+        self.assertEqual(chunk.metadata["part"], ", ".join(f"부위{i}" for i in range(MAX_PART_TAGS)))
+        self.assertEqual(chunk.metadata["task"], ", ".join(f"부위{i} 점검" for i in range(MAX_TASK_TAGS)))
+
+    def test_value_with_a_comma_is_dropped(self) -> None:
+        vocab = Vocabulary(("로프, 케이블",), ())
+
+        self.assertNotIn("part", self.apply(["로프, 케이블"], text="로프, 케이블", vocab=vocab).metadata)
+
+    def test_non_string_values_and_bad_shapes_are_ignored(self) -> None:
+        chunk = apply_tags(make_chunk(self.TEXT), {"id": "1:p1:0", "part": [None, 3, "완충기"], "task": "점검"}, vocabulary())
+
+        self.assertEqual(chunk.metadata["part"], "완충기")
+        self.assertNotIn("task", chunk.metadata)
+
+    def test_empty_result_returns_the_same_chunk_without_keys(self) -> None:
+        original = make_chunk(self.TEXT)
+
+        self.assertIs(apply_tags(original, item("1:p1:0"), vocabulary()), original)
+        self.assertIs(apply_tags(original, {"id": "1:p1:0"}, vocabulary()), original)
+
+
+class MatchItemsTest(unittest.TestCase):
+    def test_results_are_matched_by_chunk_id(self) -> None:
+        batch = [make_chunk("a", index=0), make_chunk("b", index=1)]
+
+        matched = match_items(batch, [item("1:p1:1", ["완충기"]), item("1:p1:0", ["메인 로프"])])
+
+        self.assertEqual(set(matched), {"1:p1:0", "1:p1:1"})
+        self.assertEqual(matched["1:p1:1"]["part"], ["완충기"])
+
+    def test_unknown_ids_are_dropped(self) -> None:
+        matched = match_items([make_chunk("a", index=0)], [item("1:p9:9", ["완충기"]), item("1:p1:0")])
+
+        self.assertEqual(set(matched), {"1:p1:0"})
+
+    def test_duplicated_result_ids_are_all_dropped(self) -> None:
+        batch = [make_chunk("a", index=0), make_chunk("b", index=1)]
+
+        matched = match_items(batch, [item("1:p1:0", ["완충기"]), item("1:p1:0", ["메인 로프"]), item("1:p1:1")])
+
+        self.assertEqual(set(matched), {"1:p1:1"})
+
+    def test_missing_ids_are_simply_absent(self) -> None:
+        batch = [make_chunk("a", index=0), make_chunk("b", index=1)]
+
+        self.assertEqual(set(match_items(batch, [item("1:p1:0")])), {"1:p1:0"})
+
+    def test_duplicated_ids_inside_the_batch_are_not_matched(self) -> None:
+        batch = [make_chunk("a", index=0), make_chunk("b", index=0)]
+
+        self.assertEqual(match_items(batch, [item("1:p1:0", ["완충기"])]), {})
+
+    def test_malformed_items_are_ignored(self) -> None:
+        matched = match_items([make_chunk("a", index=0)], ["x", None, {"part": []}, item("1:p1:0")])
+
+        self.assertEqual(set(matched), {"1:p1:0"})
+
+
+class TagTest(unittest.TestCase):
+    def test_tags_are_added_and_order_and_length_are_kept(self) -> None:
+        chunks = [
+            make_chunk("메인 로프를 점검한다", index=0),
+            make_chunk("표 4. 시험 방법", index=1),
+            make_chunk("완충기 시험 절차", index=2),
+        ]
+        sent = []
+
+        def complete(workflow, prompt, schema):
+            sent.append(prompt)
+            return {"chunks": [item("1:p1:0", ["메인 로프"], ["메인 로프 점검"]), item("1:p1:2", ["완충기"], ["완충기 시험"])]}
+
+        result = tag(chunks, vocabulary(), complete)
+
+        self.assertEqual([c.chunk_id for c in result], [c.chunk_id for c in chunks])
+        self.assertEqual(result[0].metadata["task"], "메인 로프 점검")
+        self.assertEqual(result[2].metadata["part"], "완충기")
+        self.assertIs(result[1], chunks[1])
+        self.assertNotIn("[청크 id=1:p1:1]", sent[0])  # 부위가 없는 청크는 LLM에 보내지 않는다
+
+    def test_input_chunks_are_not_modified(self) -> None:
+        chunk = make_chunk("메인 로프 점검")
+        before = dict(chunk.metadata)
+
+        tag([chunk], vocabulary(), lambda *a: {"chunks": [item("1:p1:0", ["메인 로프"])]})
+
+        self.assertEqual(chunk.metadata, before)
+
+    def test_no_candidates_means_no_llm_call(self) -> None:
+        def complete(*args):
+            raise AssertionError("must not be called")
+
+        chunks = [make_chunk("표 4. 시험 방법")]
+
+        self.assertEqual(tag(chunks, vocabulary(), complete), chunks)
+        self.assertEqual(tag([], vocabulary(), complete), [])
+
+    def test_candidates_are_sent_in_batches(self) -> None:
+        chunks = [make_chunk("완충기 점검", index=i) for i in range(BATCH_SIZE + 1)]
+        sizes = []
+
+        def complete(workflow, prompt, schema):
+            sizes.append(prompt.count("[청크 id="))
+            return {"chunks": []}
+
+        tag(chunks, vocabulary(), complete)
+
+        self.assertEqual(sizes, [BATCH_SIZE, 1])
+
+    def test_results_from_another_batch_are_not_applied(self) -> None:
+        chunks = [make_chunk("완충기 점검", index=i) for i in range(BATCH_SIZE + 1)]
+        last_id = chunks[-1].chunk_id
+
+        def complete(workflow, prompt, schema):
+            return {"chunks": [item(last_id, ["완충기"])]}  # 첫 배치에는 없는 id다
+
+        result = tag(chunks, vocabulary(), complete)
+
+        self.assertTrue(all("part" not in c.metadata for c in result[:BATCH_SIZE]))
+        self.assertEqual(result[-1].metadata["part"], "완충기")
 
 
 if __name__ == "__main__":

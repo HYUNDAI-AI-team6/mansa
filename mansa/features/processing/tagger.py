@@ -5,8 +5,9 @@
 """
 
 import re
+from collections import Counter
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from pydantic import BaseModel
 
@@ -16,6 +17,10 @@ from features.processing.models import Chunk
 
 # LLM 한 번에 보낼 청크 수. 청크가 최대 1,500자라 한 요청이 3만 자 안팎이 되지 않게 잡았다.
 BATCH_SIZE = 15
+# 청크 하나에 붙일 태그의 최대 개수. 검색이 겹치는 태그 수로 순위를 정해서 태그가 많은 청크가 유리해지는 것을 막는다.
+MAX_PART_TAGS = 3
+MAX_TASK_TAGS = 2
+TAG_SEPARATOR = ", "
 
 # 한 글자 동의어("카")는 다른 단어의 일부("카문", "카드")에 걸리지 않게, 앞이 글자가 아니고 뒤가 조사이거나
 # 글자가 아닐 때만 본문에 있다고 본다.
@@ -160,3 +165,93 @@ def request_tags(
     """
     result = complete("TAG", build_prompt(vocabulary, batch), _BatchOutput)
     return list(result["chunks"])
+
+
+def _clean(
+    values: object,
+    known: tuple[str, ...],
+    supported: Callable[[str], bool],
+    limit: int,
+    vocabulary: Vocabulary,
+) -> list[str]:
+    """LLM이 준 값 목록에서 쓸 수 있는 표준 이름만 앞에서부터 limit개 남긴다.
+
+    문자열이 아닌 값, 분류표에 없는 값(동의어는 표준 이름으로 바꾼 뒤 판단), 쉼표가 든 값, 중복,
+    본문에 근거가 없는 값은 버린다.
+    """
+    if not isinstance(values, list):
+        return []
+    result: list[str] = []
+    for value in values:
+        if not isinstance(value, str):
+            continue
+        name = vocabulary.standard(value, known)
+        if name is None or TAG_SEPARATOR.strip() in name or name in result or not supported(name):
+            continue
+        result.append(name)
+        if len(result) == limit:
+            break
+    return result
+
+
+def match_items(batch: Sequence[Chunk], items: Sequence[object]) -> dict[str, dict]:
+    """LLM 결과를 청크 id로 대응시킨다. 배치에 없는 id와 두 번 이상 나온 id의 결과는 버린다.
+
+    배치 안에 같은 id의 청크가 둘 이상이면 어느 청크의 결과인지 알 수 없어서 그 id도 대응시키지 않는다.
+    결과에 없는 청크는 돌려주는 dict에도 없다.
+    """
+    batch_ids = Counter(chunk.chunk_id for chunk in batch)
+    dicts = [item for item in items if isinstance(item, dict)]
+    result_ids = Counter(item.get("id") for item in dicts)
+    return {
+        item["id"]: item
+        for item in dicts
+        if batch_ids.get(item.get("id")) == 1 and result_ids[item["id"]] == 1
+    }
+
+
+def apply_tags(chunk: Chunk, item: dict, vocabulary: Vocabulary) -> Chunk:
+    """청크 하나에 LLM 결과를 검증해 붙인 새 Chunk를 돌려준다. 붙일 태그가 없으면 같은 청크를 돌려준다.
+
+    part·task는 ", "로 이은 문자열로 저장한다. 비는 쪽은 키를 만들지 않는다(빈 문자열을 저장하지 않는다).
+    """
+    parts = _clean(
+        item.get("part"), vocabulary.parts, lambda name: vocabulary.supports_part(chunk.text, name),
+        MAX_PART_TAGS, vocabulary,
+    )
+    tasks = _clean(
+        item.get("task"), vocabulary.tasks, lambda name: vocabulary.supports_task(chunk.text, name),
+        MAX_TASK_TAGS, vocabulary,
+    )
+    if not parts and not tasks:
+        return chunk
+    metadata = dict(chunk.metadata)
+    if parts:
+        metadata["part"] = TAG_SEPARATOR.join(parts)
+    if tasks:
+        metadata["task"] = TAG_SEPARATOR.join(tasks)
+    return replace(chunk, metadata=metadata)
+
+
+def tag(
+    chunks: Sequence[Chunk],
+    vocabulary: Vocabulary,
+    complete: Callable[..., dict] = llm.complete,
+) -> list[Chunk]:
+    """청크에 part·task 태그를 붙인 목록을 입력과 같은 순서·길이로 돌려준다.
+
+    부위가 본문에 있는 청크만 BATCH_SIZE개씩 묶어 LLM에 보내고, 결과는 청크 id로만 대응시킨다.
+    태그가 붙은 청크만 metadata에 part·task가 추가된 새 Chunk가 되고 나머지는 그대로다. 입력 청크는 바꾸지 않는다.
+    유료 외부 API(OpenAI)를 호출한다.
+    """
+    result = list(chunks)
+    indexes = candidate_indexes(chunks, vocabulary)
+    for start in range(0, len(indexes), BATCH_SIZE):
+        positions = indexes[start : start + BATCH_SIZE]
+        batch = [chunks[i] for i in positions]
+        items = match_items(batch, request_tags(vocabulary, batch, complete))
+        for position in positions:
+            item = items.get(chunks[position].chunk_id)
+            if item is not None:
+                result[position] = apply_tags(chunks[position], item, vocabulary)
+    return result
