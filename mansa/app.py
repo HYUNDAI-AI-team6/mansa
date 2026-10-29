@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import gradio as gr
 
+from features.auth.service import AuthService
 from features.evaluation.storage import SAVE_DIR
 from ui import components as ui
 from ui import (
@@ -44,8 +45,9 @@ class Shell:
     resettable: dict  # key -> PageView / QAView (메뉴로 들어올 때 다시 그릴 화면)
 
     def nav_outputs(self) -> list:
-        """메뉴를 바꿀 때 다시 그리는 부분: 머리글, 화면들, 메뉴 버튼들."""
-        return [self.header, *self.pages.values(), *self.navs.values()]
+        """메뉴를 바꿀 때 다시 그리는 부분: 머리글, 화면들, 메뉴 버튼들, 문서 관리 새로고침 타이머."""
+        timer = self.resettable["documents"].links["timer"]
+        return [self.header, *self.pages.values(), *self.navs.values(), timer]
 
 
 def _build_page(key: str, store: gr.State, user: gr.State):
@@ -59,7 +61,7 @@ def _build_page(key: str, store: gr.State, user: gr.State):
         "history": lambda: history.build(),
         "doc_view": lambda: doc_view.build(store),
         "support": lambda: support.build(),
-        "documents": lambda: documents.build(store),
+        "documents": documents.build,
         "upload": lambda: upload.build(store),
         "master": lambda: master.build(store),
         "evaluation": lambda: evaluation.build(),
@@ -115,7 +117,7 @@ def _show(key: str, user: dict | None, nav_keys: list[str]) -> tuple:
     header = ui.page_header(page.label, page.description, user)
     pages = [gr.Column(visible=p.key == key) for p in PAGES]
     navs = [gr.Button(elem_classes=_nav_classes(k, k == key)) for k in nav_keys]
-    return (header, *pages, *navs)
+    return (header, *pages, *navs, gr.Timer(active=False))  # 어느 화면으로 가든 문서 새로고침은 끈다
 
 
 def _then_reset(event, view) -> None:
@@ -172,6 +174,13 @@ def _layout(role: str | None) -> tuple:
     )
 
 
+def _auth() -> AuthService:
+    """DB 연결이 필요해 로그인할 때 서비스를 만든다."""
+    from util.mysql_connection import execute, fetch_all
+
+    return AuthService(fetch_all, execute)
+
+
 def _wire_login(
     role: str, form: login.LoginForm, shell: Shell, user: gr.State, layout_outputs: list
 ) -> None:
@@ -180,8 +189,8 @@ def _wire_login(
     outputs = [form.error, user, *layout_outputs, *shell.nav_outputs()]
 
     def handle(user_id: str, password: str) -> tuple:
-        """목데이터로 로그인하고 화면을 바꾼다. 실패하면 안내 상자만 보여 준다."""
-        account, message = mock.mock_login(user_id, password, role)
+        """users·admins 테이블로 로그인하고 화면을 바꾼다. 실패하면 안내 상자만 보여 준다."""
+        account, message = _auth().login(role, user_id, password)
         if account is None:
             skips = [gr.skip()] * (len(outputs) - 1)
             return (gr.HTML(login.error_html(message), visible=True), *skips)
@@ -204,14 +213,15 @@ def _wire_logout(
     states 는 [로그인 계정, 세션 목데이터] 순서다.
     """
     fields = [box for form in forms for box in (form.user_id, form.password)]
+    timer = shell.resettable["documents"].links["timer"]
 
     def logout() -> tuple:
         """로그인 화면을 다시 보여 주는 값."""
-        return (None, mock.new_store(), *_layout(None), *[""] * len(fields))
+        return (None, mock.new_store(), *_layout(None), *[""] * len(fields), gr.Timer(active=False))
 
     for button in shell.logouts:
         event = button.click(None, js=login.RESET_JS)
-        event.then(logout, None, [*states, *layout_outputs, *fields])
+        event.then(logout, None, [*states, *layout_outputs, *fields, timer])
 
 
 def main():

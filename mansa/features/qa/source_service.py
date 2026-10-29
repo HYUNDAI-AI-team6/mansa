@@ -36,6 +36,7 @@ class SourceService:
             page=page,
             department=meta.get("department", ""),
             clause=meta.get("clause", ""),
+            doc_type=meta.get("document_type", ""),
         )
 
 
