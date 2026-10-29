@@ -8,7 +8,12 @@ from unittest import mock
 
 from sqlalchemy.exc import IntegrityError
 
-from features.documents.errors import DocumentNotFoundError, DocumentStorageError, DuplicateDocumentError
+from features.documents.errors import (
+    DocumentNotFoundError,
+    DocumentStorageError,
+    DuplicateDocumentError,
+    InvalidStatusTransition,
+)
 from features.documents.models import Document, DocumentRow
 from features.documents.service import DocumentService, check_pdf, normalize_filename
 from features.documents.storage import PdfStorage
@@ -27,6 +32,7 @@ class FakeDb:
         self.next_id = 1
         self.blind_precheck = False  # True면 첫 중복 조회가 비어 있는 것처럼 답한다(동시에 올린 경우)
         self.insert_error: Exception | None = None
+        self.before_update = None  # UPDATE 직전에 부르는 함수(다른 곳이 먼저 바꾼 경우를 흉내 낸다)
 
     def fetch(self, sql: str, params: dict | None = None) -> list[dict]:
         self.calls.append((sql, params))
@@ -67,6 +73,15 @@ class FakeDb:
             before = len(self.rows)
             self.rows = [r for r in self.rows if r["id"] != params["id"]]
             return before - len(self.rows)
+        if sql.startswith("UPDATE documents_info SET status"):
+            if self.before_update:
+                self.before_update(self)
+            changed = 0
+            for row in self.rows:
+                if row["id"] == params["id"] and row["status"] == params["current"]:
+                    row["status"] = params["status"]
+                    changed += 1
+            return changed
         raise AssertionError(f"unexpected SQL: {sql}")
 
     def sql_with(self, text: str) -> list[tuple[str, dict | None]]:
@@ -385,6 +400,198 @@ class SummaryTest(ServiceTestCase):
         self.assertEqual(summary.total, 4)
         self.assertEqual(summary.by_status, {"PROCESSING": 1, "COMPLETED": 2, "FAILED": 1})
         self.assertEqual(summary.by_type, {"tech": 2, "secure": 2})
+
+
+class SetStatusTest(ServiceTestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.document_id = self.register()
+
+    def status(self) -> str:
+        return self.db.rows[0]["status"]
+
+    def test_processing_becomes_completed(self) -> None:
+        self.service.set_status(self.document_id, "COMPLETED", chunk_count=349)
+
+        self.assertEqual(self.status(), "COMPLETED")
+        self.assertEqual(self.service.get_status(self.document_id).status, "COMPLETED")
+
+    def test_processing_becomes_failed(self) -> None:
+        self.service.set_status(self.document_id, "FAILED", error="스캔 PDF는 지원하지 않아요")
+
+        self.assertEqual(self.status(), "FAILED")
+
+    def test_chunk_count_and_error_are_only_logged_until_the_columns_exist(self) -> None:
+        with self.assertLogs("features.documents.service", level="INFO") as logs:
+            self.service.set_status(self.document_id, "COMPLETED", chunk_count=349)
+
+        update = self.db.sql_with("UPDATE")[0][0]
+        self.assertNotIn("chunk_count", update)
+        self.assertNotIn("error_message", update)
+        self.assertIn("chunk_count=349", logs.output[0])
+
+    def test_a_long_error_is_cut_in_the_log(self) -> None:
+        with self.assertLogs("features.documents.service", level="INFO") as logs:
+            self.service.set_status(self.document_id, "FAILED", error="x" * 1500)
+
+        self.assertIn("x" * 1000, logs.output[0])
+        self.assertNotIn("x" * 1001, logs.output[0])
+
+    def test_finished_documents_cannot_change_to_another_status(self) -> None:
+        self.service.set_status(self.document_id, "COMPLETED")
+
+        with self.assertRaises(InvalidStatusTransition) as caught:
+            self.service.set_status(self.document_id, "FAILED")
+
+        self.assertEqual((caught.exception.current, caught.exception.new), ("COMPLETED", "FAILED"))
+        self.assertEqual(self.status(), "COMPLETED")
+
+    def test_failed_documents_cannot_become_completed_or_processing(self) -> None:
+        self.service.set_status(self.document_id, "FAILED")
+
+        for new in ("COMPLETED", "PROCESSING"):
+            with self.subTest(new=new), self.assertRaises(InvalidStatusTransition):
+                self.service.set_status(self.document_id, new)
+
+        self.assertEqual(self.status(), "FAILED")
+
+    def test_repeating_the_same_status_changes_nothing(self) -> None:
+        self.service.set_status(self.document_id, "COMPLETED")
+        updates = len(self.db.sql_with("UPDATE"))
+
+        self.service.set_status(self.document_id, "COMPLETED", chunk_count=1)
+
+        self.assertEqual(len(self.db.sql_with("UPDATE")), updates)
+
+    def test_setting_processing_while_processing_is_a_no_op(self) -> None:
+        self.service.set_status(self.document_id, "PROCESSING")
+
+        self.assertEqual(self.db.sql_with("UPDATE"), [])
+
+    def test_the_update_is_conditioned_on_the_current_status(self) -> None:
+        self.service.set_status(self.document_id, "COMPLETED")
+
+        sql, params = self.db.sql_with("UPDATE")[0]
+        self.assertIn("AND status = :current", sql)
+        self.assertEqual(params, {"status": "COMPLETED", "id": self.document_id, "current": "PROCESSING"})
+
+    def test_another_worker_finishing_first_with_a_different_status_is_reported(self) -> None:
+        def other_worker(db: FakeDb) -> None:
+            db.rows[0]["status"] = "FAILED"
+
+        self.db.before_update = other_worker
+
+        with self.assertRaises(InvalidStatusTransition) as caught:
+            self.service.set_status(self.document_id, "COMPLETED")
+
+        self.assertEqual((caught.exception.current, caught.exception.new), ("FAILED", "COMPLETED"))
+        self.assertEqual(self.status(), "FAILED")
+
+    def test_another_worker_finishing_first_with_the_same_status_is_fine(self) -> None:
+        def other_worker(db: FakeDb) -> None:
+            db.rows[0]["status"] = "COMPLETED"
+
+        self.db.before_update = other_worker
+
+        self.service.set_status(self.document_id, "COMPLETED")
+
+        self.assertEqual(self.status(), "COMPLETED")
+
+    def test_a_document_deleted_during_the_update_raises_not_found(self) -> None:
+        self.db.before_update = lambda db: db.rows.clear()
+
+        with self.assertRaises(DocumentNotFoundError):
+            self.service.set_status(self.document_id, "COMPLETED")
+
+    def test_missing_document(self) -> None:
+        with self.assertRaises(DocumentNotFoundError):
+            self.service.set_status(99, "COMPLETED")
+
+    def test_bad_arguments_are_rejected_before_any_change(self) -> None:
+        calls_before = len(self.db.calls)
+        for args in (
+            (0, "COMPLETED", None, None),
+            (True, "COMPLETED", None, None),
+            (self.document_id, "DONE", None, None),
+            (self.document_id, "PENDING", None, None),
+            (self.document_id, "COMPLETED", None, -1),
+            (self.document_id, "COMPLETED", None, True),
+            (self.document_id, "COMPLETED", None, "3"),
+            (self.document_id, "FAILED", 123, None),
+        ):
+            with self.subTest(args=args), self.assertRaises(ValueError):
+                self.service.set_status(*args)
+
+        self.assertEqual(len(self.db.calls), calls_before)
+        self.assertEqual(self.status(), "PROCESSING")
+
+    def test_zero_chunks_is_a_valid_count(self) -> None:
+        self.service.set_status(self.document_id, "COMPLETED", chunk_count=0)
+
+        self.assertEqual(self.status(), "COMPLETED")
+
+
+class DeleteTest(ServiceTestCase):
+    def test_delete_document_record_removes_only_that_row(self) -> None:
+        first, second = self.register("a.pdf"), self.register("b.pdf")
+
+        self.assertTrue(self.service.delete_document_record(first))
+
+        self.assertEqual([r["id"] for r in self.db.rows], [second])
+
+    def test_delete_document_record_is_safe_to_repeat(self) -> None:
+        document_id = self.register()
+
+        self.assertTrue(self.service.delete_document_record(document_id))
+        self.assertFalse(self.service.delete_document_record(document_id))
+
+    def test_delete_document_record_always_filters_by_id(self) -> None:
+        self.service.delete_document_record(5)
+
+        sql, params = self.db.sql_with("DELETE")[0]
+        self.assertIn("WHERE id = :id", sql)
+        self.assertEqual(params, {"id": 5})
+
+    def test_delete_pdf_removes_the_file_and_is_safe_to_repeat(self) -> None:
+        document_id = self.register()
+
+        self.assertTrue(self.service.delete_pdf(document_id))
+        self.assertFalse(self.service.delete_pdf(document_id))
+        self.assertEqual(self.files(), [])
+        self.assertEqual(len(self.db.rows), 1)  # DB 행은 건드리지 않는다
+
+    def test_delete_pdf_works_after_the_row_is_gone(self) -> None:
+        document_id = self.register()
+        self.service.delete_document_record(document_id)
+
+        self.assertTrue(self.service.delete_pdf(document_id))
+
+    def test_delete_pdf_passes_storage_errors_on(self) -> None:
+        document_id = self.register()
+
+        with mock.patch.object(Path, "unlink", side_effect=PermissionError("denied")):
+            with self.assertRaises(DocumentStorageError):
+                self.service.delete_pdf(document_id)
+
+    def test_bad_ids_are_rejected(self) -> None:
+        for bad in (0, -1, True, None, "1"):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):
+                    self.service.delete_document_record(bad)
+                with self.assertRaises(ValueError):
+                    self.service.delete_pdf(bad)
+
+    def test_the_whole_life_of_a_document(self) -> None:
+        document_id = self.register()
+        self.service.set_status(document_id, "COMPLETED", chunk_count=3)
+        self.assertEqual(self.service.get_status(document_id).status, "COMPLETED")
+
+        self.assertTrue(self.service.delete_pdf(document_id))  # 삭제 순서: ChromaDB(정환) → PDF → 행
+        self.assertTrue(self.service.delete_document_record(document_id))
+
+        with self.assertRaises(DocumentNotFoundError):
+            self.service.get_document(document_id)
+        self.assertEqual(self.files(), [])
 
 
 if __name__ == "__main__":

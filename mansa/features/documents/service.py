@@ -14,15 +14,20 @@ from typing import Any
 
 from sqlalchemy.exc import IntegrityError
 
-from features.documents.errors import DocumentNotFoundError, DuplicateDocumentError, DocumentStorageError
+from features.documents.errors import (
+    DocumentNotFoundError,
+    DocumentStorageError,
+    DuplicateDocumentError,
+    InvalidStatusTransition,
+)
 from features.documents.models import (
     DOC_TYPES,
+    STATUS_PROCESSING,
     STATUSES,
     Document,
     DocumentRow,
     DocumentStatus,
     DocumentSummary,
-    STATUS_PROCESSING,
     title_of,
 )
 from features.documents.storage import PdfStorage
@@ -32,6 +37,7 @@ logger = logging.getLogger(__name__)
 # 화면(ui/upload.py의 MAX_MB)과 같은 한도다. 화면 값을 바꾸면 여기도 같이 바꾼다.
 MAX_PDF_BYTES = 50 * 1024 * 1024
 MAX_FILENAME_CHARS = 255  # documents_info.filename은 varchar(255)다
+MAX_ERROR_CHARS = 1000  # 실패 사유의 최대 길이(error_message는 varchar(1000)이다)
 PDF_HEADER = b"%PDF-"
 MYSQL_DUPLICATE_ENTRY = 1062
 MYSQL_FOREIGN_KEY_FAILS = 1452
@@ -271,3 +277,56 @@ class DocumentService:
             by_status[row["status"]] = by_status.get(row["status"], 0) + count
             by_type[row["document_type"]] = by_type.get(row["document_type"], 0) + count
         return DocumentSummary(total=sum(by_status.values()), by_status=by_status, by_type=by_type)
+
+    def set_status(
+        self, document_id: int, status: str, error: str | None = None, chunk_count: int | None = None
+    ) -> None:
+        """문서의 처리 상태를 바꾼다. 처리 중(PROCESSING)에서 완료·실패로만 바꿀 수 있다.
+
+        이미 같은 상태이면 아무것도 바꾸지 않고 끝난다(결과를 다시 알려도 안전하다). 완료·실패에서 다른 상태로 바꾸려
+        하면 InvalidStatusTransition을 발생시킨다. 상태는 UPDATE에 현재 상태 조건을 걸어 바꾸므로, 두 곳에서
+        동시에 바꿔도 먼저 끝난 상태가 덮어써지지 않는다. 없는 문서는 DocumentNotFoundError, 알 수 없는 상태나
+        잘못된 chunk_count·error는 ValueError다.
+
+        chunk_count(완료 때 저장한 청크 수)와 error(실패 사유)는 documents_info에 컬럼이 생길 때까지 DB에 쓰지 않고
+        로그에만 남긴다. error는 MAX_ERROR_CHARS까지만 남긴다.
+        """
+        _check_id(document_id)
+        if status not in STATUSES:
+            raise ValueError(f"unknown status: {status!r}, expected one of {list(STATUSES)}")
+        if chunk_count is not None and (isinstance(chunk_count, bool) or not isinstance(chunk_count, int) or chunk_count < 0):
+            raise ValueError("chunk_count must be an int >= 0")
+        if error is not None and not isinstance(error, str):
+            raise ValueError("error must be a str")
+
+        current = self._get_row(document_id)["status"]
+        if current == status:
+            return
+        if current != STATUS_PROCESSING:
+            raise InvalidStatusTransition(current, status)
+        changed = self._run(
+            "UPDATE documents_info SET status = :status WHERE id = :id AND status = :current",
+            {"status": status, "id": document_id, "current": STATUS_PROCESSING},
+        )
+        if not changed:  # 읽은 뒤 다른 곳에서 먼저 바꿨다. 지금 상태로 판단한다.
+            now = self._get_row(document_id)["status"]
+            if now != status:
+                raise InvalidStatusTransition(now, status)
+            return
+        logger.info(
+            "document %s -> %s (chunk_count=%s, error=%s)",
+            document_id, status, chunk_count, (error or "")[:MAX_ERROR_CHARS] or None,
+        )
+
+    def delete_pdf(self, document_id: int) -> bool:
+        """문서의 원본 PDF를 지운다. 지웠으면 True, 이미 없으면 False다. DB 행이 이미 없어도 지울 수 있고 재시도해도 안전하다."""
+        return self._storage.delete(document_id)
+
+    def delete_document_record(self, document_id: int) -> bool:
+        """documents_info의 행만 지운다. 지웠으면 True, 이미 없으면 False다.
+
+        삭제 흐름의 마지막에 불러야 한다(ChromaDB 청크와 원본 PDF를 먼저 지운다). 행을 먼저 지우면 문서 ID를 잃어서
+        나머지를 다시 시도할 수 없다.
+        """
+        _check_id(document_id)
+        return self._run("DELETE FROM documents_info WHERE id = :id", {"id": document_id}) > 0
