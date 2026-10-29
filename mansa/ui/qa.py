@@ -2,6 +2,7 @@
 
 관리자 '질문 테스트'도 test_mode=True 로 같은 화면을 다시 쓴다.
 """
+import logging # 질문 처리에 실패한 원인을 서버 로그에 남기려고 쓴다
 
 from dataclasses import dataclass, field
 from functools import cache
@@ -10,6 +11,7 @@ from html import escape
 import gradio as gr
 
 from core.schemas import Answer, AnswerSection, Clarify, NoAnswer
+from features.qa.answer_guard import build_no_answer
 from features.qa.factory import build_qa_service
 from features.qa.service import QAService
 from ui import components as ui
@@ -189,13 +191,17 @@ def _mock_answer_html(ans: mock.Answer) -> str:
     return f'<div class="card answer-card">{head}{body}{DISCLAIMER}</div>'
 
 
-def no_answer_html(message: str = "") -> str:
-    """답변 불가 카드(U3 아래쪽). message 는 서비스가 정한 안내 문구다(목데이터 대화는 비어 있다)."""
+def no_answer_html(message: str = "", reason: str = "") -> str:
+    """답변 불가 카드(U3 아래쪽). message.reason 은 서비스가 정한 안내 문구·이유다(목데이터 대화는 비어 있다).
+    
+    문서를 찾지 못한 경우와 처리 중 실패(llm_failure)를 제목으로 구분한다.
+    """
     text = message or "등록된 매뉴얼·안전 문서 범위 밖의 질문이에요. 일반 지식으로 채워서 답하지 않아요."
+    title = "지금은 답변할 수 없습니다" if reason == "llm_failure" else "문서에서 찾을 수 없습니다"
     card = (
         '<div class="card no-answer"><div class="na-head">'
         f'<span class="na-icon">{icons.svg("alert", TEXT2, 18)}</span>'
-        "<h4>문서에서 찾을 수 없습니다</h4></div>"
+        f"<h4>{title}</h4></div>"
         f"<p>{escape(text)}</p></div>"
     )
     return f'<div class="bot-row">{ui.ai_avatar()}{card}</div>'
@@ -242,7 +248,7 @@ def turns_html(turns: list[dict]) -> str:
             out.append(skipped_clarify_html())
             continue
         if turn["kind"] != "answer":
-            out.append(no_answer_html(turn.get("message", "")))
+            out.append(no_answer_html(turn.get("message", ""), turn.get("reason", "")))
             continue
         ans = turn["answer"]
         out.append(answer_html(ans) if isinstance(ans, Answer) else _mock_answer_html(ans))
@@ -300,7 +306,12 @@ def _service() -> QAService:
 def _query(question: str, state: dict, *hints: str) -> Answer | Clarify | NoAnswer:
     """고른 모델·부위(hints)를 질문 앞에 붙여 Q&A 서비스에 묻는다. 유료 LLM API를 호출한다."""
     text = " ".join([*(h for h in hints if h), question])
-    return _service().answer(text, state["conversation_id"], MEMBER_ID)
+    try:
+        return _service().answer(text, state["conversation_id"], MEMBER_ID)
+    except Exception:
+        # Chroma·DB 접속이나 설정 오류가 나도 '찾는 중'에 멈추지 않게 답변 불가로 바꾼다
+        logging.getLogger(__name__).exception("qa answer failed")
+        return build_no_answer(None, "llm_failure") 
 
 
 def _apply(state: dict, question: str, result: Answer | Clarify | NoAnswer) -> dict:
@@ -311,7 +322,7 @@ def _apply(state: dict, question: str, result: Answer | Clarify | NoAnswer) -> d
         turn = {"q": question, "kind": "answer", "answer": result}
         state = {**state, "conversation_id": result.conversation_id}
     else:
-        turn = {"q": question, "kind": "no_answer", "message": result.message}
+        turn = {"q": question, "kind": "no_answer", "message": result.message, "reason": result.reason}
     return {**state, "turns": [*state["turns"], turn]}
 
 
