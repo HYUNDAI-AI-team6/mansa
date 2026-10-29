@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from itertools import zip_longest
 from typing import Any
 from features.retrieval.bm25 import bm25_rank
 from features.retrieval.rrf import rrf_merge
@@ -167,7 +168,7 @@ def to_scored_chunks(
         ScoredChunk(
             chunk_id= chunk_id,
             text= by_id[chunk_id]["text"],
-            # BM25·태그로만 찾은 청크는 0.0이라 is_sufficient 기준을 못 넘고 merge_evidence에서도 뒤로 밀린다.
+            # BM25·태그로만 찾은 청크는 0.0이라 is_sufficient 기준을 못 넘지만 merge_evidence는 순위대로 남긴다.
             score=similarity.get(chunk_id, 0.0),
             doc_type=doc_type,
             metadata=by_id[chunk_id].get("metadata", {}),
@@ -214,42 +215,15 @@ def search_safety(
 def merge_evidence(
     manual: list[ScoredChunk], safety: list[ScoredChunk], top_n: int = EVIDENCE_TOP_N
 ) -> Evidence:
-    """매뉴얼·안전 문서 검색 결과를 합쳐 점수가 높은 순으로 상위 top_n개를 고른다.
+    """매뉴얼·안전 문서 검색 결과를 각자의 순위(RRF) 그대로 번갈아 뽑아 상위 top_n개를 고른다.
 
-    같은 chunk_id가 여러 번 나오면 점수가 가장 높은 것 하나만 남긴다.
-    점수가 같으면 manual, safety 순서로 먼저 들어온 청크가 앞선다. 입력 리스트는 바꾸지 않는다.
+    점수로 다시 정렬하지 않으므로 BM25·태그로만 찾은 청크(score 0.0)도 순위대로 남고,
+    매뉴얼·안전 근거가 함께 들어간다. 한쪽이 모자라면 다른 쪽으로 채운다.
+    같은 chunk_id는 먼저 나온 것 하나만 남긴다. 입력 리스트는 바꾸지 않는다.
     """
-    best: dict[str, ScoredChunk] = {}
-    for chunk in [*manual, *safety]:
-        kept = best.get(chunk.chunk_id)
-        if kept is None or chunk.score > kept.score:
-            best[chunk.chunk_id] = chunk
-    ranked = sorted(best.values(), key=lambda c: c.score, reverse=True)
-    return Evidence(chunks=ranked[:top_n])
-
-class HybridRetriever:
-    """QAService의 Retriever 구현. 벡터·BM25·태그 검색에 쓸 search와 청크 목록을 들고 있다.
-
-    명세서 services.qa.Retriever에 해당한다. 생성할 때 load_corpus로 매뉴얼·안전 문서 청크를
-    한 번 읽어 두므로 앱 시작 시 한 번만 만든다. 이후 올라온 문서는 새로 만들어야 BM25·태그에 반영된다.
-    """
-
-    def __init__(
-        self,
-        search: VectorSearch,
-        get: ChunkGetter,
-        expand_terms: TermExpander = default_safety_terms,
-    ) -> None:
-        """search는 util.rag_query.search_chunks, get은 get_chunks를 넘긴다. Chroma를 호출한다."""
-        self._search = search
-        self._expand_terms = expand_terms
-        self._manual_corpus = load_corpus(get, MANUAL_DOC_TYPE, MANUAL_COLLECTION)
-        self._safety_corpus = load_corpus(get, SAFETY_DOC_TYPE, SAFETY_COLLECTION)
-
-    def search_manual(self, question: str, intent: Intent) -> list[ScoredChunk]:
-        """매뉴얼·사양서 청크를 검색한다. 유료 임베딩 API와 Chroma를 호출한다."""
-        return search_manual(question, intent, self._search, self._manual_corpus)
-
-    def search_safety(self, question: str, intent: Intent) -> list[ScoredChunk]:
-        """안전 문서 청크를 검색한다. 유료 임베딩 API와 Chroma를 호출한다."""
-        return search_safety(question, intent, self._search, self._safety_corpus, self._expand_terms)
+    picked: dict[str, ScoredChunk] = {}
+    for pair in zip_longest(manual, safety):
+        for chunk in pair:
+            if chunk is not None and chunk.chunk_id not in picked:
+                picked[chunk.chunk_id] = chunk
+    return Evidence(chunks=list(picked.values())[:top_n])

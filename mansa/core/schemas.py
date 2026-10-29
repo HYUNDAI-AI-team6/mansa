@@ -41,7 +41,7 @@ class ScoredChunk:
 
 @dataclass
 class Evidence:
-    """답변에 쓸 근거 청크 목록. 점수가 높은 순서로 정렬되어 있다."""
+    """답변에 쓸 근거 청크 목록. 매뉴얼·안전 문서 검색 순위를 번갈아 합친 순서다(merge_evidence)."""
 
     chunks: list[ScoredChunk] = field(default_factory=list)
 
