@@ -18,8 +18,9 @@ from features.processing.models import Chunk
 
 logger = logging.getLogger(__name__)
 
-# LLM 한 번에 보낼 청크 수. 청크가 최대 1,500자라 한 요청이 3만 자 안팎이 되지 않게 잡았다.
-BATCH_SIZE = 15
+# LLM 한 번에 보낼 청크 수. 15개로 보냈을 때는 LLM이 뒤쪽 청크의 태그를 비워서 돌려주는 일이 많았고
+# (안전기준 274개 중 88개에 태그), 5개로 줄이자 150개에 붙었다.
+BATCH_SIZE = 5
 # 청크 하나에 붙일 태그의 최대 개수. 검색이 겹치는 태그 수로 순위를 정해서 태그가 많은 청크가 유리해지는 것을 막는다.
 MAX_PART_TAGS = 3
 MAX_TASK_TAGS = 2
