@@ -13,6 +13,7 @@ import gradio as gr
 from core.schemas import Answer, AnswerSection, Clarify, NoAnswer, SourceView
 from features.history.service import HistoryService
 from features.history.store import MemoryHistoryStore
+from features.master.equipment import EquipmentModelService
 from features.qa.answer_guard import build_no_answer
 from features.qa.clarify_policy import MODEL_QUESTION
 from features.qa.factory import build_qa_service, build_source_service
@@ -444,7 +445,9 @@ def _build_ask(test_mode: bool) -> dict:
 
 def _model_row(c: dict) -> None:
     """설비 모델 선택 줄. 고르지 않아도 질문할 수 있다(값은 빈 문자열)."""
-    choices = [("설비 모델 선택 (선택 사항)", "")] + [(m, m) for m in mock.MODELS]
+    # 질문 분석은 등록된 모델 이름만 남기므로 기준정보의 모델 이름을 그대로 보여준다.
+    names = [m.name for m in EquipmentModelService().list_models()]
+    choices = [("설비 모델 선택 (선택 사항)", "")] + [(n, n) for n in names]
     with gr.Row(elem_classes=["model-row"]):
         c["model"] = gr.Dropdown(
             choices=choices,
