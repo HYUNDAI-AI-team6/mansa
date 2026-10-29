@@ -111,21 +111,26 @@ def chunk_tags(metadata: dict[str, Any]) -> set[str]:
     return tags
 
 def rank_by_tags(
-    intent: Intent, corpus: list[dict[str, Any]], top_k: int = TAG_TOP_K
+    intent: Intent, chunks: list[dict[str, Any]], top_k: int = TAG_TOP_K
 ) -> list[str]:
-    """Intent의 부위·작업과 겹치는 태그가 많은 청크 ID를 순서대로 top_k개 반환한다.
-
-    겹치는 태그가 하나도 없는 청크는 빠진다. 개수가 같으면 corpus 순서를 따른다.
+    """Intent의 부위와 겹치는 태그가 많은 청크 ID를 순서대로 top_k개 반환한다.
+    
+    작업 태그 일치는 부위 겹침 개수가 같을 때만 앞세운다(작업 태그는 일부 청크에만 붙어 약한 신호로 쓴다).
+    부위·작업 태그가 하나도 겹치지 않는 청크는 빠진다. 순위가 같으면 chunks 순서를 따른다.
     Intent에 부위·작업이 없으면 빈 리스트다. 외부 호출은 없다.
     """
     # 모델은 태그 비교가 아니라 where 필터로 거를 예정이라 부위·작업만 비교한다
-    wanted = {*intent.parts, *([intent.task] if intent.task else [])}
-    if not wanted:
+    parts = set(intent.parts)
+    if not (parts or intent.task):
         return []
-    counts = [(chunk["id"], len(wanted & chunk_tags(chunk.get("metadata",{})))) for chunk in corpus]
+    scored = []
+    for chunk in chunks:
+        tags = chunk_tags(chunk.get("metadata", {}))
+        scored.append((chunk["id"], (len(parts & tags), intent.task in tags)))
     # 겹침 0개를 빼지 않으면 관계없는 청크도 RRF에서 순위 점수를 받는다
-    ranked = sorted((item for item in counts if item[1] > 0), key=lambda item: item[1], reverse=True)
+    ranked = sorted((item for item in scored if any(item[1])), key=lambda item: item[1], reverse=True)
     return [chunk_id for chunk_id, _ in ranked[:top_k]]
+
 
 def rank_ids(
     vector_hits: list[dict[str, Any]],
@@ -148,76 +153,67 @@ def distance_to_similarity(distance: float) -> float:
     # shortcut: OpenAI 임베딩은 길이가 1이라 제곱 L2 거리 d에서 코사인 유사도 = 1 - d/2로 계산한다, 실서버 값으로 확인한 뒤 확정한다
     return max(0.0, min(1.0, 1 - distance / 2))
 
+
 def to_scored_chunks(
     ids: list[str],
     vector_hits: list[dict[str, Any]],
-    corpus: list[dict[str, Any]],
     doc_type: str,
     top_k: int = RESULT_TOP_K,
-)-> list[ScoredChunk]:
+) -> list[ScoredChunk]:
     """순서가 정해진 청크 ID를 앞에서 top_k개까지 ScoredChunk로 바꾼다.
-
-    score는 벡터 유사도(0~1)이고, BM25로만 찾은 청크는 유사도를 모르므로 0.0이다.
-    본문·메타데이터는 벡터 결과에 있으면 그것을, 없으면 corpus에서 가져온다.
+    
+    ids는 모두 vector_hits 안의 청크이며, score는 그 벡터 유사도(0~1)다.
     """
-    by_id = {chunk["id"]: chunk for chunk in corpus}
-    # corpus를 읽은 뒤 새로 올라온 청크는 벡터 결과에만 있어서 함께 넣는다
-    by_id.update({hit["id"]: hit for hit in vector_hits})
-    similarity = {hit["id"]: distance_to_similarity(hit["distance"]) for hit in vector_hits}
+    by_id = {hit["id"]: hit for hit in vector_hits}
     return [
         ScoredChunk(
-            chunk_id= chunk_id,
+            chunk_id=chunk_id,
             text= by_id[chunk_id]["text"],
-            # BM25·태그로만 찾은 청크는 0.0이라 is_sufficient 기준을 못 넘지만 merge_evidence는 순위대로 남긴다.
-            score=similarity.get(chunk_id, 0.0),
+            score=distance_to_similarity(by_id[chunk_id]["distance"]),
             doc_type=doc_type,
             metadata=by_id[chunk_id].get("metadata", {}),
         )
         for chunk_id in ids[:top_k]
     ]
 
-def search_manual(
-        question: str, intent: Intent, search: VectorSearch, corpus: list[dict[str, Any]]
-) -> list[ScoredChunk]:
-    """매뉴얼·사양서 청크를 벡터 검색과 BM25로 찾아 RRF 순서의 ScoredChunk 목록으로 반환한다.
 
-    corpus는 load_corpus(get, MANUAL_DOC_TYPE, MANUAL_COLLECTION)로 미리 읽어 둔 매뉴얼 청크다.
+def search_manual(question: str, intent: Intent, search: VectorSearch) -> list[ScoredChunk]:
+    """매뉴얼·사양서 청크를 벡터 검색으로 후보를 찾고, 그 안에서 벡터·BM25·태그 순위를 RRF로 합쳐 반환한다.
+    
+    태그는 거르는 조건이 아니라 순위 신호라서 태그가 없는 청크도 후보에 남는다.
     search는 유료 임베딩 API와 Chroma를 호출하며 실패는 그대로 전달한다.
     intent의 부위·작업은 태그 일치 순위에 쓴다.
     """
     # shortcut: 청크 메타데이터에 모델 ID가 없어 모델 필터 없이 찾는다, 색인에 모델 ID가 들어가면 where로 거른다
     vector_hits = search_vector(question, search, MANUAL_DOC_TYPE, MANUAL_COLLECTION)
-    bm25_hits = search_bm25(question, corpus)
-    tag_ids = rank_by_tags(intent, corpus)
-    ids = rank_ids(vector_hits, bm25_hits, tag_ids)
-    return to_scored_chunks(ids, vector_hits, corpus, MANUAL_DOC_TYPE)
+    ids = rank_ids(vector_hits, search_bm25(question, vector_hits), rank_by_tags(intent, vector_hits))
+    return to_scored_chunks(ids, vector_hits, MANUAL_DOC_TYPE)
+
 
 def search_safety(
     question: str,
     intent: Intent,
     search: VectorSearch,
-    corpus: list[dict[str, Any]],
     expand_terms: TermExpander = default_safety_terms,
 ) -> list[ScoredChunk]:
-    """안전 문서 청크를 보강한 검색어로 벡터 검색과 BM25로 찾아 RRF 순서의 ScoredChunk 목록으로 반환한다.
-
+    """안전 문서 청크를 보강한 검색어로 벡터 검색해 후보를 찾고, 그 안에서 벡터·BM25·태그 순위를 RRF로 합쳐 반환한다.
+    
     검색어는 build_safety_query로 질문 뒤에 부위·작업 단어를 붙여 만든다.
-    corpus는 load_corpus(get, SAFETY_DOC_TYPE, SAFETY_COLLECTION)로 미리 읽어 둔 안전 문서 청크다.
+    태그는 거르는 조건이 아니라 순위 신호라서 태그가 없는 청크도 후보에 남는다.
     search는 유료 임베딩 API와 Chroma를 호출하며 실패는 그대로 전달한다.
     """
     query = build_safety_query(question, intent, expand_terms)
     vector_hits = search_vector(query, search, SAFETY_DOC_TYPE, SAFETY_COLLECTION)
-    bm25_hits = search_bm25(query, corpus)
-    tag_ids = rank_by_tags(intent, corpus)
-    ids = rank_ids(vector_hits, bm25_hits, tag_ids)
-    return to_scored_chunks(ids, vector_hits, corpus, SAFETY_DOC_TYPE)
+    ids = rank_ids(vector_hits, search_bm25(query, vector_hits), rank_by_tags(intent, vector_hits))
+    return to_scored_chunks(ids, vector_hits, SAFETY_DOC_TYPE)
+
 
 def merge_evidence(
     manual: list[ScoredChunk], safety: list[ScoredChunk], top_n: int = EVIDENCE_TOP_N
 ) -> Evidence:
     """매뉴얼·안전 문서 검색 결과를 각자의 순위(RRF) 그대로 번갈아 뽑아 상위 top_n개를 고른다.
 
-    점수로 다시 정렬하지 않으므로 BM25·태그로만 찾은 청크(score 0.0)도 순위대로 남고,
+    점수로 다시 정렬하지 않으므로 BM25·태그 덕분에 앞선 청크도 순위대로 남고,
     매뉴얼·안전 근거가 함께 들어간다. 한쪽이 모자라면 다른 쪽으로 채운다.
     같은 chunk_id는 먼저 나온 것 하나만 남긴다. 입력 리스트는 바꾸지 않는다.
     """

@@ -119,7 +119,7 @@ SAFETY_COLLECTION = _env_str("SAFETY_COLLECTION", "safety_docs")
 MANUAL_DOC_TYPE = _env_choice("MANUAL_DOC_TYPE", "tech", ("tech", "secure"))
 MANUAL_COLLECTION = _env_str("MANUAL_COLLECTION", "tech_docs")
 CORPUS_PAGE_SIZE = _env_int("CORPUS_PAGE_SIZE", 500, minimum=1)  # 말뭉치를 한 번에 읽는 크기
-VECTOR_TOP_K = _env_int("VECTOR_TOP_K", 20, minimum=1)
+VECTOR_TOP_K = _env_int("VECTOR_TOP_K", 50, minimum=1) # BM25·태그 순위를 매길 후보 수
 BM25_TOP_K = _env_int("BM25_TOP_K", 20, minimum=1)
 RESULT_TOP_K = _env_int("RESULT_TOP_K", 20, minimum=1)
 TAG_TOP_K = _env_int("TAG_TOP_K", 20, minimum=1)
