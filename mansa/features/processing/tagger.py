@@ -5,9 +5,11 @@
 """
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from features.master.taxonomy import TaxonomyService
+from features.processing.models import Chunk
 
 # 한 글자 동의어("카")는 다른 단어의 일부("카문", "카드")에 걸리지 않게, 앞이 글자가 아니고 뒤가 조사이거나
 # 글자가 아닐 때만 본문에 있다고 본다.
@@ -79,3 +81,16 @@ class Vocabulary:
             return self.mentions(text, [task])
         subject = " ".join(words[:-1])
         return self.mentions(text, [words[-1]]) and self.mentions(text, self.forms(subject))
+
+
+def candidate_indexes(chunks: Sequence[Chunk], vocabulary: Vocabulary) -> list[int]:
+    """LLM에 보낼 청크의 위치를 순서대로 돌려준다. 분류표 부위(또는 동의어)가 본문에 하나라도 있는 청크다.
+
+    부위가 하나도 없는 청크(제목만 있는 청크, 디자인·색상 설명 등)는 붙일 태그가 없으므로 호출하지 않는다.
+    작업은 부위와 함께 있어야 근거가 되므로 부위만 보고 거른다.
+    """
+    return [
+        index
+        for index, chunk in enumerate(chunks)
+        if any(vocabulary.supports_part(chunk.text, part) for part in vocabulary.parts)
+    ]

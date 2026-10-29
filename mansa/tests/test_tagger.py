@@ -1,7 +1,8 @@
 import unittest
 
 from features.master.taxonomy import TaxonomyService
-from features.processing.tagger import Vocabulary
+from features.processing.models import Chunk
+from features.processing.tagger import Vocabulary, candidate_indexes
 
 PARTS = ("메인 로프", "승강기 칸", "완충기")
 TASKS = ("메인 로프 점검", "승강기 칸 점검", "완충기 시험")
@@ -10,6 +11,11 @@ SYNONYMS = {"와이어로프": "메인 로프", "카": "승강기 칸"}
 
 def vocabulary() -> Vocabulary:
     return Vocabulary(PARTS, TASKS, SYNONYMS)
+
+
+def make_chunk(text: str, page: int = 1, index: int = 0) -> Chunk:
+    meta = {"source": "a.pdf", "page": page, "chunk": index, "document_id": 1, "document_type": "secure"}
+    return Chunk(text=text, metadata=meta)
 
 
 class VocabularyTest(unittest.TestCase):
@@ -101,6 +107,32 @@ class SupportTest(unittest.TestCase):
 
         self.assertTrue(vocab.supports_task("정기 점검", "점검"))
         self.assertFalse(vocab.supports_task("정기 시험", "점검"))
+
+
+class CandidateTest(unittest.TestCase):
+    def test_only_chunks_that_mention_a_part_are_candidates(self) -> None:
+        chunks = [
+            make_chunk("메인 로프를 점검한다", index=0),
+            make_chunk("표 4. 시험 방법", index=1),
+            make_chunk("카 내부 조명", index=2),
+            make_chunk("와이어로프 마모", index=3),
+        ]
+
+        self.assertEqual(candidate_indexes(chunks, vocabulary()), [0, 2, 3])
+
+    def test_chunk_without_any_part_is_skipped(self) -> None:
+        self.assertEqual(candidate_indexes([make_chunk("부속서 Ⅰ 전기안전장치 목록")], vocabulary()), [])
+
+    def test_empty_input_returns_empty_list(self) -> None:
+        self.assertEqual(candidate_indexes([], vocabulary()), [])
+
+    def test_empty_vocabulary_has_no_candidates(self) -> None:
+        self.assertEqual(candidate_indexes([make_chunk("메인 로프")], Vocabulary((), ())), [])
+
+    def test_one_character_synonym_does_not_make_unrelated_chunks_candidates(self) -> None:
+        chunks = [make_chunk("카탈로그 안내", index=0), make_chunk("카드 결제", index=1)]
+
+        self.assertEqual(candidate_indexes(chunks, vocabulary()), [])
 
 
 if __name__ == "__main__":
