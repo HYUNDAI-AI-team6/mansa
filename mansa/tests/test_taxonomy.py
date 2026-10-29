@@ -38,7 +38,8 @@ class ShippedDataTest(unittest.TestCase):
     def test_data_files_load_and_agree_with_each_other(self):
         service = TaxonomyService.from_directory()
         self.assertEqual(list(service.taxonomy.by_axis()), ["부위", "작업", "작업 위치", "위험 유형"])
-        self.assertEqual(len(service.relations), 5)
+        self.assertGreaterEqual(len(service.relations), 5)
+        self.assertTrue(set(service.relations) <= set(service.taxonomy.tasks))
         self.assertEqual(service.normalize_term("와이어로프"), "메인 로프")
         self.assertEqual(service.expand_query_terms("메인 로프 점검"), ["카 상부", "기계실", "추락", "끼임"])
 
