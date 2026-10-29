@@ -284,7 +284,7 @@ delete_document_record(document_id) -> bool      # MySQL 행만 삭제. 반드�
 - 예외: `DuplicateDocumentError`(`.document_id`에 기존 문서 ID), `DocumentNotFoundError`, `DocumentStorageError`, `InvalidStatusTransition`, `ValueError`(유형·파일 형식·파일명·부서 오류).
 - `filename`은 원본 파일명이고, 서비스가 NFC로 정규화한 뒤 확장자를 빼서 `title`을 만든다.
 - 등록 순서: 입력 검증(`%PDF-` 헤더, 크기) → `title`·해시 계산 → 중복 조회(중복이면 거절) → 임시 파일로 저장 → `INSERT`(상태 `처리 중`) → 임시 파일을 `{저장소}/{doc_type}/{id}.pdf`로 이름 변경. 실패하면 행과 파일을 정리한다. `execute`가 `lastrowid`를 주지 않으므로 새 ID는 `title_hash`로 다시 조회해서 얻는다. 사용자 파일명은 경로에 쓰지 않는다.
-- 저장소 기준 폴더는 환경변수로 관리하며, 위치는 미확정이다(§8).
+- 저장소 기준 폴더는 환경변수 `PDF_STORAGE_DIR`로 관리하고 기본값은 `mansa/data/documents`다(제안. 박정환·DB 담당 확인 전이며 `config.py`에는 아직 없다). 기존 `data/pdfs`는 개발용 샘플이 한글 파일명으로 들어 있어서 분리했다. 영속 볼륨 여부는 미확정이다(§8). `file_path`는 `Path(PDF_STORAGE_DIR) / doc_type / f"{id}.pdf"`로 계산한다.
 - 책임 구분: DocumentService는 MySQL 행과 원본 PDF 파일만 다루고 ChromaDB와 파이프라인을 호출하지 않는다. 파이프라인은 MySQL에 직접 접근하지 않고 `set_status`만 호출한다.
 
 ### 7.3 문서관리 → ChromaDB (`util/vector_upload.py`, 이미 있음)
@@ -333,6 +333,7 @@ n = upload_embeddings(doc_type, collection_name, ids, embeddings, documents, met
 - `search_chunks()`, `get_chunks()`의 결과는 `{"id", "text", "metadata", "distance"}`(`get_chunks`는 `distance` 없음) 형식이다. 검색 로직은 QA 담당이라 수정하지 않는다.
 - `retriever.py`는 `part`·`task`를 쉼표로 쪼개 질문의 `Intent` 부위·작업과 겹치는 개수로 순위를 정한다. 문자열이 아니거나 비어 있으면 태그가 없는 것으로 본다.
 - 질문에 부위·작업이 없으면 분류표 부위를 선택지로 되묻는다(`clarify_policy.py`). 분류표가 35개로 늘어서 선택지는 분류표 앞쪽 `MAX_PART_OPTIONS`(8)개까지만 보여주도록 장영균이 수정했다(QA 확인 필요, §8).
+- 태그는 안전 문서와 매뉴얼 모두에 붙지만 **일부 청크에만** 붙는다(실제 LLM, 배치 5개 기준: 안전기준 349개 중 부위 43%·작업 4%, 엘트론 11%, LUXEN 27%). 태그를 검색 조건(필터)으로 걸면 태그 없는 청크가 모두 빠지므로, 일치하면 순위를 올리는 신호(RRF 등)로만 쓰고 태그 없는 청크도 후보에 남기기를 권한다. 작업(`task`) 태그는 특히 적다.
 - `Intent`의 모델·부위는 기준정보에 **등록된 값만** 남긴다. 모델은 `where` 필터로 거를 예정이라, 청크의 `model`이 등록된 모델 ID와 철자가 같아야 한다.
 - BM25는 `get_chunks`로 읽은 청크 원문(`text`)만 사용한다. 메타데이터는 BM25에 쓰이지 않는다.
 - 청크를 `(source, page, chunk)`로 정렬한다. 키가 없으면 빈 문자열이나 0으로 취급한다.
@@ -343,17 +344,18 @@ n = upload_embeddings(doc_type, collection_name, ids, embeddings, documents, met
 |---|---|
 | `title_hash`의 입력 규칙(`doc_type` 포함 여부, 소문자 변환, NFC 정규화) | DB 담당 |
 | `documents`에 `error_message` 컬럼 추가, `status` 한글 3값 확정, 마이그레이션 파일 위치·실행 시점 | DB 담당 |
-| 원본 PDF 저장 위치·방식(영속 볼륨 여부), 기준 폴더 환경변수 | DB 담당·박정환 |
+| 원본 PDF 저장 위치·방식(영속 볼륨 여부). 기준 폴더 환경변수는 `PDF_STORAGE_DIR`(기본 `mansa/data/documents`)로 제안했다. 서버를 다시 시작할 때 디스크가 지워지면 원본 PDF가 사라져 재처리·삭제가 안 된다 | DB 담당·박정환 |
 | 남아 있는 ChromaDB 테스트 데이터의 차원(1536 vs 3072) 정리 | DB 담당 |
 | 분류표를 실제 PDF 3개 용어 기준으로 확장했다(부위 37개, 작업 49개, 작업 위치 7개). 엘트론 용어로 부위 2개(적재하중 검출 모니터링 장치, 안전봉)와 동의어 `Car Door → 카문`을 더하고, `가버너 → 과속조절기`로 고쳤다. 관계표(`task_relations.json`)에는 새 작업 33개를 같은 청크에서 함께 나온 작업 위치·위험 유형 횟수로 채웠다(근거가 4개 미만인 작업과 `권상기` 계열은 비어 있다). 태그는 이 목록 안에서만 고른다. 확정 여부와 어색한 조합 정리, `task`를 **부위+동작 합친 이름**으로 유지하는 것(명세 예시의 동사 단위 `점검`과 다름) | QA·기준정보 담당 |
-| 분류표 확장으로 되묻기 선택지가 35개가 되어 `clarify_policy.py`의 `build_options`를 앞쪽 8개로 줄이고 테스트를 고쳤다. 상한·자르는 방식(앞쪽부터)이 맞는지 | QA |
+| 분류표 확장으로 되묻기 선택지가 37개가 되어 `clarify_policy.py`의 `build_options`를 앞쪽 8개로 줄이고 테스트를 고쳤다. 상한·자르는 방식(앞쪽부터)이 맞는지 | QA |
 | 동의어 `가버너 → 조속기`의 표준 태그가 분류표에 없어서 `가버너 → 과속조절기`로 고쳤다(LLM이 `조속기`를 태그로 만들어내던 문제). 분류표의 `비상정지장치`는 PDF에 거의 안 나오고(1건) PDF는 `추락방지안전장치`(43건)를 쓴다. `조속기`·`비상정지장치`를 동의어로 넣을지 | 기준정보 담당 |
 | `config.py`의 `CHUNK_SIZE`(800)·`CHUNK_OVERLAP`(100)은 QA의 `util/rag_ingest.py`(테스트용 적재)만 쓴다. 문서관리 청킹(`features/processing/`)은 300~1,200자, 겹침 없음으로 따로 정했다. 두 기준 중 정식 기준과 설정 정리 방법 | QA |
 | `chunk`를 0부터 시작하는 것, `model`·`clause` 같은 키가 없는 청크의 처리 | QA |
 | QA의 `util/rag_*` 기본 임베딩(`test_embed_with_openai`)을 `core.llm.embed`로 통일할 시점, `core.llm.embed`에 빈 문자열·차원(3072) 검사를 추가할지 | QA |
 | 상태 전이 검증 수용 여부, 삭제 중간 실패 처리 | 박정환 |
 | `data/master/equipment_models.csv`에 실제 설비 모델(제조사·모델명·정격 속도·하중·용도·구동 방식) 채우기. 지금은 자리표시자라 `model` 없이 저장된다 | 박정환(CSV 작성), 장영균(PDF에서 인식되는 표기 제공) |
-| `model` 키가 없는 청크(모델이 안 나오는 페이지)를 모델 필터가 제외해도 되는지. 모델별 복제 청크는 그대로 두기로 합의함 | QA |
+| `model` 키가 없는 청크(모델이 안 나오는 페이지)를 모델 필터가 제외해도 되는지. 모델별 복제 청크는 그대로 두기로 합의함. 복제로 늘어난 청크는 엘트론 27개 중 2개, LUXEN 81개 중 8개(7~10%)이고 모두 두 모델이 같이 나오는 공통 페이지다. 모델을 지정하지 않은 질문에서 같은 문장이 두 번 나올 수 있으므로, 모델 머리말을 뺀 본문이 같은 검색 결과를 합치는 것을 제안한다 | QA |
+| 표 안에만 모델명이 있는 페이지는 `model`이 비지만(모델 이름을 본문에서만 찾는다), 가진 PDF 2개에는 그런 페이지가 없다. 그런 PDF가 나오면 표에서도 찾도록 추가한다 | 장영균 |
 | 안전기준 수식(`HyhwpEQ` 글리프) 복원 방식과 시점 | 장영균 |
 | 도면 페이지에 OCR/Vision을 추가할지 | 팀 합의 |
 
