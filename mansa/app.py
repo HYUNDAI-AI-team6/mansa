@@ -182,20 +182,28 @@ def _auth() -> AuthService:
 
 
 def _wire_login(
-    role: str, form: login.LoginForm, shell: Shell, user: gr.State, layout_outputs: list
+    role: str,
+    form: login.LoginForm,
+    shell: Shell,
+    user: gr.State,
+    layout_outputs: list,
+    session: gr.BrowserState,
 ) -> None:
     """로그인 버튼·Enter 를 연결한다. 성공하면 권한별 첫 화면으로 간다."""
     nav_keys = list(shell.navs)
-    outputs = [form.error, user, *layout_outputs, *shell.nav_outputs()]
+    outputs = [form.error, user, *layout_outputs, *shell.nav_outputs(), session]
 
     def handle(user_id: str, password: str) -> tuple:
         """users·admins 테이블로 로그인하고 화면을 바꾼다. 실패하면 안내 상자만 보여 준다."""
-        account, message = _auth().login(role, user_id, password)
+        auth = _auth()
+        account, message = auth.login(role, user_id, password)
         if account is None:
             skips = [gr.skip()] * (len(outputs) - 1)
             return (gr.HTML(login.error_html(message), visible=True), *skips)
         shown = _show(HOME[role], account, nav_keys)
-        return (gr.HTML(visible=False), account, *_layout(role), *shown)
+        token = auth.start_session(role, account["uid"])
+        saved = {"role": role, "token": token}
+        return (gr.HTML(visible=False), account, *_layout(role), *shown, saved)
 
     home = shell.resettable.get(HOME[role])
     for trigger in (form.submit.click, form.password.submit):
@@ -207,27 +215,64 @@ def _wire_logout(
     states: list[gr.State],
     layout_outputs: list,
     forms: list[login.LoginForm],
+    session: gr.BrowserState,
 ) -> None:
     """로그아웃: 사용자 로그인 모드로 되돌리고, 입력했던 아이디·비밀번호와 목데이터를 지운다.
 
     states 는 [로그인 계정, 세션 목데이터] 순서다.
     """
     fields = [box for form in forms for box in (form.user_id, form.password)]
-    timer = shell.resettable["documents"].links["timer"]
 
-    def logout() -> tuple:
-        """로그인 화면을 다시 보여 주는 값."""
-        return (None, mock.new_store(), *_layout(None), *[""] * len(fields), gr.Timer(active=False))
+
+    def logout(saved: dict) -> tuple:
+        """DB 의 로그인 세션을 지우고 로그인 화면을 다시 보여 주는 값."""
+        saved = saved or {}
+        _auth().end_session(saved.get("role", ""), saved.get("token", ""))
+        return (None, mock.new_store(), *_layout(None), *[""] * len(fields), {})
 
     for button in shell.logouts:
         event = button.click(None, js=login.RESET_JS)
-        event.then(logout, None, [*states, *layout_outputs, *fields, timer])
+        event.then(logout, session, [*states, *layout_outputs, *fields, session])
+
+def _wire_resume(
+    demo: gr.Blocks,
+    shell: Shell,
+    user: gr.State,
+    layout_outputs: list,
+    session: gr.BrowserState,
+) -> None:
+    """새로고침으로 화면이 새로 열리면 브라우저에 남은 토큰으로 로그인 상태를 되살린다."""
+    nav_keys = list(shell.navs)
+    outputs = [user, *layout_outputs, *shell.nav_outputs(), session]
+
+    def resume(saved: dict) -> tuple:
+        """토큰이 유효하면 권한별 첫 화면을 보여 주고, 아니면 로그인 화면을 보여 주고 토큰을 지운다."""
+        saved = saved or {}
+        account = _auth().resume(saved.get("role", ""), saved.get("token", ""))
+        if account is None:
+            nothing = [gr.skip()] * len(shell.nav_outputs())
+            return (gr.skip(), *_layout(None), *nothing, {} if saved else gr.skip())
+        shown = _show(HOME[account["role"]], account, nav_keys)
+        return (account, *_layout(account["role"]), *shown, saved)
+
+    event = demo.load(resume, session, outputs)
+    for role, key in HOME.items():  # 되살린 권한의 첫 화면만 다시 그린다(숨은 화면은 건드리지 않는다)
+        view = shell.resettable[key]
+
+        def reset_if_role(u, *args, role=role, view=view):
+            if u and u["role"] == role:
+                return view.reset(*args)
+            return tuple([gr.skip()] * len(view.reset_outputs))
+
+        event.then(reset_if_role, [user, *view.reset_inputs], view.reset_outputs)
+
 
 
 def main():
     """화면을 만들고 이벤트를 연결한 뒤 앱을 실행한다."""
     with gr.Blocks(title="MANSA", fill_width=True) as demo:
         user = gr.State(None)
+        session = gr.BrowserState({}, storage_key="mansa_session")
         store = gr.State(mock.new_store())
         login_view, user_form, admin_form = login.build()
         shell = _build_shell(store, user)
@@ -235,9 +280,10 @@ def main():
 
         _wire_nav(shell, user)
         _wire_links(shell, user)
-        _wire_login("user", user_form, shell, user, layout_outputs)
-        _wire_login("admin", admin_form, shell, user, layout_outputs)
-        _wire_logout(shell, [user, store], layout_outputs, [user_form, admin_form])
+        _wire_login("user", user_form, shell, user, layout_outputs, session)
+        _wire_login("admin", admin_form, shell, user, layout_outputs, session)
+        _wire_logout(shell, [user, store], layout_outputs, [user_form, admin_form], session)
+        _wire_resume(demo, shell, user, layout_outputs, session)
 
     # 평가 결과 CSV는 실행 폴더(mansa/) 밖인 저장소 루트 eval/save/에 있어 내려받기를 허용해야 한다.
     demo.launch(

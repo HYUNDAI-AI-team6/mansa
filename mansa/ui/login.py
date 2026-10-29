@@ -123,13 +123,14 @@ def build() -> tuple[gr.Column, LoginForm, LoginForm]:
 
     로그인 성공 처리는 화면 전환이 필요해 app.py 에서 연결한다.
     """
-    with gr.Column(elem_classes=["login"], elem_id="login") as view:
+    # 처음엔 숨겨 둔다: 새로고침 때 저장된 로그인 확인(app.py 의 resume)이 끝나야 보일 화면을 정한다.
+    with gr.Column(elem_classes=["login"], elem_id="login", visible=False) as view:
         with gr.Row(elem_classes=["login-row"]):
             stack = f'<div class="intro-stack">{intro_html("user")}{intro_html("admin")}</div>'
             gr.HTML(stack, padding=False, elem_classes=["intro-stage"])
             with gr.Column(elem_classes=["card-stage"]):
                 user_form = _card("user")
-                admin_form = _card("admin")
+                admin_form = _card("admin") 
     user_form.switch.click(None, js=SWITCH_JS.format(admin="true"))
     admin_form.switch.click(None, js=SWITCH_JS.format(admin="false"))
     return view, user_form, admin_form

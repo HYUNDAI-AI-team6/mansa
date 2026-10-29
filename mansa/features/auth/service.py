@@ -1,5 +1,7 @@
 """로그인: 사용자는 users, 관리자는 admins 테이블의 계정으로만 인증한다."""
 
+import hashlib
+import secrets
 from collections.abc import Callable
 from typing import Any
 
@@ -8,6 +10,8 @@ from argon2.exceptions import InvalidHashError, VerifyMismatchError
 
 FAIL_MESSAGE = "아이디 또는 비밀번호가 올바르지 않아요"
 EMPTY_MESSAGE = "아이디와 비밀번호를 입력해 주세요"
+
+SESSION_HOURS = 1
 
 _hasher = PasswordHasher()
 
@@ -25,6 +29,33 @@ _QUERIES = {
         "UPDATE admins SET last_login_at = NOW() WHERE id = :id",
     ),
 }
+
+
+# role -> (세션 테이블, 세션 만료 정리 SQL, 세션 저장 SQL, 세션으로 계정 찾는 SQL).
+# 테이블명은 고정 값이라 외부 입력이 섞이지 않는다.
+_SESSIONS = {
+    "user": (
+        "user_sessions",
+        "INSERT INTO user_sessions (id, user_id, expires_at) "
+        "VALUES (:sid, :uid, DATE_ADD(NOW(), INTERVAL :hours HOUR))",
+        "SELECT u.id, u.login_id, u.name, d.name AS dept FROM user_sessions s "
+        "JOIN users u ON u.id = s.user_id JOIN departments d ON d.id = u.department_id "
+        "WHERE s.id = :sid AND s.expires_at > NOW() AND u.status = 'active'",
+    ),
+    "admin": (
+        "admin_sessions",
+        "INSERT INTO admin_sessions (id, admin_id, expires_at) "
+        "VALUES (:sid, :uid, DATE_ADD(NOW(), INTERVAL :hours HOUR))",
+        "SELECT a.id, a.login_id, a.name, '관리자' AS dept FROM admin_sessions s "
+        "JOIN admins a ON a.id = s.admin_id "
+        "WHERE s.id = :sid AND s.expires_at > NOW() AND a.status = 'active'",
+    ),
+}
+
+
+def _session_id(token: str) -> str:
+    """토큰 원문의 SHA-256. DB 에는 원문 대신 이 값만 저장한다."""
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 def hash_password(password: str) -> str:
@@ -54,7 +85,37 @@ class AuthService:
             return None, FAIL_MESSAGE
         row = rows[0]
         self._execute(touch, {"id": row["id"]})
-        return {"id": row["login_id"], "role": role, "name": row["name"], "dept": row["dept"]}, ""
+        account = {"id": row["login_id"], "role": role, "name": row["name"], "dept": row["dept"]}
+        return {**account, "uid": row["id"]}, ""
+
+    def start_session(self, role: str, uid: int) -> str:
+        """로그인 세션을 저장하고 브라우저에 보관할 토큰 원문을 돌려준다. 만료된 세션도 함께 지운다."""
+        table, insert, _ = _SESSIONS[role]
+        self._execute(f"DELETE FROM {table} WHERE expires_at < NOW()", {})
+        token = secrets.token_urlsafe(32)
+        self._execute(insert, {"sid": _session_id(token), "uid": uid, "hours": SESSION_HOURS})
+        return token
+
+    def resume(self, role: str, token: str) -> dict | None:
+        """브라우저에 남은 토큰이 유효하면 회원 정보를, 아니면 None 을 돌려준다.
+
+        role 은 브라우저가 보낸 값이라 모르는 값이면 조회하지 않는다.
+        """
+        if role not in _SESSIONS or not token:
+            return None
+        rows = self._fetch_all(_SESSIONS[role][2], {"sid": _session_id(token)})
+        if not rows:
+            return None
+        row = rows[0]
+        account = {"id": row["login_id"], "role": role, "name": row["name"], "dept": row["dept"]}
+        return {**account, "uid": row["id"]}
+
+    def end_session(self, role: str, token: str) -> None:
+        """로그아웃: 그 토큰의 세션을 지운다. 모르는 role·토큰이면 아무것도 하지 않는다."""
+        if role in _SESSIONS and token:
+            self._execute(
+                f"DELETE FROM {_SESSIONS[role][0]} WHERE id = :sid", {"sid": _session_id(token)}
+            )
 
     @staticmethod
     def _matches(password_hash: str, password: str) -> bool:
