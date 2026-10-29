@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from core.schemas import Clarify, Intent
 from features.master.taxonomy import TaxonomyService
-from features.qa.clarify_policy import MODEL_QUESTION, PART_QUESTION, RuleClarifyPolicy
+from features.qa.clarify_policy import MAX_PART_OPTIONS, MODEL_QUESTION, PART_QUESTION, RuleClarifyPolicy
 from features.qa.service import QAService
 
 PARTS = ["메인 로프", "권상기"]
@@ -49,9 +49,17 @@ class BuildOptionsTest(unittest.TestCase):
         policy(parts).build_options(intent()).options.append("추가")
         self.assertEqual(parts, PARTS)  # 선택지를 바꿔도 분류표는 그대로다
 
+    def test_part_options_are_capped(self):
+        parts = [f"부위{i}" for i in range(MAX_PART_OPTIONS + 5)]
+        result = policy(parts).build_options(intent())
+        self.assertEqual(result.options, parts[:MAX_PART_OPTIONS])
+        self.assertEqual(len(parts), MAX_PART_OPTIONS + 5)  # 분류표는 줄어들지 않는다
+
     def test_with_real_taxonomy(self):
-        result = RuleClarifyPolicy(TaxonomyService.from_directory()).build_options(intent())
-        self.assertEqual(result.options, ["메인 로프", "브레이크 라이닝", "도어 센서", "비상정지장치", "권상기"])
+        taxonomy = TaxonomyService.from_directory()
+        result = RuleClarifyPolicy(taxonomy).build_options(intent())
+        self.assertEqual(result.options, taxonomy.taxonomy.parts[:MAX_PART_OPTIONS])
+        self.assertEqual(result.options[:5], ["메인 로프", "브레이크 라이닝", "도어 센서", "비상정지장치", "권상기"])
 
 
 class QAServiceClarifyTest(unittest.TestCase):
