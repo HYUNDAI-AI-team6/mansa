@@ -141,3 +141,4 @@ class SourceView:
     page: int | None
     department: str = ""
     clause: str = ""
+    doc_type: str = "" #"tech"(매뉴얼) 또는 "secure"(안전문서). 원문 창 탭을 고를 때 쓴다

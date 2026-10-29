@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from functools import partial
 
+from config import MANUAL_COLLECTION, MANUAL_DOC_TYPE, SAFETY_COLLECTION, SAFETY_DOC_TYPE
 from core import llm
 from features.history.service import HistoryService
 from features.history.store import MemoryHistoryStore
@@ -12,7 +13,14 @@ from features.qa.answer_generator import AnswerGenerator
 from features.qa.question_analyzer import QuestionAnalyzer
 from features.qa.clarify_policy import RuleClarifyPolicy
 from features.qa.service import QAService
-from features.retrieval.retriever import ChunkGetter, HybridRetriever, VectorSearch, default_safety_terms
+from features.qa.source_service import SourceService
+from features.retrieval.retriever import (
+    ChunkGetter,
+    HybridRetriever,
+    VectorSearch,
+    default_safety_terms,
+    load_corpus,
+)
 from util.rag_query import get_chunks, search_chunks
 
 def build_qa_service(
@@ -38,3 +46,16 @@ def build_qa_service(
         generator=AnswerGenerator(complete),
         history=HistoryService(MemoryHistoryStore()),
     )
+
+
+def build_source_service(get: ChunkGetter = get_chunks) -> SourceService:
+    """근거 원문 창용 SourceService를 만든다. 매뉴얼·안전 문서 청크를 Chroma에서 모두 읽는다.
+    
+    컬렉션이 없거나 서버에 접속할 수 없으면 예외가 그대로 전달된다.
+    """
+    # shortcut: HybridRetriever와 별도로 Chroma를 한 번 더 읽는다, 청크가 많아져 시작이 느려지면 retriever의 청크를 공유한다
+    chunks = [
+        *load_corpus(get, MANUAL_DOC_TYPE, MANUAL_COLLECTION),
+        *load_corpus(get, SAFETY_DOC_TYPE, SAFETY_COLLECTION)
+    ]
+    return SourceService(chunks)

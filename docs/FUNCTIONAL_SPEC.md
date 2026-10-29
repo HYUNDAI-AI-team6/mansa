@@ -1,6 +1,6 @@
 # MANSA 문서관리 기능명세서
 
-> 기준일: 2026-10-28 / 기준 브랜치: `feat/pdf-extraction`
+> 기준일: 2026-10-29 / 기준 브랜치: `feat/102-pdf-chunking`
 > 문서관리 영역과 다른 영역(질의응답·DB·화면)이 만나는 지점만 다룬다.
 > 확정된 내용과 아직 확정되지 않은 내용을 구분해서 적었다. **"미확정"으로 표시된 항목은 추측해서 구현하지 않는다.**
 
@@ -47,6 +47,8 @@ Gradio 화면 연결과 ChromaDB 저장 파이프라인은 장영균 담당이 �
 
 ### 3.2 문서 등록과 중복
 
+> DB 정의가 바뀌었을 수 있다. §7.4의 "변경 확인 필요"를 먼저 본다.
+
 - 버전 관리, 기존 문서 갱신, 별도 재처리 기능은 구현하지 않는다.
 - 중복 판정 키는 `documents.title_hash`(UNIQUE)다. `title`(확장자를 뺀 원래 파일명)의 해시이고, **PDF 내용의 해시가 아니다.** 파일 내용 해시(SHA-256)는 쓰지 않는다.
 - 해시 입력의 정확한 규칙(`doc_type` 포함 여부, 소문자 변환, 유니코드 NFC 정규화)은 DB 담당과 확정한다(§8). 서비스에서는 해시를 만드는 코드를 한 곳에만 두고, 규칙이 바뀌어도 그곳만 고친다.
@@ -60,6 +62,8 @@ Gradio 화면 연결과 ChromaDB 저장 파이프라인은 장영균 담당이 �
 - 업로드 화면의 중복 안내는 박정환 담당이다.
 
 ### 3.3 처리 상태
+
+> DB 정의가 바뀌었을 수 있다. §7.4의 "변경 확인 필요"를 먼저 본다.
 
 - 서비스 인터페이스에서는 `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`를 쓴다.
 - DB(`documents.status`, VARCHAR(10))에는 한글로 저장한다: `처리 중`, `완료`, `실패`. 서비스가 변환한다(PENDING·PROCESSING → `처리 중`, COMPLETED → `완료`, FAILED → `실패`). DB에서는 PENDING과 PROCESSING을 구분하지 않으므로 읽을 때는 `PROCESSING`으로 돌려준다. 화면 표시는 DB 값을 그대로 쓴다.
@@ -100,13 +104,38 @@ Gradio 화면 연결과 ChromaDB 저장 파이프라인은 장영균 담당이 �
 
 ### 3.7 청킹 원칙
 
-- 기술사양서는 **모델 단위**로 청크를 나눈다. 청크 하나에는 `model`을 하나만 둔다. 한 표에 여러 모델이 있으면 모델별로 나눈다. 모델에 속하지 않는 공통 본문은 `model` 키를 생략한다.
-- 안전기준은 조항·절 구조를 보존해 나눈다.
-- 표는 값과 헤더의 연결 관계가 유지되도록 텍스트로 바꾼다.
-- **청크 본문에 모델명과 조항 번호를 포함한다.** QA의 BM25는 본문 텍스트만 보고, 메타데이터는 보지 않는다.
-- 청크 한 건이 임베딩 입력 한도(8,191토큰)를 넘지 않게 길이를 제한한다.
-- 본문 청크와 표 청크는 한 페이지 안에서 하나의 `chunk` 순번으로 이어서 매긴다.
-- 신뢰도 낮은 표(`TableBlock.is_reliable=False`)를 청크로 만들지는 미확정이다.
+구현 위치는 `features/processing/chunker.py`(진입점), `chunker_secure.py`, `chunker_tech.py`, `chunk_utils.py`다.
+
+**공통**
+- 진입점은 `chunk(document, content, models=None)`다. `document.doc_type`이 `secure`면 안전기준, `tech`면 기술사양서 청킹으로 분기하고, 알 수 없는 유형이면 `ValueError`다. `models`는 기술사양서에서만 쓴다.
+- **청크는 페이지를 넘지 않는다.** 출처가 `(source, page)`로 표시되기 때문이다. 조항이 다음 페이지로 이어지면 그 페이지에서 새 청크가 된다.
+- 본문 길이는 300~1,200자를 목표로 하고 머리말을 포함해 1,500자를 넘지 않는다. 임베딩 입력 한도(8,191토큰)보다 충분히 작다.
+- 한 페이지 안에서 본문 청크를 먼저, 표 청크를 다음에 하나의 `chunk` 순번(0부터)으로 매긴다.
+- **신뢰도 낮은 표(`is_reliable=False`)는 청크를 만들지 않는다.** 그 표의 글자는 본문에 남아 있어서 본문 청크에 들어간다.
+- **수식 폰트의 읽을 수 없는 글리프(사설 영역 문자)는 청크에서 지운다.** 지워서 글자·숫자가 남지 않은 줄은 버린다. `PdfContent`의 원본은 바꾸지 않으므로 나중에 수식을 읽을 수 있게 되면 원본을 다시 쓸 수 있다.
+- 표 안의 각주 표시(`100가)`, `2,500다)`)는 지우거나 분리하지 않고 그대로 둔다.
+- **청크 본문에 모델명이나 조항 번호를 포함한다.** QA의 BM25는 본문 텍스트만 보고, 메타데이터는 보지 않는다.
+
+**안전기준 (`chunker_secure.py`)**
+- 줄 머리의 조항 번호(`6.5.1.2`)로 나눈다. 직전 조항의 다음 번호(첫 하위 조항이거나 같은 단계에서 1~5 큰 번호)일 때만 조항으로 보고, 본문 속 숫자(`89 …`, `1 000 ㎏`, `3 참조)`)는 조항으로 보지 않는다.
+- 짧은 조항은 같은 페이지 안에서 합친다(1~2단계 조항에서 새 청크를 시작). 1,200자를 넘는 조항은 줄·문장 경계에서 나눈다.
+- 본문 앞에 맥락 머리말을 붙인다: 상위 제목 `[6.5 승강로]`, 이어지는 조항 `[8.2.1.2 일반사항 계속]`, 부속서 `[부속서 Ⅴ 기계류 공간 - 접근]`.
+- 부속서(`부속서 Ⅰ` 제목이 페이지 앞 3줄 안에 있을 때)는 조항 번호 없이 처리하고 `section_title`에 부속서 제목을 넣는다.
+- 신뢰도 높은 표는 행마다 `열 이름: 값 | …` 문장으로 바꾸고, 표 제목(`[ 표 5. … ]`)을 청크마다 붙인다. 값이 한 칸뿐인 행(`비고`)은 값만 쓴다. 첫 열이 조항 번호면 그 청크의 `clause`로 쓴다.
+
+**기술사양서 (`chunker_tech.py`)**
+- 모델 이름 목록(`models`)은 박정환이 문서를 처리할 때마다 기준정보(`EquipmentModelService().list_models()`의 `name`, 원본은 `data/master/equipment_models.csv`)에서 읽어 넘긴다. PDF에서 제품명을 규칙으로 추측하면 `PASSENGER ELEVATORS` 같은 문구가 섞여 틀린 `model`이 들어가기 때문이다. 목록이 없으면 `model` 키와 머리말을 넣지 않는다.
+- 이름 매칭은 **긴 이름부터** 하고, 앞뒤에 영문·숫자가 바로 붙지 않는 **단어 경계**에서만 맞춘다(`YZER`와 `NEW YZER`가 둘 다 있을 때 짧은 쪽이 먼저 걸리지 않게). 대소문자와 단어 사이 공백 차이는 무시한다. **`model`에는 PDF 표기가 아니라 목록에 있는 이름 그대로** 넣는다. 질문 분석이 등록된 이름으로 `model`을 찾아서 철자가 다르면 청크를 못 찾는다.
+- 페이지 본문에 이름이 나오는 모델마다 그 페이지의 청크를 만들고 `[모델]` 머리말과 `model`을 둔다. **한 페이지에 모델이 둘 이상 나오면(공유 표, 소개 페이지) 같은 내용을 모델별로 복제한다.** 복제로 검색 결과에 같은 문장이 두 번 나올 수 있지만, QA(세림님)와 합의해 그대로 둔다. 모델이 나오지 않는 페이지는 `model` 없이 만든다.
+- 표는 열 이름 행(최대 3줄)을 합쳐 열 이름을 만들고(`Car Inside` + `W` → `Car Inside W`), 행마다 `열 이름: 값 | …`로 바꾼다. 병합으로 가려진 칸은 같은 열의 위 행 값으로 채우고 실제 빈 칸은 채우지 않는다.
+- 본문은 줄 단위로 묶고, 페이지 번호 줄과 글자가 30자 미만인 페이지(사진 설명 한두 줄)는 만들지 않는다.
+
+**알려진 한계**
+- 기술사양서의 `model`은 기준정보 CSV에 실제 모델이 채워져야 들어간다. 지금은 `[모델 A]` 같은 자리표시자라서 그대로면 `model` 없이 저장되고, QA의 모델 필터에 걸리지 않는다(§8). 문서는 CSV를 채운 뒤에 올려야 하고, 올린 뒤에 CSV를 고치면 문서를 삭제하고 다시 올려야 한다.
+- LUXEN 전원설비 표(23p, 25p)는 한 칸에 값이 여러 개(`550 600 700`)라 행과 값의 연결이 부정확하다.
+- 데이터 행에 숫자가 하나도 없는 표는 앞 3행을 열 이름으로 본다.
+- 가로로 병합된 칸이 데이터 행에 있으면 위 행 값이 잘못 채워질 수 있다. 이번 PDF 3개에서는 확인되지 않았다.
+- 규칙은 PDF 3개(안전기준 KC 2050-51, 엘트론, LUXEN/NEW YZER)로 만들었다. 다른 문서에는 맞지 않을 수 있다.
 
 ## 4. 청크 메타데이터 계약
 
@@ -120,9 +149,9 @@ Gradio 화면 연결과 ChromaDB 저장 파이프라인은 장영균 담당이 �
 | `document_id` | int | 전체 | MySQL `documents.id` |
 | `document_type` | str | 전체 | `tech` 또는 `secure` |
 | `doc_name` | str | 전체 | 출처에 표시할 문서명. **파일명에서 확장자를 뺀 값** = `documents.title` (예: `안전기준`) |
-| `model` | str | `tech` | 차종·모델명. 청크당 하나. PDF 표기를 그대로 쓴다(§8) |
-| `clause` | str | `secure` | 조항·절 번호 (예: `6.6.4.1.2`) |
-| `section_title` | str | `secure` | 조항·절 제목. 선택 항목 |
+| `model` | str | `tech` | 차종·모델명. 청크당 하나. 기준정보 모델 이름 중 페이지에 나온 것을 **목록의 철자 그대로** 쓴다(§3.7, §8) |
+| `clause` | str | `secure` | 조항·절 번호 (예: `6.6.4.1.2`). 표 청크는 첫 열이 조항 번호일 때만, 부속서는 없음 |
+| `section_title` | str | `secure` | 조항·절 제목, 부속서는 부속서 제목. 선택 항목 |
 | `part` | str | 태그 있을 때 | 부위 태그, 쉼표 구분 (§3.5) |
 | `task` | str | 태그 있을 때 | 작업 태그, 쉼표 구분 (§3.5) |
 
@@ -148,7 +177,9 @@ uv run --locked python -B -m unittest discover -s tests -v
 | 페이지별 텍스트 추출, 스캔본 판별 | 완료 | `pdf_text.py` |
 | 표 추출, 숫자 복원, 표 신뢰도 표시 | 완료 | `pdf_tables.py` |
 | 본문·표 통합 추출, 표 영역 중복 제거 | 완료 | `pdf_content.py` |
-| 청킹(기술사양서·안전기준), `Chunk` 구조 | 미구현 | |
+| 청킹 진입점 `chunk()` | 완료 | `chunker.py` |
+| 안전기준 청킹, `Chunk` 구조 | 완료 | `chunker_secure.py`, `models.py`, `chunk_utils.py` |
+| 기술사양서 청킹 | 완료 | `chunker_tech.py`. 모델 이름 목록(`models`)이 있어야 `model`이 채워짐 |
 | 태그 생성 (`part`, `task`) | 미구현 | |
 | 임베딩 생성 (`core.llm.embed`) | 미구현 | QA와 합의 후 |
 | 문서 등록·중복 확인, 목록·상태·삭제 서비스 | 미구현 | `features/documents/`는 비어 있음 |
@@ -160,14 +191,19 @@ PageText(page_no, text, char_count, image_count, is_low_text)           # pdf_te
 PdfText(file_name, page_count, pages)
 
 TableBlock(page_no, table_index, bbox, rows, row_count, col_count,
-           empty_ratio, is_reliable)                                    # pdf_tables.py
+           empty_ratio, is_reliable, merged)                            # pdf_tables.py
 PdfTables(file_name, page_count, tables, failed_pages)
 
 PageContent(page_no, body_text, tables, is_low_text, image_count)       # pdf_content.py
 PdfContent(file_name, page_count, pages, failed_table_pages)
 ```
 
-`Chunk`는 아직 정의되지 않았다. 확정된 형태는 `.text`(str), `.metadata`(dict), `.chunk_id`(속성)이다. 메타데이터는 §4를 따른다.
+```text
+Chunk(text, metadata)  # .chunk_id = "{document_id}:p{page}:{chunk}"      # models.py
+DocumentLike           # 청킹이 문서에서 읽는 속성: id, title, filename, doc_type
+```
+
+`TableBlock.merged`는 `rows`와 같은 크기의 표시로, True인 칸은 병합된 셀에 가려진 칸(PyMuPDF가 `None`으로 준 칸)이다. 실제로 비어 있는 칸(False)과 구분하려고 둔다. `Chunk`의 메타데이터는 §4를 따른다.
 
 ### 5.2 호출할 함수
 
@@ -191,13 +227,13 @@ PdfContent(file_name, page_count, pages, failed_table_pages)
 - 텍스트가 50자 미만인 페이지는 `is_low_text=True`다. 이미지·도면 위주 페이지일 수 있다.
 - `TableBlock.is_reliable=False`인 표(빈 셀 비율 50% 초과 또는 행·열이 모두 2 이하)는 구조가 틀렸을 수 있다. 이 표의 영역은 `body_text`에서 지우지 않고, **신뢰할 수 있는 표만** 본문에서 뺀다.
 - 표 셀의 분리된 숫자(`'0 37\n.'`)는 페이지 글자 좌표로 `0.37`처럼 복원한다. 본문에서는 같은 문제가 발견되지 않았다.
-- 표 값과 헤더를 연결한 텍스트화, 병합 헤더·병합 셀의 빈 칸 처리는 아직 하지 않았다.
+- 병합으로 가려진 칸은 `merged`로 표시한다. 표 값과 헤더를 연결한 텍스트화, 병합 헤더·병합 칸 채우기는 청킹 단계에서 한다(§3.7).
 
 ## 6. PDF 추출의 알려진 한계
 
 OCR과 Vision LLM 기반 도면·이미지 해석은 구현 범위에서 제외한다. 읽을 수 없는 스캔본·도면의 내용을 임의로 만들어내지 않는다. 테스트 PDF 3개(LUXEN/NEW YZER 카탈로그, 엘트론 기술사양서, 안전기준 KC 2050-51:2022)로 확인한 한계는 아래와 같다.
 
-- **안전기준 수식:** 수식 본체가 텍스트로 나오지 않는다(예: 11p, 181~182p). 변수 설명만 추출된다.
+- **안전기준 수식:** 수식 본체가 읽히지 않는다(예: 11p, 181~182p). 수식은 이미지가 아니라 한글(HWP) 수식 편집기 폰트(`HyhwpEQ`)의 글자 코드로 들어 있고(42페이지, 수식이 든 텍스트 블록 496개, 글자 종류 108개), 코드가 표준 유니코드가 아니라 텍스트로 안 나온다. 청크에서는 이 글리프를 지우므로 변수 설명(`여기서, F : 전체 수직력(N)`)만 남고 수식은 없다. 수식 복원은 추후 진행한다(후보: 글리프 → 문자 변환표, 수식 영역 비전 LLM).
 - **그림·도면:** 안전기준 그림 안의 치수, 엘트론의 도면 기호, LUXEN의 사진과 아이콘 속 글자는 추출되지 않는다. 그림 캡션과 기호 설명은 텍스트로 나온다.
 - **제조사명:** 엘트론 문서에서는 로고 이미지에만 있어서 텍스트로 나오지 않는다.
 - **표:** `find_tables()`가 놓친 표는 알 수 없고, 구조가 틀린 표가 신뢰도 높음으로 분류될 수 있다. 확인된 실패 사례는 LUXEN 26·27p다.
@@ -214,17 +250,20 @@ OCR과 Vision LLM 기반 도면·이미지 해석은 구현 범위에서 제외�
 | 단계 | 시그니처 | 상태 |
 |---|---|---|
 | 추출 | `extract_pdf_content(path) -> PdfContent` | 완료 |
-| 청킹 | `chunk(document: Document, content: PdfContent) -> list[Chunk]` | 미구현 |
+| 청킹 | `chunk(document, content, models=None) -> list[Chunk]` | 완료 |
 | 태그 | `tag(chunks: Sequence[Chunk]) -> list[Chunk]` | 미구현 |
 | 임베딩 | `embed(texts: list[str]) -> list[list[float]]` | 미구현 |
 
 - `tag`는 입력과 같은 순서·길이로 돌려주고, 태그가 있는 청크만 `metadata`에 `part`·`task`를 추가한 새 `Chunk`를 돌려준다.
-- 현재 `features/processing/pipeline.py`(feat/50-ingest-pipeline)의 `IngestSteps`는 옛 시그니처(`is_scanned`, `extract_text`, `extract_tables`, `chunk(document, pages, tables)`)라서 위 합의에 맞게 박정환이 수정할 예정이다.
+- `IngestSteps`는 합의한 시그니처(`extract`, `chunk`, `tag`, `embed`)로 develop에 반영됐다(PR #52). `chunk`의 `models`는 박정환이 문서를 처리할 때마다 `EquipmentModelService().list_models()`의 이름을 읽어 넘기는 함수로 감싸서 `IngestSteps.chunk`에 연결한다. 청킹 쪽은 `chunk(document, content, models=None)` 시그니처를 유지한다. `document`는 `id`, `title`, `filename`, `doc_type`과 함께 파이프라인이 읽는 `file_path`를 모두 가져야 한다(`get_document()`가 제공).
+- 실제 PDF 3개의 청크가 `Indexer.prepare()` 검증을 통과하고, 가짜 저장소로 `IngestPipeline`이 완료 기록까지 가는 것을 테스트로 확인했다. 실제 ChromaDB 서버 저장과 실제 임베딩 호출은 확인하지 않았다.
 - `Indexer.prepare()`가 청크에서 검사하는 조건: `text`는 공백이 아닌 문자열, `source`는 비어 있지 않은 `str`, `page`는 1 이상 `int`, `chunk`는 0 이상 `int`, `document_id`·`document_type`은 문서와 같은 값, 값은 `str/int/float/bool`만, 같은 `(page, chunk)`는 한 번만. 이 조건을 어기면 `ValueError`다.
 - 스캔본은 `ScannedPdfError`로 오고, `pipeline._error_text`는 `IngestError` 외 예외를 "예외이름 (see server log)"로만 기록한다. 박정환의 어댑터가 사용자용 문구로 바꾼다.
 - 완료할 때 `set_status(id, "COMPLETED", chunk_count=저장한 청크 수)`로 청크 수를 넘긴다.
 
 ### 7.2 문서관리 → 박정환 (`DocumentService`)
+
+> DB 정의가 바뀌었을 수 있다. §7.4의 "변경 확인 필요"를 먼저 본다.
 
 이름과 입출력은 합의했고 아직 구현하지 않았다. 아래는 DB 담당이 만든 `documents` 테이블(§7.4)을 기준으로 한다.
 
@@ -256,13 +295,15 @@ n = upload_embeddings(doc_type, collection_name, ids, embeddings, documents, met
 ```
 
 - `doc_type`은 `"tech"` 또는 `"secure"`이고, 유형마다 접속하는 서버가 다르다. 컬렉션 이름은 인자로 받는다.
-- **컬렉션은 기술 `tech_docs`, 안전 `safety_docs`로 확정**됐다(박정환 전달). QA의 `retriever.py`는 기술 문서 컬렉션을 임시 이름 `manual_docs`로 쓰고 있어 `tech_docs`로 바꿔야 한다.
+- **컬렉션은 기술 `tech_docs`, 안전 `safety_docs`로 확정**됐다(박정환 전달). QA의 `retriever.py`(`config.MANUAL_COLLECTION`)도 기본값이 `tech_docs`로 같음을 확인했다(#83).
 - `ids`, `embeddings`, `documents`, `metadatas`는 같은 길이여야 하고, 같은 id를 다시 보내면 덮어쓴다(upsert).
 - 컬렉션은 처음 저장할 때 임베딩 차원이 고정된다. 다른 차원은 저장하지 않는다.
 - **거리 방식은 L2(Chroma 기본값)로 둔다.** QA의 `distance_to_similarity`가 `1 - d/2`로 L2를 가정하므로, cosine 컬렉션을 만들면 유사도가 틀려진다. 바꾸려면 QA와 먼저 합의한다.
 - 두 서버에는 현재 인증이 없다. 자세한 사용법은 `docs/VectorDBConnector.md`를 따른다.
 
 ### 7.4 문서관리 → MySQL
+
+> **변경 확인 필요:** DB 담당이 이후 전달한 정의(`documents_info`)는 아래 표와 다르다. 컬럼은 `filename`(확장자 포함 여부 불명), `document_type`, `department_id`(NULL 허용), `status` ENUM(`PROCESSING`/`COMPLETED`/`FAILED`), `upload_at`, `updated_at`이고, 중복 판정은 `UNIQUE (filename, document_type)`이다. `title_hash`, `chunk_count`, 원본 경로, 실패 사유 컬럼은 없다. 인덱스 `idx_documents_status_created`가 테이블에 없는 컬럼 `created_at`을 가리켜서 그대로는 만들어지지 않는다. 어느 정의가 최종인지 DB 담당이 확인하면 §3.2, §3.3, §7.2, §7.4를 함께 고친다.
 
 - `util/mysql_connection.py`의 `fetch_all(sql, params)`, `execute(sql, params)`로 SQL을 직접 보낸다. 값은 `:이름` 자리표시자로 넘기고 SQL 문자열에 이어 붙이지 않는다. `execute`는 영향 행 수만 반환하고 `lastrowid`는 주지 않는다. 자세한 사용법은 `docs/MySqlConnector.md`를 따른다.
 - `core/models/`는 비어 있고 ORM 모델은 쓰지 않는다. raw SQL 방식을 따른다.
@@ -303,12 +344,13 @@ n = upload_embeddings(doc_type, collection_name, ids, embeddings, documents, met
 | 원본 PDF 저장 위치·방식(영속 볼륨 여부), 기준 폴더 환경변수 | DB 담당·박정환 |
 | 남아 있는 ChromaDB 테스트 데이터의 차원(1536 vs 3072) 정리 | DB 담당 |
 | 분류표의 **부위·작업 표준 태그 목록**. 받기 전에는 자유 생성, 받으면 목록 안에서만 선택 | QA·기준정보 담당 |
-| 기준정보의 **모델 ID 목록**. 받기 전에는 PDF 표기(예: `LUXEN`, `NEW YZER`)를 그대로 `model`에 넣는다 | QA·기준정보 담당 |
 | `chunk`를 0부터 시작하는 것, `model`·`clause` 같은 키가 없는 청크의 처리 | QA |
-| `core.llm.embed` 추가, QA의 `embed` 기본값 교체 시점, QA `retriever.py`의 `manual_docs` → `tech_docs` 변경 | QA |
-| `IngestSteps`·`Indexer`를 합의한 시그니처로 바꾸는 시점, 상태 전이 검증 수용 여부, `chunk_count` 전달, 삭제 중간 실패 처리 | 박정환 |
-| 신뢰도 낮은 표를 청크로 만들지 여부 | 장영균 |
-| 수식·도면 페이지에 OCR/Vision을 나중에 추가할지 | 팀 합의 |
+| `core.llm.embed` 추가, QA의 `embed` 기본값 교체 시점 | QA |
+| 상태 전이 검증 수용 여부, 삭제 중간 실패 처리 | 박정환 |
+| `data/master/equipment_models.csv`에 실제 설비 모델(제조사·모델명·정격 속도·하중·용도·구동 방식) 채우기. 지금은 자리표시자라 `model` 없이 저장된다 | 박정환(CSV 작성), 장영균(PDF에서 인식되는 표기 제공) |
+| `model` 키가 없는 청크(모델이 안 나오는 페이지)를 모델 필터가 제외해도 되는지. 모델별 복제 청크는 그대로 두기로 합의함 | QA |
+| 안전기준 수식(`HyhwpEQ` 글리프) 복원 방식과 시점 | 장영균 |
+| 도면 페이지에 OCR/Vision을 추가할지 | 팀 합의 |
 
 ## 9. 작업 규칙
 
