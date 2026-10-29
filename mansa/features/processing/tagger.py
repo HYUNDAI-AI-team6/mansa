@@ -4,6 +4,7 @@
 순위에 반영되기 때문이다. LLM이 고른 값도 본문에 근거가 있는 표준 이름만 남긴다.
 """
 
+import logging
 import re
 from collections import Counter
 from collections.abc import Callable, Sequence
@@ -14,6 +15,8 @@ from pydantic import BaseModel
 from core import llm
 from features.master.taxonomy import TaxonomyService
 from features.processing.models import Chunk
+
+logger = logging.getLogger(__name__)
 
 # LLM 한 번에 보낼 청크 수. 청크가 최대 1,500자라 한 요청이 3만 자 안팎이 되지 않게 잡았다.
 BATCH_SIZE = 15
@@ -161,10 +164,14 @@ def request_tags(
 ) -> list[dict]:
     """청크 배치를 LLM에 보내 청크별 태그 후보({"id", "part", "task"}) 목록을 받는다. 값은 검증하지 않은 그대로다.
 
-    유료 외부 API(OpenAI)를 호출한다. 재시도 후에도 실패하면 complete가 LlmError를 발생시킨다.
+    유료 외부 API(OpenAI)를 호출한다. 재시도 후에도 실패하면 complete가 LlmError를 발생시키고,
+    응답에 "chunks" 목록이 없으면 ValueError를 발생시킨다.
     """
     result = complete("TAG", build_prompt(vocabulary, batch), _BatchOutput)
-    return list(result["chunks"])
+    items = result.get("chunks") if isinstance(result, dict) else None
+    if not isinstance(items, list):
+        raise ValueError("tag response has no chunks list")
+    return items
 
 
 def _clean(
@@ -242,16 +249,24 @@ def tag(
 
     부위가 본문에 있는 청크만 BATCH_SIZE개씩 묶어 LLM에 보내고, 결과는 청크 id로만 대응시킨다.
     태그가 붙은 청크만 metadata에 part·task가 추가된 새 Chunk가 되고 나머지는 그대로다. 입력 청크는 바꾸지 않는다.
-    유료 외부 API(OpenAI)를 호출한다.
+    배치 하나가 실패하면(호출 오류, 응답 형식 오류) 그 배치의 청크는 태그 없이 두고 나머지는 계속한다.
+    그래서 문서 처리를 멈추는 예외를 내지 않는다. 유료 외부 API(OpenAI)를 호출한다.
     """
     result = list(chunks)
     indexes = candidate_indexes(chunks, vocabulary)
     for start in range(0, len(indexes), BATCH_SIZE):
         positions = indexes[start : start + BATCH_SIZE]
         batch = [chunks[i] for i in positions]
-        items = match_items(batch, request_tags(vocabulary, batch, complete))
-        for position in positions:
-            item = items.get(chunks[position].chunk_id)
-            if item is not None:
-                result[position] = apply_tags(chunks[position], item, vocabulary)
+        try:
+            items = match_items(batch, request_tags(vocabulary, batch, complete))
+            tagged = {
+                position: apply_tags(chunks[position], items[chunks[position].chunk_id], vocabulary)
+                for position in positions
+                if chunks[position].chunk_id in items
+            }
+        except Exception as exc:  # 한 배치의 실패가 문서 전체 처리를 막지 않게 한다
+            logger.warning("tag batch skipped: %s chunks starting at %s (%s)", len(batch), batch[0].chunk_id, type(exc).__name__)
+            continue
+        for position, chunk in tagged.items():
+            result[position] = chunk
     return result

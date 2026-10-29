@@ -368,5 +368,64 @@ class TagTest(unittest.TestCase):
         self.assertEqual(result[-1].metadata["part"], "완충기")
 
 
+class TagFailureTest(unittest.TestCase):
+    def chunks(self, count: int) -> list[Chunk]:
+        return [make_chunk("완충기 점검", index=i) for i in range(count)]
+
+    def test_failed_batch_is_left_untagged_and_others_continue(self) -> None:
+        chunks = self.chunks(BATCH_SIZE + 1)
+        calls = []
+
+        def complete(workflow, prompt, schema):
+            calls.append(prompt)
+            if len(calls) == 1:
+                raise RuntimeError("boom")
+            return {"chunks": [item(chunks[-1].chunk_id, ["완충기"])]}
+
+        with self.assertLogs("features.processing.tagger", level="WARNING") as logs:
+            result = tag(chunks, vocabulary(), complete)
+
+        self.assertEqual(len(result), len(chunks))
+        self.assertTrue(all("part" not in c.metadata for c in result[:BATCH_SIZE]))
+        self.assertEqual(result[-1].metadata["part"], "완충기")
+        self.assertIn("RuntimeError", logs.output[0])
+        self.assertNotIn("boom", logs.output[0])
+
+    def test_malformed_response_leaves_the_batch_untagged(self) -> None:
+        chunks = self.chunks(2)
+
+        for bad in ({}, {"chunks": None}, {"chunks": "x"}):
+            with self.subTest(bad=bad), self.assertLogs("features.processing.tagger", level="WARNING"):
+                result = tag(chunks, vocabulary(), lambda *a, bad=bad: bad)
+
+            self.assertEqual(result, chunks)
+
+    def test_garbage_items_do_not_raise(self) -> None:
+        chunks = self.chunks(1)
+
+        result = tag(chunks, vocabulary(), lambda *a: {"chunks": ["x", None, {"id": chunks[0].chunk_id, "part": 5}]})
+
+        self.assertEqual(result, chunks)
+
+    def test_all_batches_failing_returns_the_input_unchanged(self) -> None:
+        chunks = self.chunks(BATCH_SIZE * 2)
+
+        def complete(*args):
+            raise ConnectionError
+
+        with self.assertLogs("features.processing.tagger", level="WARNING") as logs:
+            result = tag(chunks, vocabulary(), complete)
+
+        self.assertEqual(result, chunks)
+        self.assertEqual(len(logs.output), 2)
+
+    def test_keyboard_interrupt_is_not_swallowed(self) -> None:
+        def complete(*args):
+            raise KeyboardInterrupt
+
+        with self.assertRaises(KeyboardInterrupt):
+            tag(self.chunks(1), vocabulary(), complete)
+
+
 if __name__ == "__main__":
     unittest.main()
