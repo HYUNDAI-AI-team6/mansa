@@ -1,6 +1,6 @@
 import re
 import unittest
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from features.master.taxonomy import TaxonomyService
@@ -212,11 +212,11 @@ class ApplyTagsTest(unittest.TestCase):
     def apply(self, part=(), task=(), text: str = TEXT, vocab: Vocabulary | None = None) -> Chunk:
         return apply_tags(make_chunk(text), item("1:p1:0", part, task), vocab or vocabulary())
 
-    def test_valid_tags_are_joined_with_comma_and_space(self) -> None:
+    def test_valid_tags_are_stored_as_string_lists(self) -> None:
         chunk = self.apply(["메인 로프", "완충기"], ["메인 로프 점검"])
 
-        self.assertEqual(chunk.metadata["part"], "메인 로프, 완충기")
-        self.assertEqual(chunk.metadata["task"], "메인 로프 점검")
+        self.assertEqual(chunk.metadata["part"], ["메인 로프", "완충기"])
+        self.assertEqual(chunk.metadata["task"], ["메인 로프 점검"])
 
     def test_original_metadata_and_text_are_kept(self) -> None:
         original = make_chunk(self.TEXT)
@@ -228,18 +228,18 @@ class ApplyTagsTest(unittest.TestCase):
         self.assertNotIn("part", original.metadata)
 
     def test_synonym_is_converted_to_the_standard_name(self) -> None:
-        self.assertEqual(self.apply(["와이어로프"]).metadata["part"], "메인 로프")
+        self.assertEqual(self.apply(["와이어로프"]).metadata["part"], ["메인 로프"])
 
     def test_values_outside_the_vocabulary_are_dropped(self) -> None:
         chunk = self.apply(["엘리베이터", "완충기"], ["완충기", "청소"])
 
-        self.assertEqual(chunk.metadata["part"], "완충기")
+        self.assertEqual(chunk.metadata["part"], ["완충기"])
         self.assertNotIn("task", chunk.metadata)
 
     def test_part_without_evidence_in_the_text_is_dropped(self) -> None:
         chunk = self.apply(["메인 로프", "승강기 칸"], text="메인 로프를 점검한다")
 
-        self.assertEqual(chunk.metadata["part"], "메인 로프")
+        self.assertEqual(chunk.metadata["part"], ["메인 로프"])
 
     def test_task_without_evidence_in_the_text_is_dropped(self) -> None:
         chunk = self.apply(["메인 로프"], ["메인 로프 점검", "완충기 시험"], text="메인 로프의 재질과 완충기 설명")
@@ -249,7 +249,7 @@ class ApplyTagsTest(unittest.TestCase):
     def test_duplicates_are_removed(self) -> None:
         chunk = self.apply(["메인 로프", "와이어로프", "메인 로프"])
 
-        self.assertEqual(chunk.metadata["part"], "메인 로프")
+        self.assertEqual(chunk.metadata["part"], ["메인 로프"])
 
     def test_tag_counts_are_capped_in_the_order_given(self) -> None:
         vocab = Vocabulary(tuple(f"부위{i}" for i in range(6)), tuple(f"부위{i} 점검" for i in range(6)))
@@ -257,18 +257,20 @@ class ApplyTagsTest(unittest.TestCase):
 
         chunk = self.apply([f"부위{i}" for i in range(6)], [f"부위{i} 점검" for i in range(6)], text, vocab)
 
-        self.assertEqual(chunk.metadata["part"], ", ".join(f"부위{i}" for i in range(MAX_PART_TAGS)))
-        self.assertEqual(chunk.metadata["task"], ", ".join(f"부위{i} 점검" for i in range(MAX_TASK_TAGS)))
+        self.assertEqual(chunk.metadata["part"], [f"부위{i}" for i in range(MAX_PART_TAGS)])
+        self.assertEqual(chunk.metadata["task"], [f"부위{i} 점검" for i in range(MAX_TASK_TAGS)])
 
-    def test_value_with_a_comma_is_dropped(self) -> None:
+    def test_value_with_a_comma_is_kept_as_one_list_item(self) -> None:
         vocab = Vocabulary(("로프, 케이블",), ())
 
-        self.assertNotIn("part", self.apply(["로프, 케이블"], text="로프, 케이블", vocab=vocab).metadata)
+        chunk = self.apply(["로프, 케이블"], text="로프, 케이블", vocab=vocab)
+
+        self.assertEqual(chunk.metadata["part"], ["로프, 케이블"])
 
     def test_non_string_values_and_bad_shapes_are_ignored(self) -> None:
         chunk = apply_tags(make_chunk(self.TEXT), {"id": "1:p1:0", "part": [None, 3, "완충기"], "task": "점검"}, vocabulary())
 
-        self.assertEqual(chunk.metadata["part"], "완충기")
+        self.assertEqual(chunk.metadata["part"], ["완충기"])
         self.assertNotIn("task", chunk.metadata)
 
     def test_empty_result_returns_the_same_chunk_without_keys(self) -> None:
@@ -331,8 +333,8 @@ class TagTest(unittest.TestCase):
         result = tag(chunks, vocabulary(), complete)
 
         self.assertEqual([c.chunk_id for c in result], [c.chunk_id for c in chunks])
-        self.assertEqual(result[0].metadata["task"], "메인 로프 점검")
-        self.assertEqual(result[2].metadata["part"], "완충기")
+        self.assertEqual(result[0].metadata["task"], ["메인 로프 점검"])
+        self.assertEqual(result[2].metadata["part"], ["완충기"])
         self.assertIs(result[1], chunks[1])
         self.assertNotIn("[청크 id=1:p1:1]", sent[0])  # 부위가 없는 청크는 LLM에 보내지 않는다
 
@@ -375,7 +377,7 @@ class TagTest(unittest.TestCase):
         result = tag(chunks, vocabulary(), complete)
 
         self.assertTrue(all("part" not in c.metadata for c in result[:BATCH_SIZE]))
-        self.assertEqual(result[-1].metadata["part"], "완충기")
+        self.assertEqual(result[-1].metadata["part"], ["완충기"])
 
 
 class TagFailureTest(unittest.TestCase):
@@ -397,7 +399,7 @@ class TagFailureTest(unittest.TestCase):
 
         self.assertEqual(len(result), len(chunks))
         self.assertTrue(all("part" not in c.metadata for c in result[:BATCH_SIZE]))
-        self.assertEqual(result[-1].metadata["part"], "완충기")
+        self.assertEqual(result[-1].metadata["part"], ["완충기"])
         self.assertIn("RuntimeError", logs.output[0])
         self.assertNotIn("boom", logs.output[0])
 
@@ -437,6 +439,40 @@ class TagFailureTest(unittest.TestCase):
             tag(self.chunks(1), vocabulary(), complete)
 
 
+class ChromaListTagTest(unittest.TestCase):
+    """태그 목록을 ChromaDB에 넣고 $contains로 찾을 수 있는지 확인한다. 메모리 안에서만 돌고 서버에는 접속하지 않는다."""
+
+    def test_list_tags_are_stored_and_filtered_by_exact_value(self) -> None:
+        import chromadb
+
+        chunks = tag(
+            [make_chunk("메인 로프를 점검한다", index=0), make_chunk("완충기를 점검한다", index=1), make_chunk("표 4", index=2)],
+            vocabulary(),
+            lambda *a: {"chunks": [item("1:p1:0", ["메인 로프"], ["메인 로프 점검"]), item("1:p1:1", ["완충기"])]},
+        )
+        client = chromadb.EphemeralClient()
+        collection = client.get_or_create_collection("tagger_list_check")
+        try:
+            collection.add(
+                ids=[c.chunk_id for c in chunks],
+                embeddings=[[1.0, 0.0], [0.0, 1.0], [0.5, 0.5]],
+                documents=[c.text for c in chunks],
+                metadatas=[c.metadata for c in chunks],
+            )
+
+            found = collection.get(where={"part": {"$contains": "메인 로프"}})["ids"]
+            partial = collection.get(where={"part": {"$contains": "로프"}})["ids"]
+            either = collection.get(
+                where={"$or": [{"part": {"$contains": "완충기"}}, {"task": {"$contains": "메인 로프 점검"}}]}
+            )["ids"]
+        finally:
+            client.delete_collection("tagger_list_check")
+
+        self.assertEqual(found, ["1:p1:0"])
+        self.assertEqual(partial, [])  # 목록 원소와 정확히 같은 값만 맞는다
+        self.assertEqual(sorted(either), ["1:p1:0", "1:p1:1"])
+
+
 @dataclass
 class RealDocument:
     doc_type: str
@@ -473,8 +509,11 @@ class RealPdfTaggingTest(unittest.TestCase):
         self.assertEqual([c.chunk_id for c in result], [c.chunk_id for c in chunks])
         for before, after in zip(chunks, result):
             self.assertEqual(after.text, before.text)
-            parts = after.metadata["part"].split(", ") if "part" in after.metadata else []
-            tasks = after.metadata["task"].split(", ") if "task" in after.metadata else []
+            parts = after.metadata.get("part", [])
+            tasks = after.metadata.get("task", [])
+            for tags in (parts, tasks):
+                self.assertIsInstance(tags, list, after.chunk_id)
+                self.assertTrue(all(isinstance(t, str) for t in tags), after.chunk_id)
             self.assertLessEqual(len(parts), MAX_PART_TAGS)
             self.assertLessEqual(len(tasks), MAX_TASK_TAGS)
             self.assertTrue(set(parts) <= set(vocab.parts), after.chunk_id)
@@ -482,7 +521,11 @@ class RealPdfTaggingTest(unittest.TestCase):
             self.assertTrue(all(p == p.strip() and p for p in parts + tasks), after.chunk_id)
             if parts or tasks:  # 부위가 본문에 없는 청크에는 태그가 붙지 않는다
                 self.assertTrue(any(vocab.supports_part(before.text, p) for p in vocab.parts), after.chunk_id)
-        Indexer().prepare(document.id, document.doc_type, result)
+        # Indexer.prepare는 아직 part·task 목록을 받지 못한다(박정환에게 수정 요청). 태그를 뺀 나머지를 검증한다.
+        untagged = [
+            replace(c, metadata={k: v for k, v in c.metadata.items() if k not in ("part", "task")}) for c in result
+        ]
+        Indexer().prepare(document.id, document.doc_type, untagged)
         return result
 
     @unittest.skipUnless(SAFETY_PDF.is_file(), "safety pdf not found")

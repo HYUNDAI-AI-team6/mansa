@@ -2,6 +2,7 @@
 
 태그는 분류표의 표준 이름만 쓴다. 질의응답이 질문에서 뽑은 부위·작업과 청크의 태그가 글자까지 같아야
 순위에 반영되기 때문이다. LLM이 고른 값도 본문에 근거가 있는 표준 이름만 남긴다.
+part·task는 표준 이름의 문자열 목록으로 저장한다(ChromaDB의 `$contains` 필터가 목록 원소와 정확히 같은 값만 찾는다).
 """
 
 import logging
@@ -24,7 +25,6 @@ BATCH_SIZE = 5
 # 청크 하나에 붙일 태그의 최대 개수. 검색이 겹치는 태그 수로 순위를 정해서 태그가 많은 청크가 유리해지는 것을 막는다.
 MAX_PART_TAGS = 3
 MAX_TASK_TAGS = 2
-TAG_SEPARATOR = ", "
 
 # 한 글자 동의어("카")는 다른 단어의 일부("카문", "카드")에 걸리지 않게, 앞이 글자가 아니고 뒤가 조사이거나
 # 글자가 아닐 때만 본문에 있다고 본다.
@@ -184,7 +184,7 @@ def _clean(
 ) -> list[str]:
     """LLM이 준 값 목록에서 쓸 수 있는 표준 이름만 앞에서부터 limit개 남긴다.
 
-    문자열이 아닌 값, 분류표에 없는 값(동의어는 표준 이름으로 바꾼 뒤 판단), 쉼표가 든 값, 중복,
+    문자열이 아닌 값, 분류표에 없는 값(동의어는 표준 이름으로 바꾼 뒤 판단), 중복,
     본문에 근거가 없는 값은 버린다.
     """
     if not isinstance(values, list):
@@ -194,7 +194,7 @@ def _clean(
         if not isinstance(value, str):
             continue
         name = vocabulary.standard(value, known)
-        if name is None or TAG_SEPARATOR.strip() in name or name in result or not supported(name):
+        if name is None or name in result or not supported(name):
             continue
         result.append(name)
         if len(result) == limit:
@@ -221,7 +221,8 @@ def match_items(batch: Sequence[Chunk], items: Sequence[object]) -> dict[str, di
 def apply_tags(chunk: Chunk, item: dict, vocabulary: Vocabulary) -> Chunk:
     """청크 하나에 LLM 결과를 검증해 붙인 새 Chunk를 돌려준다. 붙일 태그가 없으면 같은 청크를 돌려준다.
 
-    part·task는 ", "로 이은 문자열로 저장한다. 비는 쪽은 키를 만들지 않는다(빈 문자열을 저장하지 않는다).
+    part·task는 표준 이름의 문자열 목록(list[str])으로 저장한다. 비는 쪽은 키를 만들지 않는다
+    (ChromaDB가 빈 목록을 저장하지 못한다).
     """
     parts = _clean(
         item.get("part"), vocabulary.parts, lambda name: vocabulary.supports_part(chunk.text, name),
@@ -235,9 +236,9 @@ def apply_tags(chunk: Chunk, item: dict, vocabulary: Vocabulary) -> Chunk:
         return chunk
     metadata = dict(chunk.metadata)
     if parts:
-        metadata["part"] = TAG_SEPARATOR.join(parts)
+        metadata["part"] = parts
     if tasks:
-        metadata["task"] = TAG_SEPARATOR.join(tasks)
+        metadata["task"] = tasks
     return replace(chunk, metadata=metadata)
 
 
