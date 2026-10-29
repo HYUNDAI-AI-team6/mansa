@@ -59,7 +59,7 @@ def _build_page(key: str, store: gr.State, user: gr.State):
     builders = {
         "qa": lambda: qa.build(),
         "history": lambda: history.build(),
-        "doc_view": lambda: doc_view.build(store),
+        "doc_view": lambda: doc_view.build(),
         "support": lambda: support.build(),
         "documents": documents.build,
         "upload": lambda: upload.build(store),
@@ -75,8 +75,12 @@ def _build_sidebar(role: str) -> tuple[gr.Column, gr.HTML, dict, gr.Button]:
     """권한별 왼쪽 메뉴바(사용자: 흰색, 관리자: 파란색)를 만든다."""
     admin = role == "admin"
     classes = ["sidebar", "admin"] if admin else ["sidebar"]
-    with gr.Column(elem_classes=classes, visible=False, scale=0, min_width=96) as column:
-        logo = ui.click_list(ui.logo_html(40, admin, link=True), elem_classes=["logo-block"])
+    with gr.Column(
+        elem_classes=classes, visible=False, scale=0, min_width=96
+    ) as column:
+        logo = ui.click_list(
+            ui.logo_html(40, admin, link=True), elem_classes=["logo-block"]
+        )
         buttons = {
             p.key: gr.Button(p.label, elem_classes=["nav-btn", f"ic-{p.icon}"])
             for p in navigation.pages_for(role)
@@ -102,7 +106,9 @@ def _build_shell(store: gr.State, user: gr.State) -> Shell:
     sides = {"user": side_user, "admin": side_admin}
     navs = {**nav_user, **nav_admin}
     logos = {"user": logo_user, "admin": logo_admin}
-    return Shell(view, sides, navs, logos, [logout_user, logout_admin], header, pages, resettable)
+    return Shell(
+        view, sides, navs, logos, [logout_user, logout_admin], header, pages, resettable
+    )
 
 
 def _nav_classes(key: str, active: bool) -> list[str]:
@@ -117,7 +123,12 @@ def _show(key: str, user: dict | None, nav_keys: list[str]) -> tuple:
     header = ui.page_header(page.label, page.description, user)
     pages = [gr.Column(visible=p.key == key) for p in PAGES]
     navs = [gr.Button(elem_classes=_nav_classes(k, k == key)) for k in nav_keys]
-    return (header, *pages, *navs, gr.Timer(active=False))  # 어느 화면으로 가든 문서 새로고침은 끈다
+    return (
+        header,
+        *pages,
+        *navs,
+        gr.Timer(active=False),
+    )  # 어느 화면으로 가든 문서 새로고침은 끈다
 
 
 def _then_reset(event, view) -> None:
@@ -130,11 +141,15 @@ def _wire_nav(shell: Shell, user: gr.State) -> None:
     """메뉴 버튼을 누르면 그 화면으로 바꾸고, 필요하면 화면을 처음 상태로 되돌린다."""
     nav_keys = list(shell.navs)
     for key, button in shell.navs.items():
-        event = button.click(lambda u, k=key: _show(k, u, nav_keys), user, shell.nav_outputs())
+        event = button.click(
+            lambda u, k=key: _show(k, u, nav_keys), user, shell.nav_outputs()
+        )
         _then_reset(event, shell.resettable.get(key))
     for role, logo in shell.logos.items():  # 로고를 누르면 그 권한의 첫 메뉴로
         home = HOME[role]
-        event = logo.select(lambda u, k=home: _show(k, u, nav_keys), user, shell.nav_outputs())
+        event = logo.select(
+            lambda u, k=home: _show(k, u, nav_keys), user, shell.nav_outputs()
+        )
         _then_reset(event, shell.resettable.get(home))
 
 
@@ -145,7 +160,9 @@ def _wire_links(shell: Shell, user: gr.State) -> None:
     """
     nav_keys = list(shell.navs)
     upload_btn = shell.resettable["documents"].links["upload"]
-    event = upload_btn.click(lambda u: _show("upload", u, nav_keys), user, shell.nav_outputs())
+    event = upload_btn.click(
+        lambda u: _show("upload", u, nav_keys), user, shell.nav_outputs()
+    )
     _then_reset(event, shell.resettable["upload"])
 
     picked = gr.State(0)
@@ -223,7 +240,6 @@ def _wire_logout(
     """
     fields = [box for form in forms for box in (form.user_id, form.password)]
 
-
     def logout(saved: dict) -> tuple:
         """DB 의 로그인 세션을 지우고 로그인 화면을 다시 보여 주는 값."""
         saved = saved or {}
@@ -233,6 +249,7 @@ def _wire_logout(
     for button in shell.logouts:
         event = button.click(None, js=login.RESET_JS)
         event.then(logout, session, [*states, *layout_outputs, *fields, session])
+
 
 def _wire_resume(
     demo: gr.Blocks,
@@ -256,7 +273,12 @@ def _wire_resume(
         return (account, *_layout(account["role"]), *shown, saved)
 
     event = demo.load(resume, session, outputs)
-    for role, key in HOME.items():  # 되살린 권한의 첫 화면만 다시 그린다(숨은 화면은 건드리지 않는다)
+    for (
+        role,
+        key,
+    ) in (
+        HOME.items()
+    ):  # 되살린 권한의 첫 화면만 다시 그린다(숨은 화면은 건드리지 않는다)
         view = shell.resettable[key]
 
         def reset_if_role(u, *args, role=role, view=view):
@@ -265,7 +287,6 @@ def _wire_resume(
             return tuple([gr.skip()] * len(view.reset_outputs))
 
         event.then(reset_if_role, [user, *view.reset_inputs], view.reset_outputs)
-
 
 
 def main():
@@ -282,7 +303,9 @@ def main():
         _wire_links(shell, user)
         _wire_login("user", user_form, shell, user, layout_outputs, session)
         _wire_login("admin", admin_form, shell, user, layout_outputs, session)
-        _wire_logout(shell, [user, store], layout_outputs, [user_form, admin_form], session)
+        _wire_logout(
+            shell, [user, store], layout_outputs, [user_form, admin_form], session
+        )
         _wire_resume(demo, shell, user, layout_outputs, session)
 
     # 평가 결과 CSV는 실행 폴더(mansa/) 밖인 저장소 루트 eval/save/에 있어 내려받기를 허용해야 한다.
