@@ -49,10 +49,41 @@ class PrepareTest(unittest.TestCase):
         self.assertEqual(records[0].metadata["score"], 0)
         self.assertIs(records[0].metadata["flag"], False)
 
-    def test_rejects_list_tags(self):
-        """태그는 쉼표로 이은 문자열이다. 옛 방식의 리스트는 저장하지 않는다."""
+    def test_keeps_tag_lists_for_part_and_task(self):
+        original = meta(part=["메인 로프", "완충기"], task=["메인 로프 점검"])
+        records = Indexer().prepare(7, "tech", [FakeChunk("본문", original)])
+        self.assertEqual(records[0].metadata["part"], ["메인 로프", "완충기"])
+        self.assertEqual(records[0].metadata["task"], ["메인 로프 점검"])
+
+    def test_tag_list_is_copied_and_input_is_unchanged(self):
+        tags = ["메인 로프", " "]
+        records = Indexer().prepare(7, "tech", [FakeChunk("본문", meta(part=tags))])
+        self.assertEqual(records[0].metadata["part"], ["메인 로프"])
+        self.assertIsNot(records[0].metadata["part"], tags)
+        self.assertEqual(tags, ["메인 로프", " "])
+
+    def test_tuple_tags_become_a_list(self):
+        records = Indexer().prepare(7, "tech", [FakeChunk("본문", meta(part=("완충기",)))])
+        self.assertEqual(records[0].metadata["part"], ["완충기"])
+
+    def test_empty_or_blank_tag_list_drops_the_key(self):
+        """ChromaDB가 빈 목록을 저장하지 못하므로 키를 뺀다."""
+        records = Indexer().prepare(7, "tech", [FakeChunk("본문", meta(part=[], task=["", "  "]))])
+        self.assertNotIn("part", records[0].metadata)
+        self.assertNotIn("task", records[0].metadata)
+
+    def test_comma_separated_tag_string_still_passes(self):
+        records = Indexer().prepare(7, "tech", [FakeChunk("본문", meta(part="브레이크, 캘리퍼"))])
+        self.assertEqual(records[0].metadata["part"], "브레이크, 캘리퍼")
+
+    def test_rejects_non_string_tag_elements(self):
+        for bad in ([1], ["메인 로프", None], [["중첩"]]):
+            with self.subTest(bad=bad), self.assertRaisesRegex(ValueError, "list of str"):
+                Indexer().prepare(7, "tech", [FakeChunk("본문", meta(part=bad))])
+
+    def test_lists_are_still_rejected_for_other_keys(self):
         with self.assertRaisesRegex(ValueError, "unsupported type"):
-            Indexer().prepare(7, "tech", [FakeChunk("본문", meta(part=["브레이크"]))])
+            Indexer().prepare(7, "tech", [FakeChunk("본문", meta(model=["LUXEN"]))])
 
     def test_rejects_missing_required_key(self):
         bad = meta()
