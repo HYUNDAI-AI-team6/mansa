@@ -24,11 +24,35 @@ _NUMERIC_LIKE = re.compile(r"^[\d\s.,~/×xX()+\-%]+$")
 _PAGE_NUMBER_LINE = re.compile(r"^\d{1,3}$")
 
 
+def _name_pattern(model: str) -> re.Pattern:
+    """모델 이름을 찾는 패턴을 만든다. 대소문자와 단어 사이 공백 차이는 무시한다.
+
+    앞뒤에 영문·숫자가 바로 붙어 있으면 맞지 않는다("LUXEN"이 "LUXENX"에, "NEW YZER"가 "RENEW YZER"에
+    걸리지 않게). 한글 조사는 붙어 있어도 된다("HYDRO 501과").
+    """
+    words = r"\s+".join(re.escape(word) for word in model.split())
+    return re.compile(r"(?<![A-Za-z0-9])" + words + r"(?![A-Za-z0-9])", re.IGNORECASE)
+
+
 def _page_models(page: PageContent, models: Sequence[str]) -> list[str]:
-    """페이지 본문에 이름이 나오는 모델을 처음 나온 순서대로 돌려준다. 대소문자와 공백 차이는 무시한다."""
-    text = " ".join(page.body_text.split()).lower()
-    found = [(text.find(model.lower()), model) for model in models]
-    return [model for position, model in sorted(item for item in found if item[0] >= 0)]
+    """페이지 본문에 이름이 나오는 모델을 처음 나온 순서대로 돌려준다. 돌려주는 값은 목록의 철자 그대로다.
+
+    긴 이름부터 찾고, 이미 긴 이름이 차지한 자리에는 짧은 이름을 맞추지 않는다. 목록에 "NEW YZER"와
+    "YZER"가 둘 다 있을 때 "NEW YZER"만 나온 페이지가 "YZER"로도 잡히지 않게 하려는 것이다.
+    """
+    text = " ".join(page.body_text.split())
+    taken: list[tuple[int, int]] = []
+    found: list[tuple[int, str]] = []
+    for model in sorted(models, key=lambda name: len(" ".join(name.split())), reverse=True):
+        starts = []
+        for match in _name_pattern(model).finditer(text):
+            if any(match.start() < end and start < match.end() for start, end in taken):
+                continue
+            taken.append((match.start(), match.end()))
+            starts.append(match.start())
+        if starts:
+            found.append((min(starts), model))
+    return [model for _, model in sorted(found)]
 
 
 def _header_row_indexes(rows: list[list[str]]) -> tuple[list[int], int]:
@@ -125,13 +149,15 @@ def chunk_tech(
 ) -> list[Chunk]:
     """기술사양서 추출 결과를 청크 목록으로 나눈다.
 
-    models는 모델 이름 목록이다. 페이지 본문에 이름이 나오는 모델마다 그 페이지의 청크를 하나씩
-    만들고, 본문 맨 앞에 "[모델]" 머리말을, 메타데이터에 model을 둔다. 한 페이지에 모델이 둘 이상
+    models는 모델 이름 목록(기준정보에 등록된 이름)이다. 페이지 본문에 이름이 나오는 모델마다 그
+    페이지의 청크를 하나씩 만들고, 본문 맨 앞에 "[모델]" 머리말을, 메타데이터에 model을 둔다.
+    model에는 PDF에 적힌 표기가 아니라 목록에 있는 이름 그대로 넣는다(질문 분석이 등록된 이름으로
+    찾으므로 철자가 다르면 청크를 못 찾는다). 이름 매칭은 긴 이름부터 단어 경계를 보고 한다. 한 페이지에 모델이 둘 이상
     나오면(두 모델이 공유하는 표나 소개 페이지) 같은 내용을 모델별로 복제한다. 모델이 하나도
     나오지 않거나 models가 없으면 model 없이 청크를 만든다. 신뢰도 낮은 표는 만들지 않는다.
     페이지마다 본문 청크를 먼저, 표 청크를 다음에 하나의 chunk 순번(0부터)으로 매긴다.
     """
-    names = [" ".join(model.split()) for model in models or [] if model.strip()]
+    names = list(dict.fromkeys(model for model in models or [] if model.strip()))
     chunks: list[Chunk] = []
     for page in content.pages:
         texts = _body_texts(page)

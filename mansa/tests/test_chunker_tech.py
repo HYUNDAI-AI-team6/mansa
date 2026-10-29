@@ -98,6 +98,56 @@ class ModelDetectionTest(unittest.TestCase):
 
         self.assertEqual(chunks[0].metadata["model"], "NEW YZER")
 
+    def test_longest_name_wins_over_contained_shorter_name(self) -> None:
+        page = make_page(24, "NEW YZER 모델의 승강로 사양을 설명하는 긴 문장이다. " * 3)
+
+        chunks = chunk_tech(FakeDocument(), make_content(page), ["YZER", "NEW YZER"])
+
+        self.assertEqual([c.metadata["model"] for c in chunks], ["NEW YZER"])
+
+    def test_shorter_name_still_matches_where_longer_one_is_absent(self) -> None:
+        body = "NEW YZER 모델의 설명이다. 다른 곳에서는 YZER 만 따로 언급한다. " * 3
+
+        chunks = chunk_tech(FakeDocument(), make_content(make_page(24, body)), ["YZER", "NEW YZER"])
+
+        self.assertEqual({c.metadata["model"] for c in chunks}, {"NEW YZER", "YZER"})
+
+    def test_name_must_be_a_whole_word(self) -> None:
+        page = make_page(5, "LUXENX 와 RENEW YZER 는 다른 이름이다. 설명 문장이 이어진다. " * 3)
+
+        chunks = chunk_tech(FakeDocument(), make_content(page), ["LUXEN", "NEW YZER"])
+
+        self.assertTrue(all("model" not in c.metadata for c in chunks))
+
+    def test_korean_particle_after_name_still_matches(self) -> None:
+        page = make_page(2, "ELVRO 3000과 HYDRO 501은 함께 쓰인다. 설명 문장이 이어진다. " * 3)
+
+        chunks = chunk_tech(FakeDocument(), make_content(page), ["ELVRO 3000", "HYDRO 501"])
+
+        self.assertEqual([c.metadata["model"] for c in chunks], ["ELVRO 3000", "HYDRO 501"])
+
+    def test_model_value_keeps_the_list_spelling(self) -> None:
+        page = make_page(2, "new  yzer 와 luxen 의 설명 문장이 길게 이어진다. " * 3)
+
+        chunks = chunk_tech(FakeDocument(), make_content(page), ["Luxen", "NEW YZER"])
+
+        self.assertEqual([c.metadata["model"] for c in chunks], ["NEW YZER", "Luxen"])
+        self.assertTrue(chunks[1].text.startswith("[Luxen]\n"))
+
+    def test_models_with_non_ascii_names_match(self) -> None:
+        page = make_page(2, "[모델 A] 의 사양을 설명하는 문장이다. 승강로 설명이 이어진다. " * 3)
+
+        chunks = chunk_tech(FakeDocument(), make_content(page), ["[모델 A]", "[모델 B]"])
+
+        self.assertEqual([c.metadata["model"] for c in chunks], ["[모델 A]"])
+
+    def test_duplicate_names_in_list_do_not_duplicate_chunks(self) -> None:
+        page = make_page(3, "ELVRO 3000 소개 문장이 길게 이어진다. " * 4)
+
+        chunks = chunk_tech(FakeDocument(), make_content(page), ["ELVRO 3000", "ELVRO 3000"])
+
+        self.assertEqual(len(chunks), 1)
+
     def test_page_with_two_models_is_duplicated_per_model(self) -> None:
         body = "LUXEN 과 NEW YZER 는 공통 사양을 쓴다. " * 4
 
