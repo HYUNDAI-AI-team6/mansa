@@ -43,33 +43,29 @@ Gradio 화면 연결과 ChromaDB 저장 파이프라인은 장영균 담당이 �
 | `tech` | 기술사양서 |
 | `secure` | 안전기준 문서 |
 
-`SPEC`, `SAFETY`, 한글 표기 등 다른 내부 값을 쓰지 않는다. 화면에는 "기술 문서"/"안전 문서"로 보이므로 서비스 경계에서 `tech`/`secure`로 변환한다. DB의 `documents.doc_type`이 삭제·저장 대상 ChromaDB 서버를 정한다.
+`SPEC`, `SAFETY`, 한글 표기 등 다른 내부 값을 쓰지 않는다. 화면에는 "기술 문서"/"안전 문서"로 보이므로 서비스 경계에서 `tech`/`secure`로 변환한다. DB의 `documents_info.document_type`이 삭제·저장 대상 ChromaDB 서버를 정한다.
 
 ### 3.2 문서 등록과 중복
 
-> DB 정의가 바뀌었을 수 있다. §7.4의 "변경 확인 필요"를 먼저 본다.
-
 - 버전 관리, 기존 문서 갱신, 별도 재처리 기능은 구현하지 않는다.
-- 중복 판정 키는 `documents.title_hash`(UNIQUE)다. `title`(확장자를 뺀 원래 파일명)의 해시이고, **PDF 내용의 해시가 아니다.** 파일 내용 해시(SHA-256)는 쓰지 않는다.
-- 해시 입력의 정확한 규칙(`doc_type` 포함 여부, 소문자 변환, 유니코드 NFC 정규화)은 DB 담당과 확정한다(§8). 서비스에서는 해시를 만드는 코드를 한 곳에만 두고, 규칙이 바뀌어도 그곳만 고친다.
+- 문서 테이블은 `documents_info`로 확정됐다(DB 담당 확인, 정의는 §7.4). `documents`는 DB에 없다.
+- 중복 판정 키는 `UNIQUE (filename, document_type)`이다. **PDF 내용의 해시가 아니다.** 같은 파일 이름이라도 문서 유형이 다르면 다른 문서다.
+- `filename`은 확장자를 포함해 저장한다. 서비스가 NFC로 정규화하고 확장자를 소문자 `.pdf`로 맞춘다(macOS의 NFD 한글과 `A.PDF`가 다른 문서로 등록되지 않게). 대소문자는 구분한다(DB `utf8mb4_bin`).
 - `register_document()` 규칙:
-  1. 파일명에서 `title`과 해시를 만들어 기존 문서를 확인한다.
-  2. 중복이면 PDF 저장과 MySQL 신규 등록 **전에** 거절한다.
-  3. 중복된 기존 문서의 ID를 반환한다.
+  1. 파일명을 정규화해 `(filename, document_type)`으로 기존 문서를 확인한다.
+  2. 중복이면 PDF 저장과 MySQL 신규 등록 **전에** 거절한다(`DuplicateDocumentError`).
+  3. 중복된 기존 문서의 ID를 `DuplicateDocumentError.document_id`로 돌려준다. 동시에 올려 `UNIQUE`에 걸려도 같은 오류다.
   4. 기존 문서는 자동 삭제하지 않는다.
-  5. 사용자가 문서관리 화면에서 직접 삭제한 뒤 다시 업로드한다.
+  5. 사용자가 문서관리 화면에서 직접 삭제한 뒤 다시 업로드한다. 처리에 실패한 문서도 같은 이름으로 다시 올리려면 먼저 삭제해야 한다.
 - 같은 이름에 내용이 다른 파일을 올리면 중복으로 거절된다. 이름이 다르고 내용이 같은 파일은 중복으로 잡지 못한다.
 - 업로드 화면의 중복 안내는 박정환 담당이다.
 
 ### 3.3 처리 상태
 
-> DB 정의가 바뀌었을 수 있다. §7.4의 "변경 확인 필요"를 먼저 본다.
-
-- 서비스 인터페이스에서는 `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`를 쓴다.
-- DB(`documents.status`, VARCHAR(10))에는 한글로 저장한다: `처리 중`, `완료`, `실패`. 서비스가 변환한다(PENDING·PROCESSING → `처리 중`, COMPLETED → `완료`, FAILED → `실패`). DB에서는 PENDING과 PROCESSING을 구분하지 않으므로 읽을 때는 `PROCESSING`으로 돌려준다. 화면 표시는 DB 값을 그대로 쓴다.
-- 허용 전이(제안): `처리 중` → `완료`|`실패`. `완료`·`실패`는 끝 상태다. 이 외의 전이는 `InvalidStatusTransition`이다.
-- `set_status(document_id, status, error=None, chunk_count=None)`: `COMPLETED`일 때 `chunk_count`(저장한 청크 수)를 `documents.chunk_count`에 기록한다.
-- **실패 사유:** 현재 `documents` 테이블에는 사유를 저장할 컬럼이 없다. `error_message` 컬럼 추가를 DB 담당에게 요청한다(`mansa/migrations/`에 새 번호 파일). 추가되기 전에는 `error`를 저장하지 않고 서버 로그에만 남긴다. `error`는 1,000자로 자르고 API 키나 스택 트레이스는 담지 않는다.
+- 상태는 DB의 `documents_info.status`(ENUM)를 그대로 쓴다: `PROCESSING`, `COMPLETED`, `FAILED`. `PENDING`은 쓰지 않고, 문서는 등록할 때 이미 `PROCESSING`이다. 화면은 이 값을 `처리 중`·`완료`·`실패`로 바꿔 보여준다.
+- 허용 전이: `PROCESSING` → `COMPLETED`|`FAILED`. 끝난 상태에서 다른 상태로 바꾸면 `InvalidStatusTransition`이다. 이미 같은 상태이면 아무것도 바꾸지 않고 끝난다(결과를 다시 알려도 안전하다). 바꿀 때는 `UPDATE`에 현재 상태 조건을 걸어서, 동시에 두 곳에서 바꿔도 먼저 끝난 상태가 덮어써지지 않는다.
+- `set_status(document_id, status, error=None, chunk_count=None)`: 완료할 때 `chunk_count`(저장한 청크 수)를, 실패할 때 `error`(사유)를 넘긴다.
+- **`chunk_count`·`error_message` 컬럼:** 지금 `documents_info`에는 이 컬럼이 없다. 추가하는 마이그레이션 `0002`는 작성해 두었고 공용 DB 적용은 DB 담당이 한다(§8). 컬럼이 없을 때 `UPDATE`에 쓰면 SQL 오류로 모든 문서가 실패 처리되므로, **적용된 것을 확인하기 전에는 두 값을 DB에 쓰지 않고 서버 로그에만 남긴다.** 적용을 확인한 뒤 기록을 켜는 코드는 별도 커밋으로 병합한다. `error`는 1,000자까지만 남기고 API 키나 스택 트레이스는 담지 않는다(파이프라인이 안전한 문구만 넘긴다).
 
 ### 3.4 삭제
 
@@ -144,12 +140,12 @@ Gradio 화면 연결과 ChromaDB 저장 파이프라인은 장영균 담당이 �
 
 | 키 | 타입 | 대상 | 설명 |
 |---|---|---|---|
-| `source` | str | 전체 | PDF 파일명. `documents.title + ".pdf"`로 만든다 |
+| `source` | str | 전체 | PDF 파일명. `documents_info.filename`(확장자 포함)이다 |
 | `page` | int | 전체 | PDF 페이지 번호 (1부터) |
 | `chunk` | int | 전체 | 해당 페이지 안에서의 청크 순번 (**0부터**, 임시 결정) |
 | `document_id` | int | 전체 | MySQL `documents.id` |
 | `document_type` | str | 전체 | `tech` 또는 `secure` |
-| `doc_name` | str | 전체 | 출처에 표시할 문서명. **파일명에서 확장자를 뺀 값** = `documents.title` (예: `안전기준`) |
+| `doc_name` | str | 전체 | 출처에 표시할 문서명. **파일명에서 확장자를 뺀 값** = `Document.title` (`documents_info.filename`에서 확장자를 뺀 값, 예: `안전기준`) |
 | `model` | str | `tech` | 차종·모델명. 청크당 하나. 기준정보 모델 이름 중 페이지에 나온 것을 **목록의 철자 그대로** 쓴다(§3.7, §8) |
 | `clause` | str | `secure` | 조항·절 번호 (예: `6.6.4.1.2`). 표 청크는 첫 열이 조항 번호일 때만, 부속서는 없음 |
 | `section_title` | str | `secure` | 조항·절 제목, 부속서는 부속서 제목. 선택 항목 |
@@ -158,7 +154,7 @@ Gradio 화면 연결과 ChromaDB 저장 파이프라인은 장영균 담당이 �
 
 - `source`, `page`, `chunk`의 키 이름과 자료형은 바꾸지 않는다. QA가 `(source, page, chunk)`로 정렬하고 출처를 구성한다.
 - **값이 없는 키는 생략한다.** ChromaDB 메타데이터는 `None`을 저장할 수 없다. 값은 `str`, `int`, `float`, `bool`만 가능하고 리스트·dict는 저장할 수 없다.
-- `department_id`는 ChromaDB 메타데이터에 넣지 않는다. 부서 정보는 MySQL(`documents.dept_id`)에서 `document_id`로 찾는다.
+- `department_id`는 ChromaDB 메타데이터에 넣지 않는다. 부서 정보는 MySQL(`documents_info.department_id`)에서 `document_id`로 찾는다.
 - 예전 키는 폐기했다: `product_model` → `model`, `section_number` → `clause`, `tags` → `part`·`task`.
 
 ### 4.2 청크 ID
@@ -183,7 +179,7 @@ uv run --locked python -B -m unittest discover -s tests -v
 | 기술사양서 청킹 | 완료 | `chunker_tech.py`. 모델 이름 목록(`models`)이 있어야 `model`이 채워짐 |
 | 태그 생성 (`part`, `task`) | 완료 | `tagger.py`. 실제 LLM(`gpt-4o-mini`)으로 PDF 3개를 태깅해 확인했다. 배치 5개 기준 안전기준 호출 대상 274개 중 150개에 부위, 13개에 작업 태그가 붙었다 |
 | 임베딩 생성 (`core.llm.embed`) | 구현됨 | `core/llm.py`. 실제 API 호출로 차원을 확인하지 않았고, 빈 문자열·차원 검사는 없다 |
-| 문서 등록·중복 확인, 목록·상태·삭제 서비스 | 미구현 | `features/documents/`는 비어 있음 |
+| 문서 등록·중복 확인, 목록·상태·삭제 서비스 | 구현됨 | `features/documents/`. 단위 테스트와 실제 DB 읽기 전용 조회로 확인했다. 공용 DB에 쓰는 확인(등록·삭제)과 `chunk_count`·`error_message` 기록은 대기 중이다(§3.3, §8) |
 
 ### 5.1 데이터 구조 (실제 코드 기준)
 
@@ -264,9 +260,7 @@ OCR과 Vision LLM 기반 도면·이미지 해석은 구현 범위에서 제외�
 
 ### 7.2 문서관리 → 박정환 (`DocumentService`)
 
-> DB 정의가 바뀌었을 수 있다. §7.4의 "변경 확인 필요"를 먼저 본다.
-
-이름과 입출력은 합의했고 아직 구현하지 않았다. 아래는 DB 담당이 만든 `documents` 테이블(§7.4)을 기준으로 한다.
+`mansa/features/documents/`에 구현했다(`service.py`, `storage.py`, `models.py`, `errors.py`). 아래는 `documents_info` 테이블(§7.4)을 기준으로 한다. 파이프라인에는 `DocumentService()` 객체를 그대로 넘기면 된다(`get_document`, `set_status`를 가진다).
 
 ```python
 register_document(source_path, filename, doc_type, department_id) -> int        # 새 문서 ID
@@ -279,12 +273,13 @@ delete_pdf(document_id) -> bool                  # 파일이 이미 없으면 Fa
 delete_document_record(document_id) -> bool      # MySQL 행만 삭제. 반드시 마지막에 호출
 ```
 
-- `Document`: `id`, `title`(= `doc_name`), `filename`(= `title + ".pdf"`, `source`용), `doc_type`, `department_id`, `department_name`, `status`, `chunk_count`, `created_at`, `updated_at`, `file_path`. `file_path`는 컬럼이 아니라 서비스가 계산한 저장소 안의 절대 `Path`다. 화면에 노출하지 않는다. `DocumentRow`는 `file_path`를 뺀 것이다.
-- `department_id`는 기술·안전 문서 모두 필수다(`dept_id NOT NULL`).
-- 예외: `DuplicateDocumentError`(`.document_id`에 기존 문서 ID), `DocumentNotFoundError`, `DocumentStorageError`, `InvalidStatusTransition`, `ValueError`(유형·파일 형식·파일명·부서 오류).
-- `filename`은 원본 파일명이고, 서비스가 NFC로 정규화한 뒤 확장자를 빼서 `title`을 만든다.
-- 등록 순서: 입력 검증(`%PDF-` 헤더, 크기) → `title`·해시 계산 → 중복 조회(중복이면 거절) → 임시 파일로 저장 → `INSERT`(상태 `처리 중`) → 임시 파일을 `{저장소}/{doc_type}/{id}.pdf`로 이름 변경. 실패하면 행과 파일을 정리한다. `execute`가 `lastrowid`를 주지 않으므로 새 ID는 `title_hash`로 다시 조회해서 얻는다. 사용자 파일명은 경로에 쓰지 않는다.
-- 저장소 기준 폴더는 환경변수 `PDF_STORAGE_DIR`로 관리하고 기본값은 `mansa/data/documents`다(제안. 박정환·DB 담당 확인 전이며 `config.py`에는 아직 없다). 기존 `data/pdfs`는 개발용 샘플이 한글 파일명으로 들어 있어서 분리했다. 영속 볼륨 여부는 미확정이다(§8). `file_path`는 `Path(PDF_STORAGE_DIR) / doc_type / f"{id}.pdf"`로 계산한다.
+- `Document`: `id`, `title`(= `doc_name`, 확장자를 뺀 이름), `filename`(확장자 포함, `source`용), `doc_type`, `department_id`, `department_name`, `status`, `chunk_count`, `upload_at`, `updated_at`, `file_path`. 날짜는 DB 컬럼과 같은 `upload_at`이다. `file_path`는 컬럼이 아니라 서비스가 문서 ID로 계산한 **문자열**이고(파이프라인 어댑터의 타입 표기가 `str`), 파일이 없을 수도 있다. 화면에 노출하지 않는다. `DocumentRow`는 `file_path`를 뺀 것이다. `chunk_count`는 컬럼이 생기기 전에는 `None`이다.
+- `department_id`는 등록할 때 앱에서 필수로 받는다(1 이상의 정수). DB 컬럼은 NULL을 허용하고, 화면은 NULL이면 `-`로 보여준다.
+- 예외: `DuplicateDocumentError`(`.document_id`에 기존 문서 ID), `DocumentNotFoundError`, `DocumentStorageError`, `InvalidStatusTransition`, `ValueError`(유형·파일 형식·파일명·부서 오류, 없는 부서는 FK 위반을 `ValueError`로 바꾼다). 예외는 `features/documents/errors.py`에 있다.
+- 등록 순서: 입력 검증(유형, 파일명 정규화, 부서, `%PDF-` 헤더, 50MB — 화면 `ui/upload.py`의 `MAX_MB`와 같은 한도) → `(filename, document_type)`으로 중복 조회(중복이면 거절) → 임시 파일로 저장 → `INSERT`(상태 `PROCESSING`) → 새 ID 조회 → 임시 파일을 `{저장소}/{doc_type}/{id}.pdf`로 이름 변경. 실패하면 행과 파일을 정리한다. `execute`가 `lastrowid`를 주지 않고 문장마다 트랜잭션이 따로라서 새 ID는 `(filename, document_type)`으로 다시 조회하고, 중간에 실패하면 직접 지운다. 사용자 파일명은 경로에 쓰지 않는다.
+- 조회: `list_documents`의 검색어는 파일 이름을 대소문자·악센트 구분 없이 찾고(`%`와 `_`는 글자 그대로), 최근 올린 순서로 돌려준다. `summary`는 문서가 없는 상태·유형도 0으로 채운다.
+- 삭제 함수: `delete_pdf`는 문서 유형을 몰라도 모든 유형 폴더에서 찾아 지우고, DB 행이 이미 없어도 동작하며, 파일이 없으면 오류 없이 `False`를 돌려준다(컴퓨터마다 PDF가 따로 저장되므로). `delete_document_record`는 `WHERE id`로 행 하나만 지운다. 삭제 순서(ChromaDB → PDF → 행)와 실행은 박정환 담당이다.
+- 저장소 기준 폴더는 환경변수 `PDF_STORAGE_DIR`(`config.py`)로 관리하고 기본값은 `mansa/data/documents`다. 업로드 PDF는 Git에 올라가지 않는다(`.gitignore`). 기존 `data/pdfs`는 개발용 샘플이 한글 파일명으로 들어 있어서 분리했다. 컴퓨터마다 PDF가 따로 저장되고, 영속 볼륨 여부는 미확정이다(§8). `file_path`는 `Path(PDF_STORAGE_DIR) / doc_type / f"{id}.pdf"`로 계산한다.
 - 책임 구분: DocumentService는 MySQL 행과 원본 PDF 파일만 다루고 ChromaDB와 파이프라인을 호출하지 않는다. 파이프라인은 MySQL에 직접 접근하지 않고 `set_status`만 호출한다.
 
 ### 7.3 문서관리 → ChromaDB (`util/vector_upload.py`, 이미 있음)
@@ -304,27 +299,28 @@ n = upload_embeddings(doc_type, collection_name, ids, embeddings, documents, met
 
 ### 7.4 문서관리 → MySQL
 
-> **변경 확인 필요:** DB 담당이 이후 전달한 정의(`documents_info`)는 아래 표와 다르다. 컬럼은 `filename`(확장자 포함 여부 불명), `document_type`, `department_id`(NULL 허용), `status` ENUM(`PROCESSING`/`COMPLETED`/`FAILED`), `upload_at`, `updated_at`이고, 중복 판정은 `UNIQUE (filename, document_type)`이다. `title_hash`, `chunk_count`, 원본 경로, 실패 사유 컬럼은 없다. 인덱스 `idx_documents_status_created`가 테이블에 없는 컬럼 `created_at`을 가리켜서 그대로는 만들어지지 않는다. 어느 정의가 최종인지 DB 담당이 확인하면 §3.2, §3.3, §7.2, §7.4를 함께 고친다.
+DB 담당이 `documents_info`가 최종이라고 확인했다(`documents`는 DB에 없다). 아래 정의는 실제 DB의 `SHOW CREATE TABLE` 결과를 읽어서 적었다.
 
 - `util/mysql_connection.py`의 `fetch_all(sql, params)`, `execute(sql, params)`로 SQL을 직접 보낸다. 값은 `:이름` 자리표시자로 넘기고 SQL 문자열에 이어 붙이지 않는다. `execute`는 영향 행 수만 반환하고 `lastrowid`는 주지 않는다. 자세한 사용법은 `docs/MySqlConnector.md`를 따른다.
 - `core/models/`는 비어 있고 ORM 모델은 쓰지 않는다. raw SQL 방식을 따른다.
-- DB 담당이 만든 `documents` 테이블(`mansa/migrations/0001_create_documents.sql`, 수동 실행. 이후 변경은 기존 파일을 고치지 않고 새 번호 파일로 추가):
+- 마이그레이션은 `mansa/migrations/`에 번호 순서 파일로 둔다(수동 실행, 공용 DB 적용은 DB 담당. 이후 변경은 기존 파일을 고치지 않고 새 번호 파일로 추가). `0001_create_documents_info.sql`은 현재 DB 정의와 줄 단위로 일치함을 확인했고, `0002_add_chunk_count_error_message.sql`은 작성만 했다.
 
 | 컬럼 | 타입 | 비고 |
 |---|---|---|
-| `id` | INT PK AUTO_INCREMENT | 문서 ID. ChromaDB `document_id`로 사용 |
-| `title` | VARCHAR(255) NOT NULL | 원래 파일 이름(확장자 제외, 소문자 변환 전) |
-| `title_hash` | CHAR(64) NOT NULL UNIQUE | 중복 판정 키 |
-| `doc_type` | ENUM('tech','secure') NOT NULL | 삭제·저장할 DB를 정한다 |
-| `dept_id` | 부서 PK와 같은 타입, NOT NULL | FK → 부서 테이블 PK, ON DELETE RESTRICT |
-| `status` | VARCHAR(10) NOT NULL | `처리 중` / `완료` / `실패` |
-| `chunk_count` | INT NULL | 완료 시 기록 |
-| `created_at` | DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP | |
+| `id` | BIGINT PK AUTO_INCREMENT | 문서 ID. ChromaDB `document_id`로 사용 |
+| `filename` | VARCHAR(255) `utf8mb4_bin` NOT NULL | 확장자를 포함한 원래 파일 이름(NFC). 대소문자와 NFC/NFD를 구분한다 |
+| `document_type` | ENUM('tech','secure') NOT NULL | 삭제·저장할 DB를 정한다 |
+| `department_id` | BIGINT NULL | FK → `departments(id)`, ON DELETE RESTRICT, ON UPDATE CASCADE. 등록할 때 앱에서 필수로 받는다 |
+| `status` | ENUM('PROCESSING','COMPLETED','FAILED') NOT NULL DEFAULT 'PROCESSING' | |
+| `upload_at` | DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP | |
 | `updated_at` | DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | |
+| `chunk_count` | INT NULL | **`0002` 적용 후.** 완료할 때만 기록 |
+| `error_message` | VARCHAR(1000) NULL | **`0002` 적용 후.** 실패할 때만 기록 |
 
-- 이 테이블에는 **원본 PDF 경로 컬럼과 실패 사유 컬럼이 없다.** 경로는 문서 ID로 계산하고, 실패 사유 컬럼은 추가를 요청한다(§3.3).
+- 키: `UNIQUE uk_documents_filename_type (filename, document_type)`, `idx_documents_status_upload (status, upload_at)`. 인덱스 이름은 DB 담당이 `created_at` 오류를 고치며 정한 이름이다.
+- 이 테이블에는 **원본 PDF 경로 컬럼이 없다.** 경로는 문서 ID로 계산한다(§7.2).
 - 부서 삭제는 RESTRICT라서 문서가 있는 부서는 삭제할 수 없다. 기준정보 화면의 부서 삭제는 이 오류를 처리해야 한다.
-- 이 파일은 아직 저장소에서 확인하지 못했다. 컬럼명은 DB 담당이 전달한 표를 기준으로 한다.
+- 화면(`ui/documents.py`, `ui/doc_view.py`)은 이 테이블을 직접 읽는다. 문서관리 화면의 삭제 버튼은 지금 이 행만 지우고 ChromaDB 청크와 PDF는 지우지 않는다(박정환의 삭제 흐름 연결 전).
 
 ### 7.5 문서관리 → 질의응답 (`util/rag_query.py`, `features/retrieval/`)
 
@@ -342,9 +338,9 @@ n = upload_embeddings(doc_type, collection_name, ids, embeddings, documents, met
 
 | 항목 | 확인할 곳 |
 |---|---|
-| `title_hash`의 입력 규칙(`doc_type` 포함 여부, 소문자 변환, NFC 정규화) | DB 담당 |
-| `documents`에 `error_message` 컬럼 추가, `status` 한글 3값 확정, 마이그레이션 파일 위치·실행 시점 | DB 담당 |
-| 원본 PDF 저장 위치·방식(영속 볼륨 여부). 기준 폴더 환경변수는 `PDF_STORAGE_DIR`(기본 `mansa/data/documents`)로 제안했다. 서버를 다시 시작할 때 디스크가 지워지면 원본 PDF가 사라져 재처리·삭제가 안 된다 | DB 담당·박정환 |
+| `documents_info`에 `chunk_count`·`error_message` 컬럼 추가(마이그레이션 `0002`)에 대한 DB 담당의 최종 동의(받은 답변의 동의 문구는 작성한 쪽 초안이라 확정으로 보지 않는다), 공용 DB에 적용할 담당과 시점. **적용되기 전에는 `set_status`가 두 값을 로그에만 남긴다.** 적용을 읽기 전용으로 확인한 뒤 기록을 켜는 코드를 별도 커밋으로 병합한다 | DB 담당 |
+| 원본 PDF 저장소 영속 볼륨 여부. 기준 폴더 환경변수 `PDF_STORAGE_DIR`(기본 `mansa/data/documents`)는 구현했다. 서버를 다시 시작할 때 디스크가 지워지면 원본 PDF가 사라져 재처리·삭제가 안 된다 | DB 담당·박정환 |
+| 문서 서비스를 공용 DB에 연결해 등록·상태 변경·삭제를 확인하는 일(임시 행 하나를 등록했다가 지움). 권한 시스템이 막아서 아직 못 했다 | 장영균(공용 DB 쓰기 승인 필요) |
 | 남아 있는 ChromaDB 테스트 데이터의 차원(1536 vs 3072) 정리 | DB 담당 |
 | 분류표를 실제 PDF 3개 용어 기준으로 확장했다(부위 37개, 작업 49개, 작업 위치 7개). 엘트론 용어로 부위 2개(적재하중 검출 모니터링 장치, 안전봉)와 동의어 `Car Door → 카문`을 더하고, `가버너 → 과속조절기`로 고쳤다. 관계표(`task_relations.json`)에는 새 작업 33개를 같은 청크에서 함께 나온 작업 위치·위험 유형 횟수로 채웠다(근거가 4개 미만인 작업과 `권상기` 계열은 비어 있다). 태그는 이 목록 안에서만 고른다. 확정 여부와 어색한 조합 정리, `task`를 **부위+동작 합친 이름**으로 유지하는 것(명세 예시의 동사 단위 `점검`과 다름) | QA·기준정보 담당 |
 | 분류표 확장으로 되묻기 선택지가 37개가 되어 `clarify_policy.py`의 `build_options`를 앞쪽 8개로 줄이고 테스트를 고쳤다. 상한·자르는 방식(앞쪽부터)이 맞는지 | QA |
