@@ -48,7 +48,7 @@ Run = Callable[[str, dict | None], int]
 
 _SELECT = (
     "SELECT d.id, d.filename, d.document_type, d.department_id, p.name AS department_name, "
-    "d.status, d.upload_at, d.updated_at "
+    "d.status, d.chunk_count, d.error_message, d.upload_at, d.updated_at "
     "FROM documents_info d LEFT JOIN departments p ON p.id = d.department_id"
 )
 _BY_NAME = "SELECT id FROM documents_info WHERE filename = :filename AND document_type = :doc_type"
@@ -118,7 +118,7 @@ def _check_id(document_id: int) -> None:
 
 
 def _row_values(row: dict[str, Any]) -> dict[str, Any]:
-    """조회한 행을 DocumentRow 필드 값으로 바꾼다. chunk_count 컬럼이 없으면 None이다."""
+    """조회한 행을 DocumentRow 필드 값으로 바꾼다. chunk_count·error_message가 NULL이면 None이다."""
     return {
         "id": int(row["id"]),
         "title": title_of(row["filename"]),
@@ -130,6 +130,7 @@ def _row_values(row: dict[str, Any]) -> dict[str, Any]:
         "chunk_count": row.get("chunk_count"),
         "upload_at": row["upload_at"],
         "updated_at": row["updated_at"],
+        "error_message": row.get("error_message"),
     }
 
 
@@ -225,9 +226,9 @@ class DocumentService:
         return Document(**values, file_path=file_path)
 
     def get_status(self, document_id: int) -> DocumentStatus:
-        """문서의 처리 상태, 청크 수, 마지막 변경 시각을 돌려준다."""
+        """문서의 처리 상태, 청크 수, 마지막 변경 시각, 실패 사유를 돌려준다. 청크 수와 사유는 없으면 None이다."""
         values = _row_values(self._get_row(document_id))
-        return DocumentStatus(values["status"], values["chunk_count"], values["updated_at"])
+        return DocumentStatus(values["status"], values["chunk_count"], values["updated_at"], values["error_message"])
 
     def list_documents(
         self,

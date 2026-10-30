@@ -327,6 +327,68 @@ class QueryTest(ServiceTestCase):
             self.service.get_status(5)
 
 
+class RecordedResultQueryTest(ServiceTestCase):
+    """DB에 기록된 청크 수와 실패 사유가 조회 결과에 나온다."""
+
+    def add_row(self, document_id: int, **extra) -> None:
+        self.db.rows.append({
+            "id": document_id, "filename": f"{document_id}.pdf", "document_type": "tech", "department_id": 3,
+            "status": "COMPLETED", "upload_at": NOW, "updated_at": NOW, **extra,
+        })
+
+    def test_the_select_reads_both_columns(self) -> None:
+        self.add_row(1, chunk_count=27)
+
+        self.service.get_document(1)
+        self.service.list_documents()
+
+        for sql, _ in self.db.calls:
+            self.assertIn("d.chunk_count", sql)
+            self.assertIn("d.error_message", sql)
+
+    def test_get_document_returns_the_recorded_count(self) -> None:
+        self.add_row(1, chunk_count=27)
+
+        document = self.service.get_document(1)
+
+        self.assertEqual(document.chunk_count, 27)
+        self.assertIsNone(document.error_message)
+
+    def test_get_document_returns_the_recorded_reason(self) -> None:
+        self.add_row(2, status="FAILED", chunk_count=None, error_message="PDF를 열 수 없어요")
+
+        document = self.service.get_document(2)
+
+        self.assertIsNone(document.chunk_count)
+        self.assertEqual(document.error_message, "PDF를 열 수 없어요")
+
+    def test_get_status_returns_count_and_reason(self) -> None:
+        self.add_row(1, chunk_count=349)
+        self.add_row(2, status="FAILED", error_message="스캔 PDF는 지원하지 않아요")
+
+        done, failed = self.service.get_status(1), self.service.get_status(2)
+
+        self.assertEqual((done.status, done.chunk_count, done.error_message), ("COMPLETED", 349, None))
+        self.assertEqual((failed.status, failed.chunk_count, failed.error_message), ("FAILED", None, "스캔 PDF는 지원하지 않아요"))
+
+    def test_list_rows_carry_count_and_reason(self) -> None:
+        self.add_row(1, chunk_count=5)
+        self.add_row(2, status="FAILED", error_message="사유")
+
+        rows = {row.id: row for row in self.service.list_documents()}
+
+        self.assertEqual((rows[1].chunk_count, rows[1].error_message), (5, None))
+        self.assertEqual((rows[2].chunk_count, rows[2].error_message), (None, "사유"))
+
+    def test_null_columns_become_none(self) -> None:
+        self.add_row(1, chunk_count=None, error_message=None)
+
+        document = self.service.get_document(1)
+
+        self.assertIsNone(document.chunk_count)
+        self.assertIsNone(document.error_message)
+
+
 class ListTest(ServiceTestCase):
     def last_query(self) -> tuple[str, dict]:
         sql, params = self.db.calls[-1]
