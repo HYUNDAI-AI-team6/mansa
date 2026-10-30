@@ -55,6 +55,23 @@ class PickFileTest(unittest.TestCase):
         self.assertIsNone(cleared)
 
 
+class UploadLimitTest(unittest.TestCase):
+    def test_the_screen_and_the_service_share_the_100mb_limit(self):
+        from features.documents import service
+
+        self.assertEqual(upload.MAX_MB, 100)
+        self.assertEqual(service.MAX_PDF_BYTES, upload.MAX_MB * 1024 * 1024)  # 화면 값을 바꾸면 서비스도 같이 바꾼다
+        self.assertIn(f"최대 {upload.MAX_MB}MB", upload.dropzone_html())
+
+    def test_the_support_guide_tells_the_same_limit(self):
+        import json
+        from pathlib import Path
+
+        guides = json.loads((Path(upload.__file__).parents[1] / "data" / "support" / "guides.json").read_text(encoding="utf-8"))
+        steps = next(g for g in guides if g["id"] == "upload")["steps"]
+        self.assertTrue(any(f"{upload.MAX_MB}MB 이하" in step for step in steps))
+
+
 class UploadTest(unittest.TestCase):
     def setUp(self):
         self.warn = mock.patch.object(upload.ui, "warn").start()
