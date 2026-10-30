@@ -26,11 +26,25 @@ class LayerHtmlTest(unittest.TestCase):
     def test_one_light_runs_along_a_single_figure_eight(self):
         html = busy.layer_html("제목", "설명")
         self.assertEqual(html.count('class="track"'), 1)
-        self.assertEqual(html.count('class="seg"'), busy.TAIL_LAYERS)
+        self.assertEqual(html.count('class="seg"'), busy.TAIL_LAYERS + len(busy.HEAD_GLOW))
 
     def test_the_line_keeps_the_same_width_from_tail_to_head(self):
         svg = busy._loop_svg()
         self.assertEqual(svg.count(f"stroke-width:{busy.STROKE};"), busy.TAIL_LAYERS)
+
+    def test_only_the_head_gets_a_white_glow_on_top_of_the_tail(self):
+        svg = busy._loop_svg()
+        glow = svg[svg.index('<g class="busy-glow">'):]
+        self.assertEqual(glow.count("stroke:#ffffff"), len(busy.HEAD_GLOW))
+        self.assertEqual(svg.count("stroke:#ffffff"), len(busy.HEAD_GLOW))  # 꼬리 쪽에는 흰색이 없다
+        self.assertEqual(svg.count("<g "), 1)
+
+    def test_the_glow_is_subtle_and_shorter_than_the_tail(self):
+        for length, width, opacity in busy.HEAD_GLOW:
+            self.assertLess(length, busy.TAIL_LONGEST)
+            self.assertLess(width, busy.STROKE)  # 꼬리보다 가늘어 가운데 심지로만 보인다
+            self.assertLessEqual(opacity, 1)
+        self.assertIn(".busy-glow", theme.build_css())
 
     def test_the_tail_fades_from_light_blue_through_the_brand_blue_to_violet(self):
         self.assertEqual(busy._tail_color(0), "#7dd3fc")
@@ -81,6 +95,14 @@ class StyleTest(unittest.TestCase):
         self.assertIn("position: absolute", rule)
         self.assertIn("inset: 0", rule)
         self.assertIn(".page {\n  position: relative;", self.css)  # 사이드바·머리글은 .page 밖이다
+
+    def test_the_text_is_spaced_a_little_wider(self):
+        title = self.css[self.css.index(".busy-title {"):]
+        title = title[:title.index("}")]
+        sub = self.css[self.css.index(".busy-sub {"):]
+        sub = sub[:sub.index("}")]
+        self.assertIn("letter-spacing: 0.05em", title)
+        self.assertIn("letter-spacing: 0.03em", sub)
 
     def test_the_layer_stays_below_the_sticky_header_and_the_sidebar(self):
         shell = self.css[self.css.index(".block.header-block {"):]

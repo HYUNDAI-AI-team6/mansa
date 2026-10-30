@@ -173,6 +173,10 @@
   stroke: #e3e8ff;
   stroke-width: 7;
 }
+/* 머리 쪽 흰 심지: 은은하게만 빛난다 */
+.busy-glow {
+  filter: drop-shadow(0 0 1.5px rgba(255, 255, 255, 0.9));
+}
 /* 길이가 다른 선들이 같은 속도로 같은 곳을 앞서 달려 꼬리가 이어진다 */
 .busy-loop .seg {
   animation: busy-run 1.9s linear infinite;
@@ -186,12 +190,12 @@
   }
 }
 .busy-title {
-  margin-top: 2px;
+  margin-top: 6px;
   display: flex;
   align-items: center;
   font-size: 17px;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: 0.05em;
   color: var(--text);
 }
 .busy-title > span:first-child {
@@ -248,8 +252,9 @@
   }
 }
 .busy-sub {
-  margin-top: 6px;
+  margin-top: 9px;
   font-size: 13px;
+  letter-spacing: 0.03em;
   color: var(--text2);
 }
 /* 움직임 줄이기를 켠 사용자: 움직임 없이 문구만 */
