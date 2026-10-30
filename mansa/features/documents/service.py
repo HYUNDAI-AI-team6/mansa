@@ -22,6 +22,8 @@ from features.documents.errors import (
 )
 from features.documents.models import (
     DOC_TYPES,
+    STATUS_COMPLETED,
+    STATUS_FAILED,
     STATUS_PROCESSING,
     STATUSES,
     Document,
@@ -289,8 +291,11 @@ class DocumentService:
         동시에 바꿔도 먼저 끝난 상태가 덮어써지지 않는다. 없는 문서는 DocumentNotFoundError, 알 수 없는 상태나
         잘못된 chunk_count·error는 ValueError다.
 
-        chunk_count(완료 때 저장한 청크 수)와 error(실패 사유)는 documents_info에 컬럼이 생길 때까지 DB에 쓰지 않고
-        로그에만 남긴다. error는 MAX_ERROR_CHARS까지만 남긴다.
+        상태와 함께 결과도 같은 UPDATE로 기록한다. 완료(COMPLETED)이면 chunk_count(저장한 청크 수)를 쓰고
+        error_message는 비운다. 실패(FAILED)이면 error(실패 사유)를 앞뒤 공백을 정리해 MAX_ERROR_CHARS까지만 쓰고
+        chunk_count는 비운다(실패하면 저장한 청크를 지우기 때문이다). 완료에 넘긴 error나 실패에 넘긴 chunk_count는
+        저장하지 않는다. 값을 넘기지 않았거나 사유가 비어 있으면 NULL이다. documents_info에 chunk_count,
+        error_message 컬럼이 있어야 한다(마이그레이션 0002). 컬럼이 없는 DB에서는 SQL 오류가 난다.
         """
         _check_id(document_id)
         if status not in STATUSES:
@@ -305,9 +310,18 @@ class DocumentService:
             return
         if current != STATUS_PROCESSING:
             raise InvalidStatusTransition(current, status)
+        saved_count = chunk_count if status == STATUS_COMPLETED else None
+        saved_error = (error or "").strip()[:MAX_ERROR_CHARS].strip() if status == STATUS_FAILED else ""
         changed = self._run(
-            "UPDATE documents_info SET status = :status WHERE id = :id AND status = :current",
-            {"status": status, "id": document_id, "current": STATUS_PROCESSING},
+            "UPDATE documents_info SET status = :status, chunk_count = :chunk_count, error_message = :error_message "
+            "WHERE id = :id AND status = :current",
+            {
+                "status": status,
+                "chunk_count": saved_count,
+                "error_message": saved_error or None,
+                "id": document_id,
+                "current": STATUS_PROCESSING,
+            },
         )
         if not changed:  # 읽은 뒤 다른 곳에서 먼저 바꿨다. 지금 상태로 판단한다.
             now = self._get_row(document_id)["status"]

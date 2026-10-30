@@ -80,6 +80,8 @@ class FakeDb:
             for row in self.rows:
                 if row["id"] == params["id"] and row["status"] == params["current"]:
                     row["status"] = params["status"]
+                    row["chunk_count"] = params.get("chunk_count")
+                    row["error_message"] = params.get("error_message")
                     changed += 1
             return changed
         raise AssertionError(f"unexpected SQL: {sql}")
@@ -483,13 +485,14 @@ class SetStatusTest(ServiceTestCase):
 
         self.assertEqual(self.status(), "FAILED")
 
-    def test_chunk_count_and_error_are_only_logged_until_the_columns_exist(self) -> None:
+    def test_the_result_is_written_together_with_the_status_and_also_logged(self) -> None:
         with self.assertLogs("features.documents.service", level="INFO") as logs:
             self.service.set_status(self.document_id, "COMPLETED", chunk_count=349)
 
         update = self.db.sql_with("UPDATE")[0][0]
-        self.assertNotIn("chunk_count", update)
-        self.assertNotIn("error_message", update)
+        self.assertIn("chunk_count = :chunk_count", update)
+        self.assertIn("error_message = :error_message", update)
+        self.assertEqual(self.db.rows[0]["chunk_count"], 349)
         self.assertIn("chunk_count=349", logs.output[0])
 
     def test_a_long_error_is_cut_in_the_log(self) -> None:
@@ -535,7 +538,8 @@ class SetStatusTest(ServiceTestCase):
 
         sql, params = self.db.sql_with("UPDATE")[0]
         self.assertIn("AND status = :current", sql)
-        self.assertEqual(params, {"status": "COMPLETED", "id": self.document_id, "current": "PROCESSING"})
+        self.assertEqual(params, {"status": "COMPLETED", "chunk_count": None, "error_message": None,
+                                  "id": self.document_id, "current": "PROCESSING"})
 
     def test_another_worker_finishing_first_with_a_different_status_is_reported(self) -> None:
         def other_worker(db: FakeDb) -> None:
