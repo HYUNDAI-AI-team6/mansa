@@ -62,7 +62,7 @@ class Generator(Protocol):
         """근거만 사용해 4개 영역 답변을 만든다. LLM 호출 실패는 LlmError로 알린다."""
         ...
 
-    def verify_sources(self, draft: AnswerDraft, evidence: Evidence) -> AnswerDraft | None:
+    def verify_sources(self, draft: AnswerDraft, evidence: Evidence, question: str = "") -> AnswerDraft | None:
         """근거 ID와 수치가 원문과 맞으면 답변을, 맞지 않으면 None을 반환한다."""
         ...
 
@@ -148,7 +148,7 @@ class QAService:
                 draft = self._generator.generate(question, evidence)
             except LlmError:
                 return None
-            verified = self._generator.verify_sources(draft, evidence)
+            verified = self._generator.verify_sources(draft, evidence, question)
             if verified is not None:
                 return verified
         return None

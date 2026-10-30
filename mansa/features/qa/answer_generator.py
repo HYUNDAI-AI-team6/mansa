@@ -27,7 +27,8 @@ PROMPT = """너는 장비 유지보수 기술 문서 Q&A 도우미다. 아래 [�
 
 # 근거 원문과 대조할 "숫자+단위". 예: "0.5mm", "10%", "40 N·m"
 # shortcut: 한글 단위(회·개·초 등)와 단위 없는 숫자는 단계 번호와 구분하기 어려워 검사하지 않는다, 오답이 보이면 범위를 넓힌다
-_UNIT_NUMBER = re.compile(r"\d+(?:[.,]\d+)*\s*[a-zA-Zµ%°][a-zA-Zµ%°·/²³]*")
+# 앞에 영문·숫자가 붙은 값(모델 번호 HC20022US1 등)은 수치가 아니라서 뺀다
+_UNIT_NUMBER = re.compile(r"(?<![A-Za-z\d.,])\d+(?:[.,]\d+)*\s*[a-zA-Zµ%°][a-zA-Zµ%°·/²³]*")
 
 
 class _SectionOutput(BaseModel):
@@ -68,11 +69,12 @@ class AnswerGenerator:
         result = self._complete("L2", PROMPT.format(question=question, evidence=evidence_text), _DraftOutput)
         return AnswerDraft(**{name: AnswerSection(**section) for name, section in result.items()})
 
-    def verify_sources(self, draft: AnswerDraft, evidence: Evidence) -> AnswerDraft | None:
+    def verify_sources(self, draft: AnswerDraft, evidence: Evidence, question: str = "") -> AnswerDraft | None:
         """답변이 근거와 맞으면 draft를, 맞지 않으면 None을 반환한다. LLM은 부르지 않는다.
         
         4개 영역이 모두 비었거나, 글이 있는 영역에 근거 ID가 없거나 근거에 없는 ID가 있거나,
         글에 나온 숫자+단위가 그 영역이 인용한 근거 원문에 없으면 맞지 않는 것으로 본다.
+        질문에 있던 숫자+단위(예: "1000kg 모델")는 답에 되풀이해도 새로 지어낸 값이 아니므로 통과시킨다.
         """
         texts = {c.chunk_id: c.text for c in evidence.chunks}
         sections = [draft.procedure, draft.spec, draft.safety, draft.diff]
@@ -83,7 +85,7 @@ class AnswerGenerator:
                 continue
             if not section.source_ids or any(i not in texts for i in section.source_ids):
                 return None
-            cited = "\n".join(texts[i] for i in section.source_ids)
+            cited = "\n".join([question, *(texts[i] for i in section.source_ids)])
             if not all(contains_number(cited, n.strip()) for n in _UNIT_NUMBER.findall(section.text)):
                 return None
         return draft

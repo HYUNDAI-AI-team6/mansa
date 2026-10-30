@@ -49,7 +49,7 @@ def build_qa_service(
     )
     return QAService(
         analyzer=QuestionAnalyzer(EquipmentModelService(), taxonomy, complete),
-        clarify_policy=RuleClarifyPolicy(taxonomy),
+        clarify_policy=RuleClarifyPolicy(taxonomy, EquipmentModelService()),
         retriever=retriever,
         generator=AnswerGenerator(complete),
         history=history or HistoryService(MemoryHistoryStore()),

@@ -90,7 +90,7 @@ class QAServiceHistoryTest(unittest.TestCase):
             analyzer=SimpleNamespace(analyze=lambda q, cid, first: intent, validate_ids=lambda i: i),
             clarify_policy=SimpleNamespace(needs_clarification=lambda i: False),
             retriever=SimpleNamespace(search_manual=lambda q, i: [chunk], search_safety=lambda q, i: []),
-            generator=SimpleNamespace(generate=lambda q, e: AnswerDraft(), verify_sources=lambda d, e: d),
+            generator=SimpleNamespace(generate=lambda q, e: AnswerDraft(), verify_sources=lambda d, e, q: d),
             history=self.history,
         )
 

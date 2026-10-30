@@ -1,6 +1,7 @@
 """되묻기 판단(명세서 ClarifyPolicy). 질문이 모호할 때만 실제 후보로 선택지를 만든다."""
 
 from core.schemas import Clarify, Intent
+from features.master.equipment import EquipmentModelService
 from features.master.taxonomy import TaxonomyService
 
 MODEL_QUESTION = "어떤 설비 모델인가요?"
@@ -11,20 +12,29 @@ MAX_PART_OPTIONS = 8
 class RuleClarifyPolicy:
     """규칙으로 되묻기를 판단한다(QAService의 ClarifyPolicy 구현). LLM은 부르지 않는다.
     
-    shortcut: 검색에 모델 필터가 없어 모델이 비어 있어도 되묻지 않는다, 모델 필터가 생기면 되묻기 조건에 넣는다.
+    사양 질문은 모델마다 수치가 달라 모델이 없으면 등록 모델 목록으로 되묻는다.
     """
 
-    def __init__(self, taxonomy: TaxonomyService) -> None:
-        """부위 후보를 읽을 분류표 서비스를 받는다. 테스트에서는 가짜 객체로 바꿔 넣는다."""
+    def __init__(self, taxonomy: TaxonomyService, models: EquipmentModelService | None = None) -> None:
+        """부위 후보를 읽을 분류표 서비스와 모델 후보를 읽을 설비 모델 서비스를 받는다.
+
+        models가 없으면 모델이 빠진 사양 질문도 되묻지 않는다. 테스트에서는 가짜 객체로 바꿔 넣는다.
+        """
         self._taxonomy = taxonomy
+        self._models = models
 
     def needs_clarification(self, intent: Intent) -> bool:
-        """모델 후보가 둘 이상이거나 부위,작업이 모두 없으면 True다
+        """모델 후보가 둘 이상이거나, 사양 질문인데 모델이 없거나, 그 밖의 질문인데 부위·작업이 모두 없으면 True다.
         
         intent는 validate_ids를 거친 값이라 모델은 등록된 이름, 작업은 부위가 들어간 표준 이름이다.
         그래서 작업만 있어도 부위를 아는 것으로 본다.
+        사양 질문(속도·PIT·전동기 용량 등)은 부위가 없는 게 보통이라 부위를 되묻지 않는다.
         """
-        return len(intent.model_ids) > 1 or not (intent.parts or intent.task)
+        if len(intent.model_ids) > 1:
+            return True
+        if intent.intent == "spec":
+            return not intent.model_ids and bool(self._model_names())
+        return not (intent.parts or intent.task)
 
     def build_options(self, intent: Intent) -> Clarify:
         """되묻기 질문과 선택지를 만든다. 모델이 여럿이면 그 모델들을, 아니면 분류표 부위를 선택지로 준다.
@@ -34,4 +44,10 @@ class RuleClarifyPolicy:
         """
         if len(intent.model_ids) > 1:
             return Clarify(MODEL_QUESTION, list(intent.model_ids))
+        if intent.intent == "spec" and not intent.model_ids:
+            return Clarify(MODEL_QUESTION, self._model_names())
         return Clarify(PART_QUESTION, list(self._taxonomy.taxonomy.parts[:MAX_PART_OPTIONS]))
+
+    def _model_names(self) -> list[str]:
+        """등록된 설비 모델 이름 목록. 설비 모델 서비스가 없으면 빈 리스트다."""
+        return [model.name for model in self._models.list_models()] if self._models else []
