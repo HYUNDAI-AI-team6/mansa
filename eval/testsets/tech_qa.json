@@ -1,21 +1,23 @@
 {
   "title": "MANSA 현장 물류설비 기술·안전 통합 평가 50문항",
-  "description": "제공된 승강기 PDF 3종에 한정한 평가. 모델 제원 20, 안전 관리 20, 복합 참조 10. 질문에는 정답 원문을 넣지 않는다. 안전 질문은 모델 확인 또는 올바른 안전 답변을 인정한다. 현재 평가기는 추가 정답 기준을 읽지 않으므로 의미·되묻기·복합 참조는 수동 검토가 필요하다.",
-  "schema_version": "1.0",
+  "description": "엘트론 기술사양서와 안전기준 PDF 2종 기반 50문항. 모델 제원 20, 안전 관리 20, 복합 참조 10. 모든 문항에서 되묻기는 실패. 필요한 모델·조건을 질문에 명시하고 부위·작업 표현을 보완했다. expected_sources는 Chroma source와 정확히 일치하는 파일명#p페이지 키다. 의미·되묻기·복합 참조 판정은 현재 평가기의 자동 지표와 별도로 검토한다.",
+  "schema_version": "2.1",
   "source_scope": "제공된 PDF 버전 기준. 안전기준.pdf는 KC 2050-51 : 2022 표기이며 현행 규정 여부를 검증한 자료가 아니다.",
   "cases": [
     {
       "id": "S01",
       "category": "모델 제원",
-      "question": "ELVRO 3000 화물용 엘리베이터는 어떤 구동 방식이야?",
+      "question": "ELVRO 3000 화물용 엘리베이터는 카를 어떤 구동 방식으로 움직여?",
       "workflow": "L3",
       "expected_numbers": [],
-      "expected_sources": [],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p6"
+      ],
       "reference_answer": "로프식 화물용 엘리베이터이며 AC-VVVF 인버터 벡터 구동 방식이다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "지정한 제품군·세부 형번·조건의 값을 정확히 답하면 통과. 다른 형번의 값, 근거 없는 추정, 질문과 무관한 되묻기는 실패.",
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "엘트론엘리베이터_기술사양서.pdf",
@@ -23,22 +25,30 @@
           "section": "ELVRO 3000 / AC-VVVF INVERTOR VECTOR DRIVE SYSTEM"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "S02",
       "category": "모델 제원",
-      "question": "ELVRO 3000의 GF207632US 형번은 정격하중이 얼마야?",
+      "question": "ELVRO 3000 GF207632US의 카 정격하중은 얼마야?",
       "workflow": "L3",
       "expected_numbers": [
         "750 kg"
       ],
-      "expected_sources": [],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p6"
+      ],
       "reference_answer": "정격하중은 750 kg이다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "지정한 제품군·세부 형번·조건의 값을 정확히 답하면 통과. 다른 형번의 값, 근거 없는 추정, 질문과 무관한 되묻기는 실패.",
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "엘트론엘리베이터_기술사양서.pdf",
@@ -46,7 +56,13 @@
           "section": "ELVRO 3000 사양표 / GF207632US"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "S03",
@@ -57,12 +73,14 @@
         "1700 mm",
         "2000 mm"
       ],
-      "expected_sources": [],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p6"
+      ],
       "reference_answer": "카 내부 너비 W는 1700 mm, 깊이 D는 2000 mm이다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "지정한 제품군·세부 형번·조건의 값을 정확히 답하면 통과. 다른 형번의 값, 근거 없는 추정, 질문과 무관한 되묻기는 실패.",
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "엘트론엘리베이터_기술사양서.pdf",
@@ -70,22 +88,30 @@
           "section": "ELVRO 3000 사양표 / GF210032US / Car Inside W·D"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "S04",
       "category": "모델 제원",
-      "question": "ELVRO 3000 GF230032US에 적힌 정격하중은 몇 kg이야?",
+      "question": "ELVRO 3000 GF230032US의 카 정격하중은 몇 kg이야?",
       "workflow": "L3",
       "expected_numbers": [
         "3000 kg"
       ],
-      "expected_sources": [],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p6"
+      ],
       "reference_answer": "정격하중은 3000 kg이다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "지정한 제품군·세부 형번·조건의 값을 정확히 답하면 통과. 다른 형번의 값, 근거 없는 추정, 질문과 무관한 되묻기는 실패.",
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "엘트론엘리베이터_기술사양서.pdf",
@@ -93,7 +119,13 @@
           "section": "ELVRO 3000 사양표 / GF230032US"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "S05",
@@ -104,12 +136,14 @@
         "3500 mm",
         "5500 mm"
       ],
-      "expected_sources": [],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p6"
+      ],
       "reference_answer": "너비 3500 mm, 깊이 5500 mm이다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "지정한 제품군·세부 형번·조건의 값을 정확히 답하면 통과. 다른 형번의 값, 근거 없는 추정, 질문과 무관한 되묻기는 실패.",
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "엘트론엘리베이터_기술사양서.pdf",
@@ -117,22 +151,30 @@
           "section": "ELVRO 3000 사양표 / HF80022US"
         }
       ],
-      "review_notes": "HYDRO 501에도 같은 형번이 있으나 치수가 다르다. 제품군까지 구분해야 한다."
+      "review_notes": "HYDRO 501에도 같은 형번이 있으나 치수가 다르다. 제품군까지 구분해야 한다.",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "S06",
       "category": "모델 제원",
-      "question": "HYDRO 501 화물용 HF07522US의 정격하중은 얼마야?",
+      "question": "HYDRO 501 화물용 HF07522US의 카 정격하중은 얼마야?",
       "workflow": "L3",
       "expected_numbers": [
         "750 kg"
       ],
-      "expected_sources": [],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p7"
+      ],
       "reference_answer": "정격하중은 750 kg이다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "지정한 제품군·세부 형번·조건의 값을 정확히 답하면 통과. 다른 형번의 값, 근거 없는 추정, 질문과 무관한 되묻기는 실패.",
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "엘트론엘리베이터_기술사양서.pdf",
@@ -140,7 +182,13 @@
           "section": "HYDRO 501 화물용 사양표 / HF07522US"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "S07",
@@ -151,12 +199,14 @@
         "2800 mm",
         "3400 mm"
       ],
-      "expected_sources": [],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p7"
+      ],
       "reference_answer": "너비 2800 mm, 깊이 3400 mm이다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "지정한 제품군·세부 형번·조건의 값을 정확히 답하면 통과. 다른 형번의 값, 근거 없는 추정, 질문과 무관한 되묻기는 실패.",
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "엘트론엘리베이터_기술사양서.pdf",
@@ -164,7 +214,13 @@
           "section": "HYDRO 501 화물용 사양표 / HF30022US"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "S08",
@@ -175,12 +231,14 @@
         "4000 mm",
         "6000 mm"
       ],
-      "expected_sources": [],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p7"
+      ],
       "reference_answer": "너비 4000 mm, 깊이 6000 mm이다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "지정한 제품군·세부 형번·조건의 값을 정확히 답하면 통과. 다른 형번의 값, 근거 없는 추정, 질문과 무관한 되묻기는 실패.",
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "엘트론엘리베이터_기술사양서.pdf",
@@ -188,22 +246,30 @@
           "section": "HYDRO 501 화물용 사양표 / HF80022US"
         }
       ],
-      "review_notes": "S05와 같은 형번이지만 제품군이 다르다."
+      "review_notes": "S05와 같은 형번이지만 제품군이 다르다.",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "S09",
       "category": "모델 제원",
-      "question": "HYDRO 501 승객용 HP7502C의 정격하중은 몇 kg이야?",
+      "question": "HYDRO 501 승객용 HP7502C의 카 정격하중은 몇 kg이야?",
       "workflow": "L3",
       "expected_numbers": [
         "750 kg"
       ],
-      "expected_sources": [],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p8"
+      ],
       "reference_answer": "정격하중은 750 kg이다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "지정한 제품군·세부 형번·조건의 값을 정확히 답하면 통과. 다른 형번의 값, 근거 없는 추정, 질문과 무관한 되묻기는 실패.",
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "엘트론엘리베이터_기술사양서.pdf",
@@ -211,23 +277,31 @@
           "section": "2 Panel Center Open 사양표 / HP7502C"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "S10",
       "category": "모델 제원",
-      "question": "HYDRO 501 승객용 HP1002C의 출입구 너비와 높이를 mm로 알려줘.",
+      "question": "HYDRO 501 승객용 HP1002C의 카 출입구 너비와 높이를 mm로 알려줘.",
       "workflow": "L3",
       "expected_numbers": [
         "1000 mm",
         "2100 mm"
       ],
-      "expected_sources": [],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p8"
+      ],
       "reference_answer": "출입구 너비 1000 mm, 높이 2100 mm이다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "지정한 제품군·세부 형번·조건의 값을 정확히 답하면 통과. 다른 형번의 값, 근거 없는 추정, 질문과 무관한 되묻기는 실패.",
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "엘트론엘리베이터_기술사양서.pdf",
@@ -235,22 +309,30 @@
           "section": "2 Panel Center Open 사양표 / HP1002C / Opening W·H"
         }
       ],
-      "review_notes": "높이는 병합 셀의 공통값을 읽어야 한다."
+      "review_notes": "높이는 병합 셀의 공통값을 읽어야 한다.",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "S11",
       "category": "모델 제원",
-      "question": "HYDRO 501 승객용 HP1352C의 정격하중은 얼마야?",
+      "question": "HYDRO 501 승객용 HP1352C의 카 정격하중은 얼마야?",
       "workflow": "L3",
       "expected_numbers": [
         "1350 kg"
       ],
-      "expected_sources": [],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p8"
+      ],
       "reference_answer": "정격하중은 1350 kg이다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "지정한 제품군·세부 형번·조건의 값을 정확히 답하면 통과. 다른 형번의 값, 근거 없는 추정, 질문과 무관한 되묻기는 실패.",
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "엘트론엘리베이터_기술사양서.pdf",
@@ -258,22 +340,30 @@
           "section": "2 Panel Center Open 사양표 / HP1352C"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "S12",
       "category": "모델 제원",
-      "question": "HYDRO 501 자동차용 HC20022US3의 정격하중은 몇 kg이야?",
+      "question": "HYDRO 501 자동차용 HC20022US3의 카 정격하중은 몇 kg이야?",
       "workflow": "L3",
       "expected_numbers": [
         "2500 kg"
       ],
-      "expected_sources": [],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p10"
+      ],
       "reference_answer": "정격하중은 2500 kg이다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "지정한 제품군·세부 형번·조건의 값을 정확히 답하면 통과. 다른 형번의 값, 근거 없는 추정, 질문과 무관한 되묻기는 실패.",
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "엘트론엘리베이터_기술사양서.pdf",
@@ -281,23 +371,31 @@
           "section": "Single Direction Entrance Type / HC20022US3"
         }
       ],
-      "review_notes": "형번의 2002를 보고 하중을 2000 kg으로 추정하면 실패."
+      "review_notes": "형번의 2002를 보고 하중을 2000 kg으로 추정하면 실패.",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "S13",
       "category": "모델 제원",
-      "question": "HYDRO 501 자동차용 HC20022US1의 출입구 너비와 높이를 mm로 알려줘.",
+      "question": "HYDRO 501 자동차용 HC20022US1의 카 출입구 너비와 높이를 mm로 알려줘.",
       "workflow": "L3",
       "expected_numbers": [
         "2250 mm",
         "1800 mm"
       ],
-      "expected_sources": [],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p10"
+      ],
       "reference_answer": "너비 2250 mm, 높이 1800 mm이다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "지정한 제품군·세부 형번·조건의 값을 정확히 답하면 통과. 다른 형번의 값, 근거 없는 추정, 질문과 무관한 되묻기는 실패.",
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "엘트론엘리베이터_기술사양서.pdf",
@@ -305,7 +403,13 @@
           "section": "Single Direction Entrance Type / HC20022US1 / Opening W×H"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "S14",
@@ -316,12 +420,14 @@
         "3150 mm",
         "5700 mm"
       ],
-      "expected_sources": [],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p10"
+      ],
       "reference_answer": "승강로 내부 너비 3150 mm, 깊이 5700 mm이다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "지정한 제품군·세부 형번·조건의 값을 정확히 답하면 통과. 다른 형번의 값, 근거 없는 추정, 질문과 무관한 되묻기는 실패.",
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "엘트론엘리베이터_기술사양서.pdf",
@@ -329,149 +435,216 @@
           "section": "Through Direction Entrance Type / HC20022UT1 / Hoistway Inside X×Y"
         }
       ],
-      "review_notes": "비관통형 US1의 깊이 5600 mm와 혼동하지 않아야 한다."
+      "review_notes": "비관통형 US1의 깊이 5600 mm와 혼동하지 않아야 한다.",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "S15",
       "category": "모델 제원",
-      "question": "LUXEN의 권상기는 기어드 방식이야, 기어리스 방식이야? 적용 모터도 알려줘.",
+      "question": "HYDRO 501 화물용 엘리베이터는 카를 어떤 구동 방식으로 움직여?",
       "workflow": "L3",
       "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "고효율 기어리스 동기권상기이며 영구자석 동기모터를 사용한다.",
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p7"
+      ],
+      "reference_answer": "유압식 화물용 엘리베이터이다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "지정한 제품군·세부 형번·조건의 값을 정확히 답하면 통과. 다른 형번의 값, 근거 없는 추정, 질문과 무관한 되묻기는 실패.",
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
-          "file": "Passenger Elevator_LUXEN NEW YZER_2406.pdf",
-          "pdf_page": 5,
-          "section": "LUXEN / 고효율 기어리스 동기권상기"
+          "file": "엘트론엘리베이터_기술사양서.pdf",
+          "pdf_page": 7,
+          "section": "HYDRO 501 / Hydraulic Freight Elevator"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "S16",
       "category": "모델 제원",
-      "question": "LUXEN에서 한쪽 브레이크가 작동하지 않을 때를 대비한 설계는 뭐야?",
+      "question": "ELVRO 3000 GF220032US의 카 내부 너비와 깊이를 mm로 알려줘.",
       "workflow": "L3",
-      "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "한쪽 브레이크가 작동하지 않아도 다른 한쪽이 별도로 작동하는 이중 브레이크 시스템이다.",
+      "expected_numbers": [
+        "2000 mm",
+        "2800 mm"
+      ],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p6"
+      ],
+      "reference_answer": "너비 2000 mm, 깊이 2800 mm이다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "지정한 제품군·세부 형번·조건의 값을 정확히 답하면 통과. 다른 형번의 값, 근거 없는 추정, 질문과 무관한 되묻기는 실패.",
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
-          "file": "Passenger Elevator_LUXEN NEW YZER_2406.pdf",
-          "pdf_page": 5,
-          "section": "더욱 안전한 이중 브레이크"
+          "file": "엘트론엘리베이터_기술사양서.pdf",
+          "pdf_page": 6,
+          "section": "GF220032US / Car Inside W·D"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "S17",
       "category": "모델 제원",
-      "question": "LUXEN 기어리스 동기권상기는 기어오일을 주기적으로 교체해야 해?",
+      "question": "ELVRO 3000 GF250032US의 카 정격하중은 몇 kg이야?",
       "workflow": "L3",
-      "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "기어오일을 사용하지 않으므로 기어오일 교체가 필요 없다고 설명한다.",
+      "expected_numbers": [
+        "5000 kg"
+      ],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p6"
+      ],
+      "reference_answer": "정격하중은 5000 kg이다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "지정한 제품군·세부 형번·조건의 값을 정확히 답하면 통과. 다른 형번의 값, 근거 없는 추정, 질문과 무관한 되묻기는 실패.",
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
-          "file": "Passenger Elevator_LUXEN NEW YZER_2406.pdf",
-          "pdf_page": 5,
-          "section": "고효율 기어리스 동기권상기 / 편리한 유지보수"
+          "file": "엘트론엘리베이터_기술사양서.pdf",
+          "pdf_page": 6,
+          "section": "GF250032US / Capacity"
         }
       ],
-      "review_notes": "기어오일 교체 불필요를 전체 유지관리 불필요로 확대하면 실패."
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "S18",
       "category": "모델 제원",
-      "question": "NEW YZER는 별도 기계실이 필요한 모델이야?",
+      "question": "HYDRO 501 화물용 HF10722US의 카 내부 너비와 깊이를 mm로 알려줘.",
       "workflow": "L3",
-      "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "별도 기계실이 없는 MRL(Machine Room Less) 엘리베이터이다.",
+      "expected_numbers": [
+        "4500 mm",
+        "8000 mm"
+      ],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p7"
+      ],
+      "reference_answer": "너비 4500 mm, 깊이 8000 mm이다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "지정한 제품군·세부 형번·조건의 값을 정확히 답하면 통과. 다른 형번의 값, 근거 없는 추정, 질문과 무관한 되묻기는 실패.",
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
-          "file": "Passenger Elevator_LUXEN NEW YZER_2406.pdf",
-          "pdf_page": 6,
-          "section": "NEW YZER / MACHINE ROOM LESS"
+          "file": "엘트론엘리베이터_기술사양서.pdf",
+          "pdf_page": 7,
+          "section": "HF10722US / Car Inside W·D"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "S19",
       "category": "모델 제원",
-      "question": "NEW YZER 소개 페이지에 제시된 최소 피트 깊이는 몇 mm야?",
+      "question": "HYDRO 501 승객용 HS15024CS의 카 출입구 너비와 높이를 mm로 알려줘.",
       "workflow": "L3",
       "expected_numbers": [
-        "1100 mm"
+        "1600 mm",
+        "2100 mm"
       ],
-      "expected_sources": [],
-      "reference_answer": "소개 페이지의 최소 피트 깊이는 1100 mm이다.",
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p8"
+      ],
+      "reference_answer": "너비 1600 mm, 높이 2100 mm이다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "지정한 제품군·세부 형번·조건의 값을 정확히 답하면 통과. 다른 형번의 값, 근거 없는 추정, 질문과 무관한 되묻기는 실패.",
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
-          "file": "Passenger Elevator_LUXEN NEW YZER_2406.pdf",
-          "pdf_page": 6,
-          "section": "국내 최소 피트 깊이 구현"
+          "file": "엘트론엘리베이터_기술사양서.pdf",
+          "pdf_page": 8,
+          "section": "4 Panel Center Open / HS15024CS / Opening W·H"
         }
       ],
-      "review_notes": "소개 페이지의 최소값이며 모든 형번·속도 조건에 동일한 값이라고 일반화하지 않는다."
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "S20",
       "category": "모델 제원",
-      "question": "NEW YZER 권상시스템의 베어링에는 주기적으로 주유해야 해?",
+      "question": "HYDRO 501 자동차용 HC20022UT4의 카 내부 너비와 깊이를 mm로 알려줘.",
       "workflow": "L3",
-      "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "소개 페이지는 주기적인 베어링부 주유가 필요 없는 무급유 권상시스템이라고 설명한다.",
+      "expected_numbers": [
+        "2600 mm",
+        "6200 mm"
+      ],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p10"
+      ],
+      "reference_answer": "너비 2600 mm, 깊이 6200 mm이다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "지정한 제품군·세부 형번·조건의 값을 정확히 답하면 통과. 다른 형번의 값, 근거 없는 추정, 질문과 무관한 되묻기는 실패.",
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
-          "file": "Passenger Elevator_LUXEN NEW YZER_2406.pdf",
-          "pdf_page": 6,
-          "section": "유지보수 편의성과 고객 안전성은 높이고"
+          "file": "엘트론엘리베이터_기술사양서.pdf",
+          "pdf_page": 10,
+          "section": "Through Direction Entrance Type / HC20022UT4 / Car Inside A×B"
         }
       ],
-      "review_notes": "무급유를 안전 점검 불필요로 확대하면 실패."
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "A01",
       "category": "안전 관리",
-      "question": "피트에 들어가 점검하려는데 정지장치는 어떤 조건을 확인해야 해?",
+      "question": "ELVRO 3000 GF210032US의 피트 정지장치를 점검 중이야. 피트 출입문과 피트 바닥에서의 시인성·접근성 기준을 알려줘.",
       "workflow": "L2",
       "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "피트 출입문과 바닥에서 잘 보이고 접근 가능한 정지장치가 있어야 한다. 깊이와 출입문 조건에 따라 위치·개수를 확인한다. 모델을 되묻는 응답도 인정한다.",
-      "accepted_outcomes": [
-        "clarify_model",
-        "grounded_safety_answer"
+      "expected_sources": [
+        "안전기준.pdf#p9"
       ],
-      "acceptance_criteria": "관련 설비 모델을 확인하는 구체적인 되묻기, 또는 질문에 맞고 근거와 일치하는 안전 답변 중 하나면 통과. 모델 확인 뒤 위험한 방법이나 틀린 수치를 덧붙이면 실패.",
+      "reference_answer": "정지장치는 피트 출입문 및 피트 바닥에서 잘 보이고 접근 가능해야 한다.",
+      "accepted_outcomes": [
+        "grounded_answer"
+      ],
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "안전기준.pdf",
@@ -479,21 +652,31 @@
           "section": "6.1.5.1 가)"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "A02",
       "category": "안전 관리",
-      "question": "피트에서 사람이 서서 작업하는 공간의 조도는 어디에서 얼마나 확보해야 해?",
+      "question": "ELVRO 3000 GF210032US 피트에서 완충기를 점검하려고 해. 사람이 서서 작업하는 공간의 조도는 어디에서 얼마나 확보해야 해?",
       "workflow": "L2",
-      "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "피트 바닥에서 수직 위로 1 m 떨어진 곳에서 50 lx 이상이다. 모델 확인 질문도 인정한다.",
-      "accepted_outcomes": [
-        "clarify_model",
-        "grounded_safety_answer"
+      "expected_numbers": [
+        "1 m",
+        "50 lx"
       ],
-      "acceptance_criteria": "관련 설비 모델을 확인하는 구체적인 되묻기, 또는 질문에 맞고 근거와 일치하는 안전 답변 중 하나면 통과. 모델 확인 뒤 위험한 방법이나 틀린 수치를 덧붙이면 실패.",
+      "expected_sources": [
+        "안전기준.pdf#p9"
+      ],
+      "reference_answer": "피트 바닥에서 수직 위로 1 m 떨어진 곳에서 50 lx 이상이어야 한다.",
+      "accepted_outcomes": [
+        "grounded_answer"
+      ],
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "안전기준.pdf",
@@ -501,21 +684,31 @@
           "section": "6.1.4.1 나)"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "A03",
       "category": "안전 관리",
-      "question": "기계실 작업공간과 이동 통로는 조도를 똑같이 맞추면 돼?",
+      "question": "ELVRO 3000 GF210032US의 기계실에서 권상기를 점검하려고 해. 작업공간과 작업공간 사이 이동 통로의 최소 조도는 각각 얼마야?",
       "workflow": "L2",
-      "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "각 최소 기준은 작업공간 바닥 면 200 lx, 작업공간 간 이동 공간 바닥 면 50 lx이다. 둘 다 200 lx 이상으로 맞추는 것을 금지하는 의미는 아니다.",
-      "accepted_outcomes": [
-        "clarify_model",
-        "grounded_safety_answer"
+      "expected_numbers": [
+        "200 lx",
+        "50 lx"
       ],
-      "acceptance_criteria": "관련 설비 모델을 확인하는 구체적인 되묻기, 또는 질문에 맞고 근거와 일치하는 안전 답변 중 하나면 통과. 모델 확인 뒤 위험한 방법이나 틀린 수치를 덧붙이면 실패.",
+      "expected_sources": [
+        "안전기준.pdf#p9"
+      ],
+      "reference_answer": "작업공간 바닥 면 200 lx 이상, 작업공간 간 이동 공간 바닥 면 50 lx 이상이다.",
+      "accepted_outcomes": [
+        "grounded_answer"
+      ],
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "안전기준.pdf",
@@ -523,21 +716,30 @@
           "section": "6.1.4.2"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "A04",
       "category": "안전 관리",
-      "question": "기계실 출입문에 접근하는 통로에는 어떤 조명 조건이 필요해?",
+      "question": "ELVRO 3000 GF210032US의 권상기 점검을 위해 기계실에 들어가려고 해. 기계실 출입문에 인접한 접근 통로에는 어떤 조명이 필요해?",
       "workflow": "L2",
-      "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "출입문에 인접한 접근 통로에는 50 lx 이상 영구 전기조명이 필요하다.",
-      "accepted_outcomes": [
-        "clarify_model",
-        "grounded_safety_answer"
+      "expected_numbers": [
+        "50 lx"
       ],
-      "acceptance_criteria": "관련 설비 모델을 확인하는 구체적인 되묻기, 또는 질문에 맞고 근거와 일치하는 안전 답변 중 하나면 통과. 모델 확인 뒤 위험한 방법이나 틀린 수치를 덧붙이면 실패.",
+      "expected_sources": [
+        "안전기준.pdf#p12"
+      ],
+      "reference_answer": "50 lx 이상을 확보하는 영구적으로 설치된 전기조명이 필요하다.",
+      "accepted_outcomes": [
+        "grounded_answer"
+      ],
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "안전기준.pdf",
@@ -545,21 +747,28 @@
           "section": "6.2.2"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "A05",
       "category": "안전 관리",
-      "question": "승강로에 엘리베이터와 관계없는 배관을 추가해도 돼?",
+      "question": "ELVRO 3000 GF210032US 승강로에 엘리베이터와 관계없는 공장 공정용 배관을 추가해도 돼?",
       "workflow": "L2",
       "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "원칙적으로 엘리베이터 전용이며 관계없는 배관·전선·설비 설치는 금지된다. 기준의 명시적인 예외 설비는 외부 제어장치와 안전 운행 조건을 확인해야 한다.",
-      "accepted_outcomes": [
-        "clarify_model",
-        "grounded_safety_answer"
+      "expected_sources": [
+        "안전기준.pdf#p8"
       ],
-      "acceptance_criteria": "관련 설비 모델을 확인하는 구체적인 되묻기, 또는 질문에 맞고 근거와 일치하는 안전 답변 중 하나면 통과. 모델 확인 뒤 위험한 방법이나 틀린 수치를 덧붙이면 실패.",
+      "reference_answer": "승강로는 엘리베이터 전용으로 사용되어야 하며 관계없는 공정용 배관을 설치해서는 안 된다.",
+      "accepted_outcomes": [
+        "grounded_answer"
+      ],
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "안전기준.pdf",
@@ -567,21 +776,28 @@
           "section": "6.1.2.1"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "A06",
       "category": "안전 관리",
-      "question": "승강로를 건물의 다른 용도 환기 공간으로 써도 돼?",
+      "question": "ELVRO 3000 GF210032US 승강로를 공장의 다른 작업장 환기 공간으로 사용해도 돼?",
       "workflow": "L2",
       "expected_numbers": [],
-      "expected_sources": [],
+      "expected_sources": [
+        "안전기준.pdf#p8"
+      ],
       "reference_answer": "엘리베이터 이외 용도의 환기실로 사용해서는 안 된다. 환기는 먼지·유해 연기·습기로부터 전동기·전기설비·전선을 보호하도록 설계해야 한다.",
       "accepted_outcomes": [
-        "clarify_model",
-        "grounded_safety_answer"
+        "grounded_answer"
       ],
-      "acceptance_criteria": "관련 설비 모델을 확인하는 구체적인 되묻기, 또는 질문에 맞고 근거와 일치하는 안전 답변 중 하나면 통과. 모델 확인 뒤 위험한 방법이나 틀린 수치를 덧붙이면 실패.",
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "안전기준.pdf",
@@ -589,21 +805,28 @@
           "section": "6.1.3"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "A07",
       "category": "안전 관리",
-      "question": "설비에서 기름이 샐 수 있는데 파워 유니트 공간과 피트는 어떻게 마감해야 해?",
+      "question": "유압식 HYDRO 501 HF10022US의 파워 유니트 공간과 피트는 누유에 대비해 어떻게 마감해야 해?",
       "workflow": "L2",
       "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "유압식인지 모델을 확인하거나, 유압식 조건을 명시하고 설비의 모든 유체가 유출되어도 전 유량을 수용할 수 있는 불침투성 재질로 설치·마감해야 한다고 설명한다.",
-      "accepted_outcomes": [
-        "clarify_model",
-        "grounded_safety_answer"
+      "expected_sources": [
+        "안전기준.pdf#p12"
       ],
-      "acceptance_criteria": "관련 설비 모델을 확인하는 구체적인 되묻기, 또는 질문에 맞고 근거와 일치하는 안전 답변 중 하나면 통과. 모델 확인 뒤 위험한 방법이나 틀린 수치를 덧붙이면 실패.",
+      "reference_answer": "설비의 모든 유체가 유출되어도 전 유량을 수용할 수 있도록 스며들지 않는 재질로 설치·마감해야 한다.",
+      "accepted_outcomes": [
+        "grounded_answer"
+      ],
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "안전기준.pdf",
@@ -611,21 +834,28 @@
           "section": "6.1.9.4"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "A08",
       "category": "안전 관리",
-      "question": "피트 바닥에 물이 들어오거나 작업 바닥이 울퉁불퉁해도 괜찮아?",
+      "question": "ELVRO 3000 GF210032US의 피트에 설비 설치가 끝났어. 침수 방지와 작업 바닥의 평탄성 기준을 알려줘.",
       "workflow": "L2",
       "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "설비 설치 후 물이 침투하지 않는 구조여야 한다. 완충기·레일 기초·배수 설비 부분을 제외한 작업구역 바닥은 평탄해야 한다.",
-      "accepted_outcomes": [
-        "clarify_model",
-        "grounded_safety_answer"
+      "expected_sources": [
+        "안전기준.pdf#p12"
       ],
-      "acceptance_criteria": "관련 설비 모델을 확인하는 구체적인 되묻기, 또는 질문에 맞고 근거와 일치하는 안전 답변 중 하나면 통과. 모델 확인 뒤 위험한 방법이나 틀린 수치를 덧붙이면 실패.",
+      "reference_answer": "물이 침투하지 않는 구조여야 한다. 완충기·주행안내 레일 기초·배수 설비 부분을 제외한 작업구역 바닥은 평탄해야 한다.",
+      "accepted_outcomes": [
+        "grounded_answer"
+      ],
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "안전기준.pdf",
@@ -633,21 +863,28 @@
           "section": "6.1.9.3"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "A09",
       "category": "안전 관리",
-      "question": "기계실이나 승강로 작업구역에 일반 직원도 자유롭게 들어가도 돼?",
+      "question": "ELVRO 3000 GF210032US 기계실에 관계자가 아닌 일반 직원도 자유롭게 출입하도록 해도 돼?",
       "workflow": "L2",
       "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "카 내부를 제외한 해당 구역은 관계자만 접근할 수 있도록 해야 한다.",
-      "accepted_outcomes": [
-        "clarify_model",
-        "grounded_safety_answer"
+      "expected_sources": [
+        "안전기준.pdf#p12"
       ],
-      "acceptance_criteria": "관련 설비 모델을 확인하는 구체적인 되묻기, 또는 질문에 맞고 근거와 일치하는 안전 답변 중 하나면 통과. 모델 확인 뒤 위험한 방법이나 틀린 수치를 덧붙이면 실패.",
+      "reference_answer": "해당 기계실은 관계자만 접근할 수 있도록 해야 한다.",
+      "accepted_outcomes": [
+        "grounded_answer"
+      ],
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "안전기준.pdf",
@@ -655,21 +892,30 @@
           "section": "6.2.1"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "A10",
       "category": "안전 관리",
-      "question": "무거운 승강기 부품을 들어 올리는 고리에는 어떤 표시와 설치 조건이 필요해?",
+      "question": "ELVRO 3000 GF210032US의 무거운 부품을 양중할 금속 지지대나 고리는 어디에 설치하고 무엇을 표시해야 해?",
       "workflow": "L2",
-      "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "기계실·기계류 공간 또는 승강로 천장에 양중용 금속 지지대나 고리가 1개 이상 필요하며 허용 하중을 표시해야 한다.",
-      "accepted_outcomes": [
-        "clarify_model",
-        "grounded_safety_answer"
+      "expected_numbers": [
+        "1개"
       ],
-      "acceptance_criteria": "관련 설비 모델을 확인하는 구체적인 되묻기, 또는 질문에 맞고 근거와 일치하는 안전 답변 중 하나면 통과. 모델 확인 뒤 위험한 방법이나 틀린 수치를 덧붙이면 실패.",
+      "expected_sources": [
+        "안전기준.pdf#p10"
+      ],
+      "reference_answer": "기계실·기계류 공간 또는 승강로 천장에 1개 이상 설치하고 허용 하중을 표시해야 한다.",
+      "accepted_outcomes": [
+        "grounded_answer"
+      ],
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "안전기준.pdf",
@@ -677,21 +923,28 @@
           "section": "6.1.7"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "A11",
       "category": "안전 관리",
-      "question": "기계실 한 곳에 엘리베이터 여러 대가 있으면 부품을 어떻게 구분해야 해?",
+      "question": "한 기계실에 ELVRO 3000 GF210032US 두 대가 있어. 구동기·제어반·스위치가 어느 설비 것인지 어떻게 구분해야 해?",
       "workflow": "L2",
       "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "각 엘리베이터의 구동기·제어반·과속조절기·스위치 등을 일관된 숫자·문자·색상으로 식별하고 카 지붕·피트 등 필요한 곳에도 같은 방식으로 표시한다.",
-      "accepted_outcomes": [
-        "clarify_model",
-        "grounded_safety_answer"
+      "expected_sources": [
+        "안전기준.pdf#p8"
       ],
-      "acceptance_criteria": "관련 설비 모델을 확인하는 구체적인 되묻기, 또는 질문에 맞고 근거와 일치하는 안전 답변 중 하나면 통과. 모델 확인 뒤 위험한 방법이나 틀린 수치를 덧붙이면 실패.",
+      "reference_answer": "각 엘리베이터의 부품을 일관된 숫자·문자·색상으로 식별하고, 카 지붕·피트 등 필요한 곳에도 동일한 방법을 적용해야 한다.",
+      "accepted_outcomes": [
+        "grounded_answer"
+      ],
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "안전기준.pdf",
@@ -699,21 +952,30 @@
           "section": "6.1.1.2"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "A12",
       "category": "안전 관리",
-      "question": "피트에는 사다리만 있으면 돼, 아니면 별도 출입문이 필요해?",
+      "question": "HYDRO 501 HF10722US의 피트 깊이가 2000 mm이고 승강장문에서 접근할 수 있어. 안전기준상 별도 피트 출입문이 꼭 필요한지, 사다리도 가능한지 알려줘.",
       "workflow": "L2",
-      "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "모델이나 피트 깊이를 확인해도 된다. 기준을 답하면 깊이 2.5 m 초과는 피트 출입문, 2.5 m 이하는 피트 출입문 또는 승강장문에서 쉽게 접근 가능한 승강로 내부 사다리로 구분해야 한다.",
-      "accepted_outcomes": [
-        "clarify_model",
-        "grounded_safety_answer"
+      "expected_numbers": [
+        "2.5 m"
       ],
-      "acceptance_criteria": "관련 설비 모델을 확인하는 구체적인 되묻기, 또는 질문에 맞고 근거와 일치하는 안전 답변 중 하나면 통과. 모델 확인 뒤 위험한 방법이나 틀린 수치를 덧붙이면 실패.",
+      "expected_sources": [
+        "안전기준.pdf#p12"
+      ],
+      "reference_answer": "깊이 2.5 m 이하이므로 피트 출입문 또는 승강장문에서 쉽게 접근할 수 있는 승강로 내부 사다리가 가능하다. 출입문은 6.3, 사다리는 부속서 VII의 기준을 충족해야 한다.",
+      "accepted_outcomes": [
+        "grounded_answer"
+      ],
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "안전기준.pdf",
@@ -721,21 +983,28 @@
           "section": "6.2.4"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "A13",
       "category": "안전 관리",
-      "question": "피트 사다리를 펼쳤을 때 움직이는 부품과 부딪힐 수 있으면 어떤 보호가 필요해?",
+      "question": "ELVRO 3000 GF210032US 피트의 사다리를 펼치면 움직이는 부품과 충돌할 위험이 있어. 어떤 보호장치가 필요해?",
       "workflow": "L2",
       "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "사다리가 보관 위치에 있지 않으면 운행되지 않게 하는 전기안전장치가 필요하다. 보관 시에도 모든 피난공간을 유지해야 한다.",
-      "accepted_outcomes": [
-        "clarify_model",
-        "grounded_safety_answer"
+      "expected_sources": [
+        "안전기준.pdf#p13"
       ],
-      "acceptance_criteria": "관련 설비 모델을 확인하는 구체적인 되묻기, 또는 질문에 맞고 근거와 일치하는 안전 답변 중 하나면 통과. 모델 확인 뒤 위험한 방법이나 틀린 수치를 덧붙이면 실패.",
+      "reference_answer": "사다리가 보관 위치에 있지 않으면 운행되지 않도록 막는 전기안전장치가 필요하다. 사다리 보관 시에도 피트의 모든 피난공간을 유지해야 한다.",
+      "accepted_outcomes": [
+        "grounded_answer"
+      ],
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "안전기준.pdf",
@@ -743,21 +1012,28 @@
           "section": "6.2.4 계속"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "A14",
       "category": "안전 관리",
-      "question": "피트나 카 상부에서 작업자가 갇힐 수 있으면 어떤 통신 수단이 필요해?",
+      "question": "ELVRO 3000 GF210032US 피트에서 작업자가 갇히면 스스로 빠져나갈 방법이 없어. 어떤 비상통신 설비를 어디에서 조작할 수 있어야 해?",
       "workflow": "L2",
       "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "빠져나갈 방법이 없는 위험 장소에는 피난공간에서 조작할 수 있는 비상통화장치가 필요하다.",
-      "accepted_outcomes": [
-        "clarify_model",
-        "grounded_safety_answer"
+      "expected_sources": [
+        "안전기준.pdf#p10"
       ],
-      "acceptance_criteria": "관련 설비 모델을 확인하는 구체적인 되묻기, 또는 질문에 맞고 근거와 일치하는 안전 답변 중 하나면 통과. 모델 확인 뒤 위험한 방법이나 틀린 수치를 덧붙이면 실패.",
+      "reference_answer": "피난공간에서 조작할 수 있는 비상통화장치가 설치되어야 한다.",
+      "accepted_outcomes": [
+        "grounded_answer"
+      ],
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "안전기준.pdf",
@@ -765,21 +1041,28 @@
           "section": "6.1.6"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "A15",
       "category": "안전 관리",
-      "question": "카에 과부하가 감지되면 이용자 안내와 문 동작은 어떻게 돼야 해?",
+      "question": "자동 동력 작동식 문을 사용하는 ELVRO 3000 GF210032US에서 과부하가 감지됐어. 이용자에게 어떻게 알리고 문과 예비운전은 어떻게 처리해야 해?",
       "workflow": "L2",
       "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "청각·시각 신호로 알리고 자동 동력식 문은 완전히 개방, 수동식 문은 잠금해제 상태를 유지하며 예비운전은 무효화해야 한다.",
-      "accepted_outcomes": [
-        "clarify_model",
-        "grounded_safety_answer"
+      "expected_sources": [
+        "안전기준.pdf#p117"
       ],
-      "acceptance_criteria": "관련 설비 모델을 확인하는 구체적인 되묻기, 또는 질문에 맞고 근거와 일치하는 안전 답변 중 하나면 통과. 모델 확인 뒤 위험한 방법이나 틀린 수치를 덧붙이면 실패.",
+      "reference_answer": "청각 및 시각 신호로 알리고, 자동 동력 작동식 문을 완전히 개방하며, 예비운전은 무효화해야 한다.",
+      "accepted_outcomes": [
+        "grounded_answer"
+      ],
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "안전기준.pdf",
@@ -787,21 +1070,31 @@
           "section": "16.1.2.3"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "A16",
       "category": "안전 관리",
-      "question": "짐을 싣고 내릴 때 카 바닥 높이가 승강장과 어긋나면 어느 정도에서 보정해야 해?",
+      "question": "ELVRO 3000 GF210032US의 카에 짐을 싣고 내릴 때 착상 오차가 생겨. 허용 착상 정확도와 재보정이 필요한 기준을 알려줘.",
       "workflow": "L2",
-      "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "착상 정확도는 ±10 mm 이내이며 승객 출입·하역 중 ±20 mm를 초과하면 ±10 mm 이내로 보정해야 한다.",
-      "accepted_outcomes": [
-        "clarify_model",
-        "grounded_safety_answer"
+      "expected_numbers": [
+        "±10 mm",
+        "±20 mm"
       ],
-      "acceptance_criteria": "관련 설비 모델을 확인하는 구체적인 되묻기, 또는 질문에 맞고 근거와 일치하는 안전 답변 중 하나면 통과. 모델 확인 뒤 위험한 방법이나 틀린 수치를 덧붙이면 실패.",
+      "expected_sources": [
+        "안전기준.pdf#p117"
+      ],
+      "reference_answer": "착상 정확도는 ±10 mm 이내이다. 하역 중 ±20 mm를 초과하면 ±10 mm 이내로 보정해야 한다.",
+      "accepted_outcomes": [
+        "grounded_answer"
+      ],
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "안전기준.pdf",
@@ -809,21 +1102,28 @@
           "section": "16.1.1.4"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "A17",
       "category": "안전 관리",
-      "question": "비상통화장치는 경보음만 내면 되는 거야?",
+      "question": "HYDRO 501 HP1002C의 카 비상통화장치는 경보음만 내면 돼, 아니면 음성통화가 필요해?",
       "workflow": "L2",
       "expected_numbers": [],
-      "expected_sources": [],
+      "expected_sources": [
+        "안전기준.pdf#p125"
+      ],
       "reference_answer": "구출활동 중 지속적으로 통화할 수 있는 양방향 음성통신이어야 한다.",
       "accepted_outcomes": [
-        "clarify_model",
-        "grounded_safety_answer"
+        "grounded_answer"
       ],
-      "acceptance_criteria": "관련 설비 모델을 확인하는 구체적인 되묻기, 또는 질문에 맞고 근거와 일치하는 안전 답변 중 하나면 통과. 모델 확인 뒤 위험한 방법이나 틀린 수치를 덧붙이면 실패.",
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "안전기준.pdf",
@@ -831,21 +1131,28 @@
           "section": "16.3.1"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "A18",
       "category": "안전 관리",
-      "question": "점검용 정지장치가 눌린 뒤 우연히 정상 상태로 돌아가도 괜찮아?",
+      "question": "ELVRO 3000 GF210032US 점검용 정지장치의 복귀 방식과 표시 기준을 알려줘. 우연한 조작으로 정상 복귀해도 돼?",
       "workflow": "L2",
       "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "정지장치는 쌍안정이어야 하며 의도되지 않은 작동으로 정상 복귀되지 않아야 한다. 자체 또는 근처에 정지 표시가 있어야 한다.",
-      "accepted_outcomes": [
-        "clarify_model",
-        "grounded_safety_answer"
+      "expected_sources": [
+        "안전기준.pdf#p123"
       ],
-      "acceptance_criteria": "관련 설비 모델을 확인하는 구체적인 되묻기, 또는 질문에 맞고 근거와 일치하는 안전 답변 중 하나면 통과. 모델 확인 뒤 위험한 방법이나 틀린 수치를 덧붙이면 실패.",
+      "reference_answer": "정지장치는 쌍안정이어야 하고 의도되지 않은 작동으로 정상 복귀되지 않아야 한다. 자체 또는 근처에 정지 표시가 있어야 한다.",
+      "accepted_outcomes": [
+        "grounded_answer"
+      ],
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "안전기준.pdf",
@@ -853,21 +1160,28 @@
           "section": "16.1.11.1~16.1.11.2"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "A19",
       "category": "안전 관리",
-      "question": "주 개폐기를 끄면 카 조명과 환기장치 전원까지 같이 꺼져야 해?",
+      "question": "ELVRO 3000 GF210032US의 주 개폐기를 끄면 카 조명과 환기장치 회로도 함께 차단해야 해?",
       "workflow": "L2",
       "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "주 개폐기는 카 조명·환기장치, 카 지붕 콘센트, 기계류 공간·풀리실 조명, 기계류 공간·풀리실·피트 콘센트, 승강로 조명 회로를 차단하지 않아야 한다.",
-      "accepted_outcomes": [
-        "clarify_model",
-        "grounded_safety_answer"
+      "expected_sources": [
+        "안전기준.pdf#p108"
       ],
-      "acceptance_criteria": "관련 설비 모델을 확인하는 구체적인 되묻기, 또는 질문에 맞고 근거와 일치하는 안전 답변 중 하나면 통과. 모델 확인 뒤 위험한 방법이나 틀린 수치를 덧붙이면 실패.",
+      "reference_answer": "주 개폐기는 카 조명과 환기장치에 공급되는 회로를 차단하지 않아야 한다.",
+      "accepted_outcomes": [
+        "grounded_answer"
+      ],
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "안전기준.pdf",
@@ -875,21 +1189,30 @@
           "section": "14.5.1.1"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "A20",
       "category": "안전 관리",
-      "question": "승강장 바닥의 조도 기준은 승객용과 자동차용이 같아?",
+      "question": "HYDRO 501 자동차용 HC20022US1의 승강장문 앞 승강장 바닥 조도는 최소 얼마여야 해?",
       "workflow": "L2",
-      "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "일반 승강장문 근처 바닥은 50 lx 이상, 자동차용 승강장 바닥은 150 lx 이상이다.",
-      "accepted_outcomes": [
-        "clarify_model",
-        "grounded_safety_answer"
+      "expected_numbers": [
+        "150 lx"
       ],
-      "acceptance_criteria": "관련 설비 모델을 확인하는 구체적인 되묻기, 또는 질문에 맞고 근거와 일치하는 안전 답변 중 하나면 통과. 모델 확인 뒤 위험한 방법이나 틀린 수치를 덧붙이면 실패.",
+      "expected_sources": [
+        "안전기준.pdf#p43"
+      ],
+      "reference_answer": "자동차용 엘리베이터의 승강장 바닥 조도는 150 lx 이상이어야 한다.",
+      "accepted_outcomes": [
+        "grounded_answer"
+      ],
+      "acceptance_criteria": "명시한 모델과 조건에 맞게 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "안전기준.pdf",
@@ -897,27 +1220,37 @@
           "section": "7.7.1"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "X01",
       "category": "복합 참조",
-      "question": "NEW YZER 소개 페이지의 최소 피트 깊이를 확인하고, 그 깊이로 설치한다고 가정하면 안전기준상 피트 출입문만 가능한지 사다리도 가능한지 설명해줘.",
+      "question": "HYDRO 501 자동차용 HC20022US1의 사양표상 PIT 깊이를 확인해줘. 그 깊이로 설치할 때 안전기준상 별도 피트 출입문만 가능한지, 승강장문에서 쉽게 접근하는 사다리도 가능한지 설명해줘.",
       "workflow": "L2",
       "expected_numbers": [
-        "1100 mm"
+        "1250 mm",
+        "2.5 m"
       ],
-      "expected_sources": [],
-      "reference_answer": "최소 피트 깊이는 1100 mm(1.1 m)이다. 2.5 m 이하 구간이므로 피트 출입문 또는 승강장문에서 쉽게 접근할 수 있는 승강로 내부 사다리가 가능하다. 출입문·사다리의 세부 기준도 충족해야 하며 최소값이 모든 형번에 적용된다고 단정하지 않는다.",
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p10",
+        "안전기준.pdf#p12"
+      ],
+      "reference_answer": "PIT 깊이는 1250 mm(1.25 m)이다. 2.5 m 이하이므로 피트 출입문 또는 승강장문에서 쉽게 접근 가능한 승강로 내부 사다리가 가능하다. 각각의 세부 설치 기준도 충족해야 한다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "기술 문서의 해당 모델 정보와 안전기준의 관련 조건을 모두 연결해야 통과. 한쪽만 답하거나 적용 조건 없이 적합하다고 단정하면 실패.",
+      "acceptance_criteria": "기술 문서의 해당 모델 정보와 안전기준을 연결해 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
-          "file": "Passenger Elevator_LUXEN NEW YZER_2406.pdf",
-          "pdf_page": 6,
-          "section": "최소 피트 깊이"
+          "file": "엘트론엘리베이터_기술사양서.pdf",
+          "pdf_page": 10,
+          "section": "HC20022US1 / PIT"
         },
         {
           "file": "안전기준.pdf",
@@ -925,7 +1258,13 @@
           "section": "6.2.4"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "X02",
@@ -935,12 +1274,15 @@
       "expected_numbers": [
         "1800 mm"
       ],
-      "expected_sources": [],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p6",
+        "안전기준.pdf#p9"
+      ],
       "reference_answer": "PIT는 1800 mm(1.8 m)이다. 1.6 m를 초과하므로 상부·하부 정지스위치 2개를 설치하는 조건에 해당한다. 각 스위치의 접근성과 위치 기준을 확인해야 한다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "기술 문서의 해당 모델 정보와 안전기준의 관련 조건을 모두 연결해야 통과. 한쪽만 답하거나 적용 조건 없이 적합하다고 단정하면 실패.",
+      "acceptance_criteria": "기술 문서의 해당 모델 정보와 안전기준을 연결해 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "엘트론엘리베이터_기술사양서.pdf",
@@ -953,7 +1295,13 @@
           "section": "6.1.5.1 가) 2)"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "X03",
@@ -963,12 +1311,15 @@
       "expected_numbers": [
         "1300 mm"
       ],
-      "expected_sources": [],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p7",
+        "안전기준.pdf#p9"
+      ],
       "reference_answer": "PIT는 1300 mm(1.3 m)이다. 1.6 m 이하이므로 깊이 초과에 따른 상·하부 2개 조건에는 해당하지 않는다. 정지장치 자체와 1.6 m 이하 구간의 위치·접근 기준은 필요하다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "기술 문서의 해당 모델 정보와 안전기준의 관련 조건을 모두 연결해야 통과. 한쪽만 답하거나 적용 조건 없이 적합하다고 단정하면 실패.",
+      "acceptance_criteria": "기술 문서의 해당 모델 정보와 안전기준을 연결해 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "엘트론엘리베이터_기술사양서.pdf",
@@ -981,7 +1332,13 @@
           "section": "6.1.5.1 가) 1)~2)"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "X04",
@@ -989,12 +1346,15 @@
       "question": "HYDRO 501의 구동 방식을 확인하고, 그 방식 때문에 파워 유니트 공간과 피트에 필요한 누유 대비 조건을 설명해줘.",
       "workflow": "L2",
       "expected_numbers": [],
-      "expected_sources": [],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p7",
+        "안전기준.pdf#p12"
+      ],
       "reference_answer": "HYDRO 501은 유압식이다. 파워 유니트 공간과 피트는 해당 설비의 모든 유체가 유출되어도 전 유량을 수용하고 스며들지 않는 재질로 설치·마감해야 한다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "기술 문서의 해당 모델 정보와 안전기준의 관련 조건을 모두 연결해야 통과. 한쪽만 답하거나 적용 조건 없이 적합하다고 단정하면 실패.",
+      "acceptance_criteria": "기술 문서의 해당 모델 정보와 안전기준을 연결해 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "엘트론엘리베이터_기술사양서.pdf",
@@ -1007,23 +1367,32 @@
           "section": "6.1.9.4"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "X05",
       "category": "복합 참조",
-      "question": "HYDRO 501 자동차용 HC20022US1의 정격하중을 알려주고, 이 용도의 승강장 바닥에 적용할 조도 기준도 함께 알려줘.",
+      "question": "HYDRO 501 자동차용 HC20022US1의 카 정격하중을 알려주고, 이 용도의 승강장 바닥에 적용할 조도 기준도 함께 알려줘.",
       "workflow": "L2",
       "expected_numbers": [
         "2000 kg",
         "150 lx"
       ],
-      "expected_sources": [],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p10",
+        "안전기준.pdf#p43"
+      ],
       "reference_answer": "정격하중은 2000 kg이며 자동차용 엘리베이터다. 자동차용 승강장 바닥의 조도는 150 lx 이상이어야 한다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "기술 문서의 해당 모델 정보와 안전기준의 관련 조건을 모두 연결해야 통과. 한쪽만 답하거나 적용 조건 없이 적합하다고 단정하면 실패.",
+      "acceptance_criteria": "기술 문서의 해당 모델 정보와 안전기준을 연결해 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "엘트론엘리베이터_기술사양서.pdf",
@@ -1036,23 +1405,32 @@
           "section": "7.7.1"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "X06",
       "category": "복합 참조",
-      "question": "HYDRO 501 승객용 HP1002C의 정격하중과 일반 승객용 승강장 바닥에 필요한 조도를 함께 알려줘.",
+      "question": "HYDRO 501 승객용 HP1002C의 카 정격하중과 일반 승객용 승강장 바닥에 필요한 조도를 함께 알려줘.",
       "workflow": "L2",
       "expected_numbers": [
         "1000 kg",
         "50 lx"
       ],
-      "expected_sources": [],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p8",
+        "안전기준.pdf#p43"
+      ],
       "reference_answer": "정격하중은 1000 kg이다. 승강장문 근처 승강장 바닥은 50 lx 이상이어야 한다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "기술 문서의 해당 모델 정보와 안전기준의 관련 조건을 모두 연결해야 통과. 한쪽만 답하거나 적용 조건 없이 적합하다고 단정하면 실패.",
+      "acceptance_criteria": "기술 문서의 해당 모델 정보와 안전기준을 연결해 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "엘트론엘리베이터_기술사양서.pdf",
@@ -1065,7 +1443,13 @@
           "section": "7.7.1"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "X07",
@@ -1073,12 +1457,15 @@
       "question": "HYDRO 501의 구동 방식을 기준으로, 과부하가 걸리면 정상 기동과 재착상을 모두 막아야 하는지 설명해줘.",
       "workflow": "L2",
       "expected_numbers": [],
-      "expected_sources": [],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p7",
+        "안전기준.pdf#p117"
+      ],
       "reference_answer": "HYDRO 501은 유압식이다. 과부하 시 정상 기동을 방지해야 하지만 유압식의 경우 재착상은 방지해서는 안 된다는 예외가 적용된다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "기술 문서의 해당 모델 정보와 안전기준의 관련 조건을 모두 연결해야 통과. 한쪽만 답하거나 적용 조건 없이 적합하다고 단정하면 실패.",
+      "acceptance_criteria": "기술 문서의 해당 모델 정보와 안전기준을 연결해 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "엘트론엘리베이터_기술사양서.pdf",
@@ -1091,22 +1478,32 @@
           "section": "16.1.2.1"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "X08",
       "category": "복합 참조",
-      "question": "ELVRO 3000 GF230032US의 정격하중을 확인해줘. 이 값만 알면 안전기준에 따른 카 완충기 지지대 아래의 피트 바닥 지지력을 확정할 수 있어?",
+      "question": "ELVRO 3000 GF230032US의 정격하중을 찾아줘. 카 자중과 카가 지지하는 부품의 중량 합계 P를 2000 kg, 중력가속도를 9.81 m/s²로 가정할 때, 안전기준 6.1.8.5에 따른 카 완충기 지지대 아래의 전체 수직력 F는 몇 N이야?",
       "workflow": "L2",
       "expected_numbers": [
-        "3000 kg"
+        "3000 kg",
+        "196200 N"
       ],
-      "expected_sources": [],
-      "reference_answer": "정격하중 Q는 3000 kg이다. 6.1.8.5의 F=4·gn·(P+Q)를 적용하려면 카 자중 및 카가 지지하는 부품의 중량 P도 필요하므로 정격하중만으로 지지력을 확정할 수 없다.",
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p6",
+        "안전기준.pdf#p11"
+      ],
+      "reference_answer": "정격하중 Q는 3000 kg이다. F=4×9.81×(2000+3000)=196200 N이다. P는 질문에서 주어진 계산 가정이며 제품의 실제 자중으로 단정하지 않는다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "기술 문서의 해당 모델 정보와 안전기준의 관련 조건을 모두 연결해야 통과. 한쪽만 답하거나 적용 조건 없이 적합하다고 단정하면 실패.",
+      "acceptance_criteria": "기술 문서의 해당 모델 정보와 안전기준을 연결해 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
           "file": "엘트론엘리베이터_기술사양서.pdf",
@@ -1119,67 +1516,99 @@
           "section": "6.1.8.5"
         }
       ],
-      "review_notes": "부족한 입력을 식별하는 문항이다. Q만으로 총 지지력을 계산해 제시하면 실패."
+      "review_notes": "필요한 계산 입력을 모두 제공했다. 추가 제원을 되묻거나 계산을 거절하면 실패.",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     },
     {
       "id": "X09",
       "category": "복합 참조",
-      "question": "NEW YZER의 기계실 유무를 확인해줘. 이 모델의 주 개폐기는 어디에 두어야 하는지 제어반 위치에 따라 설명해줘.",
-      "workflow": "L2",
-      "expected_numbers": [],
-      "expected_sources": [],
-      "reference_answer": "NEW YZER는 기계실이 없는 모델이다. 제어반이 승강로 밖에 있으면 제어반에, 승강로 안에 있으면 비상운전·작동시험 패널에 주 개폐기를 둔다. 두 패널이 떨어져 있으면 비상운전 패널에 둔다. 카탈로그만으로 실제 제어반 위치를 단정하지 않는다.",
-      "accepted_outcomes": [
-        "grounded_answer"
-      ],
-      "acceptance_criteria": "기술 문서의 해당 모델 정보와 안전기준의 관련 조건을 모두 연결해야 통과. 한쪽만 답하거나 적용 조건 없이 적합하다고 단정하면 실패.",
-      "reference_sources": [
-        {
-          "file": "Passenger Elevator_LUXEN NEW YZER_2406.pdf",
-          "pdf_page": 6,
-          "section": "MACHINE ROOM LESS"
-        },
-        {
-          "file": "안전기준.pdf",
-          "pdf_page": 108,
-          "section": "14.5.1.2"
-        }
-      ],
-      "review_notes": ""
-    },
-    {
-      "id": "X10",
-      "category": "복합 참조",
-      "question": "LUXEN 권상기의 기어오일 교체가 필요한지 확인해줘. 교체가 필요 없다면 기계류 작업공간 조명이나 관계자 출입 제한도 생략할 수 있어?",
+      "question": "HYDRO 501 화물용 HF10722US의 사양표상 PIT 깊이와, 이 피트의 작업공간에서 확보해야 하는 조도·측정 높이를 함께 알려줘.",
       "workflow": "L2",
       "expected_numbers": [
-        "200 lx",
+        "2000 mm",
+        "1 m",
         "50 lx"
       ],
-      "expected_sources": [],
-      "reference_answer": "LUXEN 기어리스 동기권상기는 기어오일을 사용하지 않아 기어오일 교체가 필요 없다. 이 특성이 안전설비 면제를 뜻하지는 않는다. 작업공간 바닥 면은 200 lx 이상, 이동 공간 바닥 면은 50 lx 이상이어야 하며 카 내부를 제외한 해당 구역은 관계자만 접근할 수 있어야 한다.",
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p7",
+        "안전기준.pdf#p9"
+      ],
+      "reference_answer": "PIT 깊이는 2000 mm이다. 피트 작업공간은 바닥에서 수직 위로 1 m 떨어진 곳에서 50 lx 이상을 확보해야 한다.",
       "accepted_outcomes": [
         "grounded_answer"
       ],
-      "acceptance_criteria": "기술 문서의 해당 모델 정보와 안전기준의 관련 조건을 모두 연결해야 통과. 한쪽만 답하거나 적용 조건 없이 적합하다고 단정하면 실패.",
+      "acceptance_criteria": "기술 문서의 해당 모델 정보와 안전기준을 연결해 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
       "reference_sources": [
         {
-          "file": "Passenger Elevator_LUXEN NEW YZER_2406.pdf",
-          "pdf_page": 5,
-          "section": "편리한 유지보수"
+          "file": "엘트론엘리베이터_기술사양서.pdf",
+          "pdf_page": 7,
+          "section": "HF10722US / PIT"
         },
         {
           "file": "안전기준.pdf",
           "pdf_page": 9,
-          "section": "6.1.4.2"
+          "section": "6.1.4.1 나)"
+        }
+      ],
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
+    },
+    {
+      "id": "X10",
+      "category": "복합 참조",
+      "question": "ELVRO 3000과 HYDRO 501의 구동 방식을 각각 확인해줘. 두 모델에서 과부하 시 정상 기동과 재착상을 막는 기준이 어떻게 다른지 비교해줘.",
+      "workflow": "L2",
+      "expected_numbers": [],
+      "expected_sources": [
+        "엘트론엘리베이터_기술사양서.pdf#p6",
+        "엘트론엘리베이터_기술사양서.pdf#p7",
+        "안전기준.pdf#p117"
+      ],
+      "reference_answer": "ELVRO 3000은 로프식이고 HYDRO 501은 유압식이다. 과부하 시 ELVRO 3000은 재착상을 포함한 정상 기동을 방지해야 한다. HYDRO 501도 정상 기동을 방지하지만 유압식 예외에 따라 재착상은 방지해서는 안 된다.",
+      "accepted_outcomes": [
+        "grounded_answer"
+      ],
+      "acceptance_criteria": "기술 문서의 해당 모델 정보와 안전기준을 연결해 질문의 모든 항목에 정확히 답해야 통과. 모델·부위·조건을 되묻는 응답은 정답 내용이 일부 포함되어도 실패. 답변 불가, 다른 형번의 값, 근거 없는 수치 또는 안전기준의 잘못된 적용도 실패.",
+      "reference_sources": [
+        {
+          "file": "엘트론엘리베이터_기술사양서.pdf",
+          "pdf_page": 6,
+          "section": "ELVRO 3000 / 로프식"
+        },
+        {
+          "file": "엘트론엘리베이터_기술사양서.pdf",
+          "pdf_page": 7,
+          "section": "HYDRO 501 / 유압식"
         },
         {
           "file": "안전기준.pdf",
-          "pdf_page": 12,
-          "section": "6.2.1"
+          "pdf_page": 117,
+          "section": "16.1.2.1"
         }
       ],
-      "review_notes": ""
+      "review_notes": "",
+      "rejected_outcomes": [
+        "clarification",
+        "no_answer",
+        "incorrect_answer"
+      ],
+      "clarification_policy": "fail"
     }
-  ]
+  ],
+  "clarification_policy": "fail",
+  "source_files": [
+    "엘트론엘리베이터_기술사양서.pdf",
+    "안전기준.pdf"
+  ],
+  "source_key_format": "{Chroma source}#p{PDF page number, 1-based}"
 }
