@@ -20,7 +20,9 @@ class DocumentRow:
     """목록에 보이는 문서 한 줄. 원본 PDF 경로는 담지 않는다(화면에 노출하지 않는다).
 
     filename은 확장자를 포함한 원래 파일 이름이고, title은 확장자를 뺀 이름(청크 doc_name)이다.
-    chunk_count는 완료 때 기록되며 그 전이거나 DB에 컬럼이 없으면 None이다.
+    chunk_count는 완료 때 저장한 청크 수이고 완료 전이거나 실패한 문서는 None이다.
+    error_message는 실패했을 때의 사유이고 그 밖에는 None이다. Document가 file_path(기본값 없음)를 더하는
+    상속 구조라서 기본값이 있는 이 필드는 키워드 전용이다.
     """
 
     id: int
@@ -33,6 +35,7 @@ class DocumentRow:
     chunk_count: int | None
     upload_at: datetime
     updated_at: datetime
+    error_message: str | None = field(default=None, kw_only=True)
 
 
 @dataclass(frozen=True)
@@ -44,11 +47,12 @@ class Document(DocumentRow):
 
 @dataclass(frozen=True)
 class DocumentStatus:
-    """처리 상태 조회 결과."""
+    """처리 상태 조회 결과. error_message는 실패한 문서의 사유이고 그 밖에는 None이다."""
 
     status: str
     chunk_count: int | None
     updated_at: datetime
+    error_message: str | None = None
 
 
 @dataclass(frozen=True)
