@@ -123,7 +123,7 @@ VECTOR_TOP_K = _env_int("VECTOR_TOP_K", 50, minimum=1) # BM25·태그 순위를 
 BM25_TOP_K = _env_int("BM25_TOP_K", 20, minimum=1)
 RESULT_TOP_K = _env_int("RESULT_TOP_K", 20, minimum=1)
 TAG_TOP_K = _env_int("TAG_TOP_K", 20, minimum=1)
-EVIDENCE_TOP_N = _env_int("EVIDENCE_TOP_N", 8, minimum=1)  # 답변에 쓸 근거 청크 개수
+EVIDENCE_TOP_N = _env_int("EVIDENCE_TOP_N", 12, minimum=1)  # 답변에 쓸 근거 청크 개수
 # 청크 메타데이터에서 태그 값을 꺼낼 때 쓰는 키 이름(쉼표로 구분). 문서를 올릴 때 넣은 키와 같아야 태그 순위가 동작한다.
 # 없는 키여도 오류는 없고 그 청크에 태그가 없는 것으로 본다.
 TAG_KEYS = _env_tuple("TAG_KEYS", ("part", "task"))

@@ -4,7 +4,8 @@ from collections import Counter
 
 # shortcut: 띄어쓰기·기호로만 나눠 "브레이크를"과 "브레이크"를 다른 단어로 본다, 검색 품질이 부족하면 형태소 분석이나 글자 묶음(bigram)으로 바꾼다.
 
-_WORD = re.compile(r"\w+") # 글자나 숫자가 이어진 덩어리를 찾는 규칙이다. 띄어쓰기, 쉼표, 하이픈에서 끊김
+# 숫자 묶음과 글자 묶음을 따로 끊는다. "1000kg"이 표의 "Capacity (㎏): 1000"과 "1000"으로 맞도록 숫자와 단위를 나눈다
+_WORD = re.compile(r"\d+|[^\W\d_]+")
 
 def tokenize(text: str) -> list[str]:
     """글자·숫자 묶음 단위로 나누고 영문은 소문자로 바꾼다."""
