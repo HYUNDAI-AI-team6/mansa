@@ -196,13 +196,72 @@
   font-size: 13px;
   color: var(--text2);
 }
-/* 문서 관리의 실패 사유: 한 줄로 줄여 보이고 전체는 마우스를 올리면 보인다 */
-.tbl em.fail-reason {
-  max-width: 100%;
-  color: #b91c1c;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* 문서 관리의 실패 표시: 이름 옆 ⓧ 에 마우스를 올리거나 키보드로 가면 사유와 안내가 말풍선으로 보인다 */
+.fail-info {
+  position: relative;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #fdecec;
+  cursor: help;
+}
+.fail-info:hover,
+.fail-info:focus-visible {
+  background: #fbd5d5;
+}
+.fail-info:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.fail-tip {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-24px);
+  z-index: 20;
+  width: max-content;
+  max-width: 300px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--text);
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.18);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  text-align: left;
+  cursor: default;
+}
+.fail-tip::before {
+  content: "";
+  position: absolute;
+  top: -4px;
+  left: 20px;
+  width: 8px;
+  height: 8px;
+  background: var(--text);
+  transform: rotate(45deg);
+}
+.fail-tip > span {
+  display: block;
+}
+.fail-tip > .hint {
+  color: #cbd0d8;
+}
+.fail-tip > span + .hint {
+  margin-top: 4px;
+}
+.fail-info:hover .fail-tip,
+.fail-info:focus .fail-tip,
+.fail-info:focus-within .fail-tip {
+  display: block;
 }
 .pdf {
   display: inline-flex;

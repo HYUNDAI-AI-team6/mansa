@@ -85,17 +85,20 @@ FAILED_HINT = "삭제한 뒤 다시 올려 주세요"
 
 
 def _title(doc: dict) -> str:
-    """문서 이름. 실패한 문서는 실패 사유(있으면)와 다시 올리는 방법을 덧붙인다.
+    """문서 이름. 실패한 문서는 이름 옆에 ⓧ 표시를 두고, 마우스를 올리거나 키보드로 가면 사유와 다시 올리는 방법을 보여 준다.
 
-    같은 이름·유형은 한 건만 등록할 수 있어서 실패한 문서는 삭제한 뒤 다시 올려야 한다.
-    사유는 한 줄로 줄여 보이고, 전체는 마우스를 올리면 보인다.
+    같은 이름·유형은 한 건만 등록할 수 있어서 실패한 문서는 삭제한 뒤 다시 올려야 한다. 사유가 없는 이전 실패 문서는
+    안내만 보여 준다.
     """
     label = title_label(doc)
     if doc["status"] != "실패":
         return label
     reason = (doc.get("error") or "").strip()
-    reason_html = f'<em class="fail-reason" title="{escape(reason)}">{escape(reason)}</em>' if reason else ""
-    return f"{label}{reason_html}<em>{FAILED_HINT}</em>"
+    lines = (f"<span>{escape(reason)}</span>" if reason else "") + f'<span class="hint">{FAILED_HINT}</span>'
+    return (
+        f'{label}<span class="fail-info" tabindex="0" role="img" aria-label="실패 사유 보기">'
+        f'{ui.icon("x", "#B91C1C", 11)}<span class="fail-tip" role="tooltip">{lines}</span></span>'
+    )
 
 
 def _chunks(doc: dict) -> str:

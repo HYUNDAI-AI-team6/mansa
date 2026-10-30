@@ -200,15 +200,26 @@ class TableTest(unittest.TestCase):
         self.assertEqual(html.count("grid-template-columns"), 2)  # 머리글과 한 줄
         self.assertEqual(len(documents.COLUMNS), 7)
 
-    def test_a_failed_row_shows_the_reason_with_the_full_text_on_hover(self):
+    def test_a_failed_row_has_an_info_mark_whose_tooltip_shows_the_reason_and_the_retry_hint(self):
         html = documents.table([self.doc("실패", error="PDF를 열 수 없어요")])
-        self.assertIn('class="fail-reason" title="PDF를 열 수 없어요">PDF를 열 수 없어요</em>', html)
-        self.assertIn("삭제한 뒤 다시 올려 주세요", html)
+        self.assertIn('class="fail-info"', html)
+        self.assertIn('<span class="fail-tip" role="tooltip"><span>PDF를 열 수 없어요</span>', html)
+        self.assertIn('<span class="hint">삭제한 뒤 다시 올려 주세요</span>', html)
 
-    def test_a_failed_row_without_a_reason_only_shows_the_retry_hint(self):
+    def test_the_info_mark_can_be_reached_with_the_keyboard(self):
+        html = documents.table([self.doc("실패", error="사유")])
+        self.assertIn('tabindex="0"', html)
+        self.assertIn('aria-label="실패 사유 보기"', html)
+
+    def test_the_reason_is_not_printed_next_to_the_title(self):
+        # 사유는 말풍선 안에만 있고 이름 옆에 글자로 붙지 않는다
+        html = documents.table([self.doc("실패", error="PDF를 열 수 없어요")])
+        self.assertEqual(html.count("PDF를 열 수 없어요"), 1)
+
+    def test_a_failed_row_without_a_reason_only_shows_the_retry_hint_in_the_tooltip(self):
         html = documents.table([self.doc("실패")])
-        self.assertNotIn("fail-reason", html)
-        self.assertIn("삭제한 뒤 다시 올려 주세요", html)
+        self.assertIn('class="fail-info"', html)
+        self.assertIn('<span class="fail-tip" role="tooltip"><span class="hint">', html)
 
     def test_the_reason_is_escaped(self):
         html = documents.table([self.doc("실패", error='<script>alert("x")</script>')])
@@ -222,6 +233,11 @@ class TableTest(unittest.TestCase):
     def test_a_failed_row_says_to_delete_and_upload_again(self):
         html = documents.table([self.doc("실패")])
         self.assertIn("삭제한 뒤 다시 올려 주세요", html)
+
+    def test_only_failed_rows_have_the_info_mark(self):
+        for status in ("완료", "처리 중"):
+            with self.subTest(status=status):
+                self.assertNotIn("fail-info", documents.table([self.doc(status, error="남은 사유")]))
 
     def test_other_rows_have_no_retry_hint(self):
         for status in ("완료", "처리 중"):
