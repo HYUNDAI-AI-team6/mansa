@@ -143,3 +143,7 @@ EVAL_ROOT = _env_path("EVAL_ROOT", REPO_ROOT / "eval")
 TESTSET_PATH = _env_path("TESTSET_PATH", EVAL_ROOT / "testsets" / "tech_qa.json")
 SAVE_DIR = _env_path("SAVE_DIR", EVAL_ROOT / "save")
 
+# 업로드한 원본 PDF를 두는 폴더. {PDF_STORAGE_DIR}/{doc_type}/{문서 id}.pdf 로 저장한다. 상대 경로는 저장소 루트 기준이다.
+# 서버를 다시 시작할 때 이 폴더가 지워지는 환경이면 원본 PDF가 사라진다. 컴퓨터마다 따로 저장된다.
+PDF_STORAGE_DIR = _env_path("PDF_STORAGE_DIR", REPO_ROOT / "mansa" / "data" / "documents")
+

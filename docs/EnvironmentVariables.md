@@ -38,7 +38,7 @@ from config import CHUNK_SIZE, VECTOR_TOP_K
 | 둘 중 하나 | `SAFETY_DOC_TYPE`, `MANUAL_DOC_TYPE` | `tech` 또는 `secure` |
 | 쉼표로 나눈 이름 | `TAG_KEYS` | 빈 이름 없이 `part,task`처럼 적는다 |
 | 문자열 | `EMBEDDING_MODEL`, `SAFETY_COLLECTION`, `MANUAL_COLLECTION`, `DEFAULT_CONTACT`, `ADMIN_DEPT_LABEL` | 비어 있지 않은 글자 |
-| 경로 | `EVAL_ROOT`, `TESTSET_PATH`, `SAVE_DIR` | 절대 경로 또는 저장소 루트 기준 상대 경로 |
+| 경로 | `EVAL_ROOT`, `TESTSET_PATH`, `SAVE_DIR`, `PDF_STORAGE_DIR` | 절대 경로 또는 저장소 루트 기준 상대 경로 |
 
 ## 바뀐 변수 목록
 
@@ -94,6 +94,15 @@ from config import CHUNK_SIZE, VECTOR_TOP_K
 
 - `EVAL_ROOT`만 바꾸면 `TESTSET_PATH`와 `SAVE_DIR`가 같이 따라간다. 따로 적으면 적은 값이 우선한다.
 - 상대 경로는 실행 위치(cwd)가 아니라 **저장소 루트** 기준이다.
+
+### 원본 PDF 저장 위치
+
+| 변수 | 기본값 | 설명 | 값을 읽는 곳 |
+|---|---|---|---|
+| `PDF_STORAGE_DIR` | 저장소 루트의 `mansa/data/documents/` | 업로드한 원본 PDF를 두는 폴더. `{폴더}/{tech 또는 secure}/{문서 id}.pdf`로 저장한다 | `features/documents/` |
+
+- 이 폴더는 Git에 올라가지 않는다(`.gitignore`). 컴퓨터마다 따로 저장되므로 다른 컴퓨터에서 올린 문서의 PDF는 없을 수 있다.
+- 서버를 다시 시작할 때 이 폴더가 지워지는 환경이면 원본 PDF가 사라져서 다시 처리하거나 열 수 없다.
 
 ## 어디에 어떤 값을 써야 하는가
 
