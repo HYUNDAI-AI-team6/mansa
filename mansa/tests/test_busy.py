@@ -102,12 +102,14 @@ class StyleTest(unittest.TestCase):
         self.assertIn(".busy-layer", self.css)
         self.assertIn("busy-layer", theme.build_head())
 
-    def test_only_the_page_content_is_covered(self):
+    def test_everything_right_of_the_sidebar_is_covered_including_the_header(self):
         rule = self.css[self.css.index(".block.busy-layer {"):]
         rule = rule[:rule.index("}")]
         self.assertIn("position: absolute", rule)
         self.assertIn("inset: 0", rule)
-        self.assertIn(".page {\n  position: relative;", self.css)  # 사이드바·머리글은 .page 밖이다
+        # 레이어의 기준은 머리글을 품은 #main 이다. .page(Gradio 열)는 기준이 되지 않게 static 으로 둔다
+        self.assertIn("#main {\n  position: relative;", self.css)
+        self.assertIn(".page {\n  position: static !important;", self.css)
 
     def test_the_text_is_spaced_a_little_wider(self):
         title = self.css[self.css.index(".busy-title {"):]
@@ -117,12 +119,14 @@ class StyleTest(unittest.TestCase):
         self.assertIn("letter-spacing: 0.05em", title)
         self.assertIn("letter-spacing: 0.03em", sub)
 
-    def test_the_layer_stays_below_the_sticky_header_and_the_sidebar(self):
+    def test_the_layer_is_above_the_sticky_header_but_below_the_sidebar(self):
         shell = self.css[self.css.index(".block.header-block {"):]
         header_z = int(shell[shell.index("z-index:") + 8:].split(";")[0])
         rule = self.css[self.css.index(".block.busy-layer {"):]
         layer_z = int(rule[rule.index("z-index:") + 8:].split(";")[0])
-        self.assertLess(layer_z, header_z)
+        self.assertGreater(layer_z, header_z)  # 머리글도 덮는다
+        sidebar = self.css[self.css.index("\n.sidebar {"):]
+        self.assertIn("z-index: 10", sidebar[:sidebar.index("}")])  # 사이드바는 그대로 위에 있다
 
     def test_the_box_can_follow_the_window_scroll(self):
         body = self.css[self.css.index(".busy-body {"):]

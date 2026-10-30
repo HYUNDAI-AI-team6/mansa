@@ -1,11 +1,16 @@
-/* 로딩 레이어: 오래 걸리는 작업 동안 화면 내용만 덮는다(사이드바·머리글은 그대로). */
-.page {
+/* 로딩 레이어: 오래 걸리는 작업 동안 사이드바만 빼고 머리글을 포함한 오른쪽 화면 전체를 덮는다.
+   레이어는 .page 안에 있지만 기준을 #main 으로 잡아 위쪽 머리글까지 올라가게 한다.
+   Gradio 의 열(.column)은 기본이 position: relative 라서 .page 는 static 으로 돌려 둔다. */
+#main {
   position: relative;
+}
+.page {
+  position: static !important;
 }
 .block.busy-layer {
   position: absolute !important;
   inset: 0;
-  z-index: 4; /* 위에 붙어 있는 머리글(z-index 5)과 사이드바(10)는 가리지 않는다 */
+  z-index: 6; /* 머리글(z-index 5)은 덮고, 사이드바(10)는 덮지 않는다 */
   min-width: 0 !important;
   background: radial-gradient(
     circle at 50% 50%,
