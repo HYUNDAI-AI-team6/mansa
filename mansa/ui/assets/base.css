@@ -111,8 +111,9 @@ footer {
   color: #fff !important;
 }
 
-/* ---------- 버튼 호버: 살짝 떠오르며 음영이 생긴다 ----------
-   눌 수 없는 버튼(:disabled)은 움직이지 않는다. 파란 버튼은 파란 그림자, 나머지는 회색 그림자. */
+/* ---------- 버튼 호버: 눌리는 느낌으로 바탕색이 어두워진다 ----------
+   위로 뜨거나 그림자가 생기지 않고, 마우스를 올리면 한 단계, 누르면 두 단계 어두워진다.
+   눌 수 없는 버튼(:disabled)은 변하지 않는다. */
 .gradio-container button.btn-primary,
 .gradio-container button.primary,
 .gradio-container button.btn-secondary,
@@ -121,43 +122,60 @@ footer {
 .gradio-container button.send-btn,
 .gradio-container .sidebar button.nav-btn {
   transition:
-    box-shadow 0.2s ease,
-    transform 0.2s ease,
-    background-color 0.2s ease,
-    border-color 0.2s ease;
+    background-color 0.15s ease,
+    border-color 0.15s ease;
 }
+/* 파란 버튼 */
 .gradio-container button.btn-primary:not(:disabled):hover,
 .gradio-container button.primary:not(:disabled):hover,
-.gradio-container button.send-btn:not(:disabled):hover {
-  box-shadow: 0 6px 16px rgba(59, 91, 246, 0.3) !important;
-  transform: translateY(-1px);
-}
-.gradio-container button.btn-secondary:not(:disabled):hover,
-.gradio-container button.chip:not(:disabled):hover,
-.gradio-container button.soft-btn:not(:disabled):hover {
-  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.1) !important;
-  transform: translateY(-1px);
+.gradio-container button.send-btn:not(:disabled):hover,
+.gradio-container button.chip.active:not(:disabled):hover {
+  background: #2c48d4 !important;
 }
 .gradio-container button.btn-primary:not(:disabled):active,
 .gradio-container button.primary:not(:disabled):active,
 .gradio-container button.send-btn:not(:disabled):active,
-.gradio-container button.btn-secondary:not(:disabled):active,
-.gradio-container button.chip:not(:disabled):active,
-.gradio-container button.soft-btn:not(:disabled):active {
-  box-shadow: 0 2px 6px rgba(17, 24, 39, 0.12) !important;
-  transform: none;
+.gradio-container button.chip.active:not(:disabled):active {
+  background: #2339b3 !important;
 }
-/* 메뉴 버튼은 떠오르지 않고 바탕색만 살짝 깔린다 */
+/* 흰 버튼 */
+.gradio-container button.btn-secondary:not(:disabled):hover,
+.gradio-container button.chip:not(.active):not(:disabled):hover {
+  background: #eceef2 !important;
+  border-color: #b9c0cb !important;
+}
+.gradio-container button.btn-secondary:not(:disabled):active,
+.gradio-container button.chip:not(.active):not(:disabled):active {
+  background: #e0e3e9 !important;
+  border-color: #a8b0bd !important;
+}
+/* 연한 파란 버튼 */
+.gradio-container button.soft-btn:not(:disabled):hover {
+  background: #dde4ff !important;
+}
+.gradio-container button.soft-btn:not(:disabled):active {
+  background: #ccd7ff !important;
+}
+/* 메뉴 버튼은 바탕색만 살짝 깔린다 */
 .gradio-container .sidebar button.nav-btn:not(.active):hover {
   background: rgba(17, 24, 39, 0.05) !important;
 }
 .gradio-container .sidebar.admin button.nav-btn:not(.active):hover {
   background: rgba(255, 255, 255, 0.1) !important;
 }
-/* 파란 바탕의 관리자 로그인 카드: 그림자를 어둡게 해서 보이게 한다 */
-.gradio-container .admin-card button.btn-primary:not(:disabled):hover,
+/* 파란 바탕의 관리자 로그인 카드: 흰 버튼은 회색빛으로, 투명 버튼은 하얗게 깔린다 */
+.gradio-container .admin-card button.btn-primary:not(:disabled):hover {
+  background: #e3e8ff !important;
+}
+.gradio-container .admin-card button.btn-primary:not(:disabled):active {
+  background: #d0d8ff !important;
+}
 .gradio-container .admin-card button.btn-secondary:not(:disabled):hover {
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22) !important;
+  background: rgba(255, 255, 255, 0.16) !important;
+  border-color: rgba(255, 255, 255, 0.5) !important;
+}
+.gradio-container .admin-card button.btn-secondary:not(:disabled):active {
+  background: rgba(255, 255, 255, 0.26) !important;
 }
 @media (prefers-reduced-motion: reduce) {
   .gradio-container button {

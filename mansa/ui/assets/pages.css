@@ -479,12 +479,12 @@
 }
 .dropzone:hover {
   border-color: var(--brand) !important;
-  background: #f5f7ff !important;
+  background: #e9edff !important;
 }
-/* 파일을 끌어 올 때(assets/drop_hover.js 가 .drop-wrap 에 붙인다)는 :hover 가 적용되지 않으므로 같은 모양에 그림자를 더한다 */
+/* 파일을 끌어 올 때(assets/drop_hover.js 가 .drop-wrap 에 붙인다)는 :hover 가 적용되지 않으므로 같은 모양에 더 진한 바탕과 테두리 링을 준다 */
 .drop-wrap.dragover .dropzone {
   border-color: var(--brand) !important;
-  background: #eef2ff !important;
+  background: #dfe6ff !important;
   box-shadow: 0 0 0 4px rgba(59, 91, 246, 0.14);
 }
 .drop-wrap.dragover .drop-face b {
@@ -564,19 +564,15 @@
   font-family: inherit;
   cursor: pointer;
   transition:
-    box-shadow 0.2s ease,
-    transform 0.2s ease,
-    background-color 0.2s ease,
-    border-color 0.2s ease;
+    background-color 0.15s ease,
+    border-color 0.15s ease;
 }
 .type-card:hover {
   border-color: var(--border-strong);
-  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.1);
-  transform: translateY(-1px);
+  background: #f1f2f5;
 }
 .type-card:active {
-  box-shadow: 0 2px 6px rgba(17, 24, 39, 0.12);
-  transform: none;
+  background: #e6e8ed;
 }
 .type-card .tile {
   margin-bottom: 6px;
@@ -596,7 +592,10 @@
 }
 .type-card.on:hover {
   border-color: var(--brand);
-  box-shadow: 0 4px 12px rgba(59, 91, 246, 0.2);
+  background: #e4eaff;
+}
+.type-card.on:active {
+  background: #d6dfff;
 }
 
 /* ---------- 기준정보 (Figma A3) ---------- */

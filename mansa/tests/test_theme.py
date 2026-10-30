@@ -32,6 +32,13 @@ class BuildCssTest(unittest.TestCase):
         for marker in ("login-drift-a", "버튼 호버", ".chat-input"):
             self.assertIn(marker, css)
 
+    def test_buttons_get_darker_on_hover_instead_of_lifting(self):
+        css = theme.build_css()
+        self.assertNotIn("translateY(-1px)", css)
+        for rule in ("button.btn-primary:not(:disabled):hover", "button.btn-primary:not(:disabled):active",
+                     "button.btn-secondary:not(:disabled):hover", "button.soft-btn:not(:disabled):hover"):
+            self.assertIn(rule, css)
+
     def test_drag_over_and_type_card_hover_rules_exist(self):
         css = theme.build_css()
         for rule in (".drop-wrap.dragover .dropzone", ".type-card:hover", ".type-card.on:hover"):
