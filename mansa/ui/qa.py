@@ -11,11 +11,12 @@ from html import escape
 
 import gradio as gr
 
+from config import HISTORY_PATH
 from core.schemas import Answer, AnswerSection, Clarify, NoAnswer, SourceView
 from features.documents.models import STATUS_COMPLETED
 from features.documents.service import DocumentService
 from features.history.service import HistoryService
-from features.history.store import MemoryHistoryStore
+from features.history.store import FileHistoryStore,MemoryHistoryStore
 from features.master.equipment import EquipmentModelService
 from features.qa.answer_guard import build_no_answer
 from features.qa.clarify_policy import MODEL_QUESTION
@@ -312,7 +313,7 @@ def _documents() -> DocumentService:
 @cache
 def history_service() -> HistoryService:
     """기술 Q&A가 저장하고 질문 기록 화면이 읽는 대화 기록. 둘이 같은 기록을 쓰도록 하나만 만든다."""
-    return HistoryService(MemoryHistoryStore())
+    return HistoryService(FileHistoryStore(HISTORY_PATH))
 
 
 @cache
