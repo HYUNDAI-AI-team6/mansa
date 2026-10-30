@@ -472,7 +472,7 @@
 .stat {
   display: flex !important;
   flex-direction: row !important;
-  align-items: flex-start;
+  align-items: center; /* 피그마: 아이콘 칸이 카드 높이의 가운데에 온다 */
   gap: 14px !important;
 }
 .stat > div {
