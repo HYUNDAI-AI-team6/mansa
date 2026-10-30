@@ -5,12 +5,15 @@
 import logging # 질문 처리에 실패한 원인을 서버 로그에 남기려고 쓴다
 
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from functools import cache, partial
 from html import escape
 
 import gradio as gr
 
 from core.schemas import Answer, AnswerSection, Clarify, NoAnswer, SourceView
+from features.documents.models import STATUS_COMPLETED
+from features.documents.service import DocumentService
 from features.history.service import HistoryService
 from features.history.store import MemoryHistoryStore
 from features.master.equipment import EquipmentModelService
@@ -28,11 +31,14 @@ SOURCE_KINDS = {"tech": "매뉴얼", "secure": "안전 조항"} # 근거 원문 
 KIND_COLOR = {"매뉴얼": "blue", "안전 조항": "orange"}
 QUIET = {"show_progress": "hidden"}  # 로딩은 우리가 그린 '찾는 중' 표시로 보여 준다
 THINKING_TEXT = "문서에서 답을 찾고 있어요"
-OUTPUT_COUNT = 16  # _render() 가 돌려주는 값 개수 = build() 의 outs 개수
+OUTPUT_COUNT = 17  # _render() 가 돌려주는 값 개수 = build() 의 outs 개수
 DISCLAIMER = '<p class="disclaimer">참고용 안내이며 법적 판단이 아닙니다.</p>'
 # shortcut: 로그인 기능이 없어 모든 질문을 회원 1로 저장한다, features/auth 가 생기면 로그인 계정 ID로 바꾼다.
 MEMBER_ID = 1
 RECENT_LIMIT = 3 # 질문 전 화면 '최근 질문' 카드에 보여 줄 대화 수
+CHANGES_DAYS = 7  # '최근 변경사항' 카드가 보여 줄 기간(일)
+CHANGES_LIMIT = 3  # '최근 변경사항' 카드에 보여 줄 문서 수
+TYPE_LABEL = {"tech": "기술 문서", "secure": "안전 문서"}
 RULES = [
     ("chat", "모델·부위가 비었거나 후보가 여럿", "실제 등록된 후보로 선택지를 보여 줘요"),
     ("search", "근거 점수가 낮을 때", "찾을 수 없다고 답하고 확인할 부서를 안내해요"),
@@ -78,11 +84,24 @@ def task_cards_html() -> str:
 
 
 def recent_changes_html() -> str:
-    """'최근 변경사항' 카드 (최근 7일 추가 문서, 이동 없이 목록만)."""
-    rows = "".join(
-        f'<div class="list-row"><b>{escape(c["title"])}</b><span>{escape(c["meta"])}</span></div>'
-        for c in mock.RECENT_CHANGES
-    )
+    """'최근 변경사항' 카드: 최근 CHANGES_DAYS일 안에 처리가 끝난 문서를 최근 올린 순서로 CHANGES_LIMIT개 보여 준다.
+
+    DB에서 읽지 못하면 안내 문구를 보여 주고 원인은 서버 로그에 남긴다.
+    """
+    since = datetime.now() - timedelta(days=CHANGES_DAYS)
+    try:
+        docs = [d for d in _documents().list_documents(status=STATUS_COMPLETED) if d.upload_at >= since]
+    except Exception:
+        logging.getLogger(__name__).exception("failed to load recent documents")
+        docs = None
+    if docs is None:
+        rows = '<p class="note">변경사항을 불러오지 못했어요</p>'
+    else:
+        rows = "".join(
+            f'<div class="list-row"><b>{escape(d.title)}</b>'
+            f"<span>{d.upload_at:%m/%d} · {TYPE_LABEL.get(d.doc_type, d.doc_type)} · {escape(d.department_name or '-')}</span></div>"
+            for d in docs[:CHANGES_LIMIT]
+        ) or '<p class="note">최근 7일 동안 올라온 문서가 없어요</p>'
     head = '<div class="card-head"><h3>최근 변경사항</h3><span>최근 7일</span></div>'
     return f'<div class="card list-card">{head}{rows}</div>'
 
@@ -275,12 +294,19 @@ def _render(state: dict, thinking: str = "") -> tuple:
         gr.Radio(choices=pending["options"] if pending else [], value=None), # 서비스가 준 후보로 매번 새로 고른다
         gr.Button(interactive=False),  # 고르기 전에는 '선택하고 계속'을 막는다
         recent_questions_html(), # 방금 한 질문도 보이게 그릴 때마다 기록에서 다시 읽는다
+        recent_changes_html(),  # 다른 화면에서 올린 문서도 보이게 그릴 때마다 다시 읽는다
     )
 
 
 def _thinking(state: dict, question: str) -> tuple:
     """답이 나오기 전 화면: 질문과 '답을 찾는 중'을 먼저 보여 준다(대화 상태는 아직 안 바꾼다)."""
     return (gr.skip(), *_render(state, thinking=question.strip())[1:])
+
+
+@cache
+def _documents() -> DocumentService:
+    """최근 변경사항 카드가 읽는 문서 서비스(DB). 처음 쓸 때 한 번만 만든다."""
+    return DocumentService()
 
 
 @cache
@@ -449,11 +475,12 @@ def _build_ask(test_mode: bool) -> dict:
                     gr.HTML(ui.section_title("자주 찾는 작업"), padding=False)
                     gr.HTML(task_cards_html(), padding=False)
                 else:
-                    c["recent"] = ui.click_list(visible=False) # 출력 개수를 맞추려고 숨겨 둔다
+                    c["recent"] =ui.click_list(visible=False) # 출력 개수를맞추려고 숨겨 둔다.
+                    c["changes"] = gr.HTML(visible=False, padding=False)
             if not test_mode:
                 with gr.Column(elem_classes=["right-panel"]):
                     c["recent"] = ui.click_list(recent_questions_html())
-                    gr.HTML(recent_changes_html(), padding=False)
+                    c["changes"] = gr.HTML(recent_changes_html(), padding=False)
     return c
 
 
@@ -576,7 +603,7 @@ def build(test_mode: bool = False) -> QAView:
     outs = [state, ask["view"], conv["view"], conv["turns"], conv["clarify"]]
     outs += [conv["src_panel"], conv["src_list"], conv["rules"], conv["viewer"], conv["src_tab"]]
     outs += [ask["text"], conv["follow"]]
-    outs += [conv["clar_head"], conv["clar_pick"], conv["cont"], ask["recent"]]
+    outs += [conv["clar_head"], conv["clar_pick"], conv["cont"], ask["recent"], ask["changes"]]
     ask_fn = partial(_ask, test_mode=test_mode) # 질문 테스트 화면은 질문 기록에 남지 않는 서비스로 묻는다
     ask["ask"].click(ask_fn, [ask["text"], ask["model"], state], outs, **QUIET)
     ask["text"].submit(ask_fn, [ask["text"], ask["model"], state], outs, **QUIET)
