@@ -39,6 +39,11 @@ class BuildCssTest(unittest.TestCase):
                      "button.btn-secondary:not(:disabled):hover", "button.soft-btn:not(:disabled):hover"):
             self.assertIn(rule, css)
 
+    def test_pill_choices_turn_blue_on_hover(self):
+        css = theme.build_css()
+        self.assertIn(".chip-radio label:not(.selected):not(:has(input:checked)):hover", css)
+        self.assertIn(".chip-radio label:has(input:checked):hover", css)
+
     def test_drag_over_and_type_card_hover_rules_exist(self):
         css = theme.build_css()
         for rule in (".drop-wrap.dragover .dropzone", ".type-card:hover", ".type-card.on:hover"):

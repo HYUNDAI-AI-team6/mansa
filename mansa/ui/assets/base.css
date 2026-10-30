@@ -111,8 +111,8 @@ footer {
   color: #fff !important;
 }
 
-/* ---------- 버튼 호버: 눌리는 느낌으로 바탕색이 어두워진다 ----------
-   위로 뜨거나 그림자가 생기지 않고, 마우스를 올리면 한 단계, 누르면 두 단계 어두워진다.
+/* ---------- 버튼 호버: 위로 뜨거나 그림자가 생기지 않는다 ----------
+   파란 버튼은 올리면 한 단계, 누르면 두 단계 어두워지고, 흰 버튼은 테두리와 글자가 파랗게 된다.
    눌 수 없는 버튼(:disabled)은 변하지 않는다. */
 .gradio-container button.btn-primary,
 .gradio-container button.primary,
@@ -138,16 +138,17 @@ footer {
 .gradio-container button.chip.active:not(:disabled):active {
   background: #2339b3 !important;
 }
-/* 흰 버튼 */
+/* 흰 버튼: 채팅 추천 질문 칩(.s-chip)처럼 테두리와 글자가 파랗게 된다. 누르면 연한 파란 바탕이 깔린다 */
 .gradio-container button.btn-secondary:not(:disabled):hover,
 .gradio-container button.chip:not(.active):not(:disabled):hover {
-  background: #eceef2 !important;
-  border-color: #b9c0cb !important;
+  border-color: var(--brand) !important;
+  color: var(--brand) !important;
 }
 .gradio-container button.btn-secondary:not(:disabled):active,
 .gradio-container button.chip:not(.active):not(:disabled):active {
-  background: #e0e3e9 !important;
-  border-color: #a8b0bd !important;
+  background: var(--brand-weak) !important;
+  border-color: var(--brand) !important;
+  color: var(--brand) !important;
 }
 /* 연한 파란 버튼 */
 .gradio-container button.soft-btn:not(:disabled):hover {

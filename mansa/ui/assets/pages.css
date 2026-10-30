@@ -568,11 +568,13 @@
     border-color 0.15s ease;
 }
 .type-card:hover {
-  border-color: var(--border-strong);
-  background: #f1f2f5;
+  border-color: var(--brand);
+}
+.type-card:hover b {
+  color: var(--brand);
 }
 .type-card:active {
-  background: #e6e8ed;
+  background: var(--brand-weak);
 }
 .type-card .tile {
   margin-bottom: 6px;
