@@ -251,6 +251,9 @@
 .fail-tip > span {
   display: block;
 }
+.fail-tip > span:empty {
+  display: none;
+}
 .fail-tip > .hint {
   color: rgba(255, 255, 255, 0.7);
 }

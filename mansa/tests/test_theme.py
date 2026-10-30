@@ -54,6 +54,7 @@ class BuildCssTest(unittest.TestCase):
     def test_the_failure_tooltip_shows_on_hover_only_and_is_translucent(self):
         css = theme.build_css()
         self.assertIn(".fail-info:hover .fail-tip", css)
+        self.assertIn(".fail-tip > span:empty", css)
         self.assertNotIn(".fail-info:focus", css)
         tip = css[css.index(".fail-tip {"):]
         self.assertIn("rgba(26, 29, 35, 0.82)", tip.split("}")[0])

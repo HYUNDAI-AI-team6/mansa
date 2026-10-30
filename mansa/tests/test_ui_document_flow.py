@@ -226,6 +226,18 @@ class TableTest(unittest.TestCase):
         self.assertIn('class="fail-info"', html)
         self.assertIn('<span class="fail-tip" aria-hidden="true"><span class="hint">', html)
 
+    def test_a_reason_with_nothing_visible_is_treated_as_no_reason(self):
+        # 공백·줄바꿈·제로폭 공백뿐인 사유가 빈 줄로 말풍선 위쪽에 간격을 만들지 않는다
+        for blank in ("", "   ", "\n", " \n\t ", "\u200b", "\u3000", " \u200b\n"):
+            with self.subTest(blank=repr(blank)):
+                html = documents.table([self.doc("실패", error=blank)])
+                self.assertIn('<span class="fail-tip" aria-hidden="true"><span class="hint">', html)
+                self.assertIn('aria-label="실패했어요. 삭제한 뒤 다시 올려 주세요"', html)
+
+    def test_a_reason_with_visible_text_is_kept_trimmed(self):
+        html = documents.table([self.doc("실패", error="  \n사유 있음\n ")])
+        self.assertIn('<span class="fail-tip" aria-hidden="true"><span>사유 있음</span>', html)
+
     def test_the_reason_is_escaped(self):
         html = documents.table([self.doc("실패", error='<script>alert("x")</script>')])
         self.assertNotIn("<script>", html)

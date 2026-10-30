@@ -4,6 +4,7 @@
 """
 
 import logging
+import unicodedata
 from html import escape
 
 import gradio as gr
@@ -84,6 +85,18 @@ def stats_html(docs: list[dict]) -> str:
 FAILED_HINT = "삭제한 뒤 다시 올려 주세요"
 
 
+# 공백(Zs/Zl/Zp)·제어 문자(Cc)·폭 없는 서식 문자(Cf, 예: 제로폭 공백)는 화면에 아무것도 그리지 않는다
+_INVISIBLE = {"Zs", "Zl", "Zp", "Cc", "Cf"}
+
+
+def _visible_text(value) -> str:
+    """눈에 보이는 글자가 하나도 없으면(공백·줄바꿈·폭 없는 문자뿐) 빈 문자열, 아니면 앞뒤 공백을 뺀 글."""
+    text = str(value or "").strip()
+    if all(unicodedata.category(ch) in _INVISIBLE for ch in text):
+        return ""
+    return text
+
+
 def _title(doc: dict) -> str:
     """문서 이름. 실패한 문서는 이름 옆에 ⓧ 표시를 두고, 마우스를 올리면 사유와 다시 올리는 방법을 보여 준다.
 
@@ -94,7 +107,7 @@ def _title(doc: dict) -> str:
     label = title_label(doc)
     if doc["status"] != "실패":
         return label
-    reason = (doc.get("error") or "").strip()
+    reason = _visible_text(doc.get("error"))
     lines = (f"<span>{escape(reason)}</span>" if reason else "") + f'<span class="hint">{FAILED_HINT}</span>'
     spoken = f"실패 사유: {reason}. {FAILED_HINT}" if reason else f"실패했어요. {FAILED_HINT}"
     return (
