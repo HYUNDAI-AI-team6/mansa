@@ -1,5 +1,6 @@
 """평가 실행 흐름: 테스트셋 → 답변 수집 → 질문-답변 세트 저장 → 채점 → 결과 저장."""
 
+import time
 from collections.abc import Callable, Generator, Iterator
 from datetime import datetime
 from pathlib import Path
@@ -24,11 +25,14 @@ def run_evaluation(
     testset_path: Path = storage.TESTSET_PATH,
     save_dir: Path = storage.SAVE_DIR,
     clock: Clock = datetime.now,
+    pause_sec: float = 0.0,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> Iterator[EvalProgress | EvalReport]:
     """테스트셋 전체를 평가한다. 진행 중에는 EvalProgress를, 마지막에 EvalReport를 한 번 yield한다.
 
     테스트셋이 잘못되면 응답기를 부르기 전에 TestSetError가 난다. 문항 하나의 응답 실패는
     오류 기록으로 남기고 계속한다. save_dir에 answers·result JSON·CSV를 새로 만든다(덮어쓰지 않음).
+    pause_sec는 문항 사이 대기 시간(초)이다. 연속 호출로 LLM API가 실패하는 것을 줄이려고 둔다.
     """
     testset = load_testset(testset_path)
     total = len(testset.cases)
@@ -37,6 +41,8 @@ def run_evaluation(
     records: list[AnswerRecord] = []
     yield EvalProgress(0, total)
     for case in testset.cases:
+        if records and pause_sec > 0:
+            sleep(pause_sec)
         # 여기서 LLM이 답함
         records.append(answerer.answer(case))
         yield EvalProgress(len(records), total)

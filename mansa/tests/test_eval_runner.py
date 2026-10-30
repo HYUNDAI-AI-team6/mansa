@@ -11,7 +11,7 @@ from features.evaluation.testset import TestSetError
 
 CASES = [
     {"id": "T1", "question": "갭", "workflow": "L2",
-     "expected_numbers": ["0.5 mm"], "expected_sources": ["d:1"]},
+     "expected_numbers": ["0.5 mm"], "expected_sources": ["d.pdf#p1"]},
     {"id": "T2", "question": "하중", "workflow": "L3",
      "expected_numbers": ["1000 kg"], "expected_sources": []},
     {"id": "T3", "question": "속도", "workflow": "L3",
@@ -75,6 +75,12 @@ class RunnerTest(unittest.TestCase):
         self.assertEqual(names, ["20261027-100000_answers.json", "20261027-100000_result.csv",
                                  "20261027-100000_result.json"])
         self.assertEqual(storage.load_latest(self.dir), report)
+
+    def test_pause_between_cases_only(self):
+        sleeps = []
+        list(run_evaluation(FakeAnswerer(), FakeJudge(), self.testset, self.dir, fixed_clock,
+                            pause_sec=1.0, sleep=sleeps.append))
+        self.assertEqual(sleeps, [1.0, 1.0])  # 3문항이면 사이에 두 번
 
     def test_bad_testset_stops_before_answering(self):
         self.testset.write_text(json.dumps({"cases": [{"id": "x"}]}), encoding="utf-8")

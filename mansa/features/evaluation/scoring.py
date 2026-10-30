@@ -20,6 +20,8 @@ _NUMBER_TOKEN = re.compile(r"[+\-±−]?\d+(?:[.,]\d+)*\s*(?:[a-zA-Zµ%/°²³]+
 _THOUSANDS = re.compile(r"(?<=\d),(?=\d{3}(?!\d))")
 _MINUS = str.maketrans({"−": "-", "–": "-", "—": "-"})
 _MAX_FOUND = 3
+# 정답 근거 중 검색된 비율이 이 값 이상이면 검색 적중. 정답 2개면 2개 다, 3개면 2개부터 통과한다.
+RETRIEVAL_MIN_RECALL = 0.6
 # 수치 앞에 오면 다른 수치의 일부로 보는 것: 부호·자릿수·소수점, 분수(1/1000), 지수(1e5, 1e-5)
 # "-"는 앞이 공백·문장 시작이면 부호("-1000 kg")로 막고, 앞에 글자·숫자가 붙으면 범위("5-10 mm")로 본다.
 # 천 단위가 아닌 쉼표는 목록 구분자로 보고 막지 않는다 (예: "500kg,1000kg")
@@ -76,6 +78,7 @@ def score_case(case: TestCase, record: AnswerRecord, judgement: Judgement | None
     """문항 하나를 지표별로 판정한다.
 
     수치 정확도는 규칙(contains_number)을 먼저 쓰고, 규칙이 놓친 수치만 채점 LLM 판정으로 다시 본다.
+    검색 적중은 정답 근거 중 검색된 비율이 RETRIEVAL_MIN_RECALL 이상인지로 본다.
     응답기가 값을 주지 않았거나(None) 정답이 비어 있으면 그 지표는 None이다.
     오류 문항은 계산 가능한 지표를 모두 실패(False)로 둔다. 근거 지표를 응답기가 아예
     제공하지 않는 경우의 처리는 compute_metrics가 맡는다.
@@ -91,7 +94,9 @@ def score_case(case: TestCase, record: AnswerRecord, judgement: Judgement | None
         score.consistent = False
         return score
     if has_sources and record.retrieved_ids is not None:
-        score.retrieval_hit = bool(set(case.expected_sources) & set(record.retrieved_ids))
+        expected = set(case.expected_sources)
+        recall = len(expected & set(record.retrieved_ids)) / len(expected)
+        score.retrieval_hit = recall >= RETRIEVAL_MIN_RECALL
     if has_sources and record.cited_ids is not None:
         score.source_ok = set(case.expected_sources) <= set(record.cited_ids)
     if record.cited_ids:

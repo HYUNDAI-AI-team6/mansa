@@ -11,7 +11,7 @@ VALID_CASE = {
     "question": "q",
     "workflow": "L2",
     "expected_numbers": ["5.6절"],
-    "expected_sources": ["doc:1"],
+    "expected_sources": ["안전기준.pdf#p9"],
 }
 
 
@@ -46,6 +46,17 @@ class LoadTestsetTest(unittest.TestCase):
         self._write([VALID_CASE, VALID_CASE])
         with self.assertRaisesRegex(TestSetError, "duplicate"):
             load_testset(self.path)
+
+    def test_bad_source_key(self):
+        for bad in ("24:p6:0", "안전기준.pdf", "안전기준.pdf#p0", "#p3"):
+            self._write([{**VALID_CASE, "expected_sources": [bad]}])
+            with self.assertRaisesRegex(TestSetError, f"'T01'.*{bad}"):
+                load_testset(self.path)
+
+    def test_source_key_keeps_value(self):
+        self._write([{**VALID_CASE, "expected_sources": ["a b.pdf#p12", "안전기준.pdf#p9"]}])
+        case = load_testset(self.path).cases[0]
+        self.assertEqual(case.expected_sources, ["a b.pdf#p12", "안전기준.pdf#p9"])
 
     def test_missing_file_and_bad_json(self):
         with self.assertRaises(TestSetError):

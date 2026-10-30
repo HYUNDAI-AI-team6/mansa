@@ -9,7 +9,7 @@ import gradio as gr
 
 from config import LLM_API_KEY, LLM_MODEL
 from features.evaluation import storage
-from features.evaluation.answerer import LlmAnswerer
+from features.evaluation.answerer import QaAnswerer
 from features.evaluation.judge import LlmJudge
 from features.evaluation.models import (
     LATENCY_UNITS,
@@ -45,7 +45,9 @@ TARGET_PERCENT = 60
 LOWER_IS_BETTER = {"과잉 첨부율": 40}
 NO_RESULT = "평가 결과가 없어요"
 
-# 평가 1회는 유료 LLM API를 문항 수 × 2번 부르므로 동시에 하나만 돌린다(세션이 달라도).
+# 평가 문항 사이 대기 시간(초)
+EVAL_PAUSE_SEC = 1.0
+# 평가 1회는 유료 LLM API를 문항마다 여러 번 부르므로 동시에 하나만 돌린다(세션이 달라도).
 _RUN_LOCK = threading.Lock()
 
 
@@ -218,7 +220,8 @@ def _progress(event: EvalProgress) -> tuple[str, int]:
 def _run():
     """평가를 실행하고 진행률과 결과를 화면에 내보낸다.
 
-    유료 LLM API를 문항 수 × 2번 호출한다.
+    유료 API를 문항마다 여러 번 호출한다: 질문 분석·답변 생성(근거 검사 실패 시 재생성)·채점 LLM과
+    검색 임베딩. Chroma 검색도 문항마다 호출한다.
     LLM 설정이 없거나 다른 평가가 실행 중이면 시작하지 않는다.
     """
     skip = (gr.skip(),) * 4
@@ -231,7 +234,9 @@ def _run():
         yield gr.skip(), gr.skip(), *skip
         return
     try:
-        events = run_evaluation(LlmAnswerer(), LlmJudge())
+        # QaAnswerer는 분류표를 읽으므로 앱 시작이 아니라 실행할 때 만든다
+        # 문항마다 1초 쉰다. 연속 호출 중 "답변을 만들 수 없습니다"(llm_failure)가 섞여 나와서 둔다
+        events = run_evaluation(QaAnswerer(), LlmJudge(), pause_sec=EVAL_PAUSE_SEC)
         for event in events:
             if isinstance(event, EvalProgress):
                 caption, percent = _progress(event)
