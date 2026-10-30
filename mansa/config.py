@@ -3,7 +3,6 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-
 load_dotenv()
 
 # 저장소 루트(이 파일이 mansa/ 안에 있으므로 한 단계 위). 상대 경로 환경변수의 기준이다.
@@ -53,9 +52,13 @@ def _env_int(
     too_big = maximum is not None and value > maximum
     if too_small or too_big:
         limit = (
-            f"at least {minimum}" if maximum is None
-            else f"at most {maximum}" if minimum is None
-            else f"between {minimum} and {maximum}"
+            f"at least {minimum}"
+            if maximum is None
+            else (
+                f"at most {maximum}"
+                if minimum is None
+                else f"between {minimum} and {maximum}"
+            )
         )
         raise ValueError(f"{name} must be {limit}, got {value}")
     return value
@@ -118,8 +121,10 @@ SAFETY_DOC_TYPE = _env_choice("SAFETY_DOC_TYPE", "secure", ("tech", "secure"))
 SAFETY_COLLECTION = _env_str("SAFETY_COLLECTION", "safety_docs")
 MANUAL_DOC_TYPE = _env_choice("MANUAL_DOC_TYPE", "tech", ("tech", "secure"))
 MANUAL_COLLECTION = _env_str("MANUAL_COLLECTION", "tech_docs")
-CORPUS_PAGE_SIZE = _env_int("CORPUS_PAGE_SIZE", 500, minimum=1)  # 말뭉치를 한 번에 읽는 크기
-VECTOR_TOP_K = _env_int("VECTOR_TOP_K", 50, minimum=1) # BM25·태그 순위를 매길 후보 수
+CORPUS_PAGE_SIZE = _env_int(
+    "CORPUS_PAGE_SIZE", 500, minimum=1
+)  # 말뭉치를 한 번에 읽는 크기
+VECTOR_TOP_K = _env_int("VECTOR_TOP_K", 50, minimum=1)  # BM25·태그 순위를 매길 후보 수
 BM25_TOP_K = _env_int("BM25_TOP_K", 20, minimum=1)
 RESULT_TOP_K = _env_int("RESULT_TOP_K", 20, minimum=1)
 TAG_TOP_K = _env_int("TAG_TOP_K", 20, minimum=1)
@@ -129,13 +134,17 @@ EVIDENCE_TOP_N = _env_int("EVIDENCE_TOP_N", 8, minimum=1)  # 답변에 쓸 근�
 TAG_KEYS = _env_tuple("TAG_KEYS", ("part", "task"))
 
 # 답변 품질 기준
-MAX_REGENERATIONS = _env_int("MAX_REGENERATIONS", 2, minimum=0)  # 근거 검사 실패 시 다시 생성하는 횟수
+MAX_REGENERATIONS = _env_int(
+    "MAX_REGENERATIONS", 2, minimum=0
+)  # 근거 검사 실패 시 다시 생성하는 횟수
 MIN_EVIDENCE_SCORE = _env_float("MIN_EVIDENCE_SCORE", 0.3, minimum=0.0, maximum=1.0)
 DEFAULT_CONTACT = _env_str("DEFAULT_CONTACT", "안전관리팀")
 
 # 회원 관리. 아이디·이름 칸은 users·admins 테이블의 varchar(50)이라 50보다 크게 잡을 수 없다.
 MEMBER_MAX_LENGTH = _env_int("MEMBER_MAX_LENGTH", 50, minimum=1, maximum=50)
-ADMIN_DEPT_LABEL = _env_str("ADMIN_DEPT_LABEL", "관리자")  # admins 테이블에는 부서가 없어 목록에 이 이름으로 보인다
+ADMIN_DEPT_LABEL = _env_str(
+    "ADMIN_DEPT_LABEL", "관리자"
+)  # admins 테이블에는 부서가 없어 목록에 이 이름으로 보인다
 
 # 평가 파일 위치. 기본은 저장소 루트의 eval/ 이고 실행 위치(cwd)와 상관없다.
 # 상대 경로로 적으면 저장소 루트 기준이다. TESTSET_PATH, SAVE_DIR 는 따로 적지 않으면 EVAL_ROOT 를 따라간다.
@@ -145,5 +154,6 @@ SAVE_DIR = _env_path("SAVE_DIR", EVAL_ROOT / "save")
 
 # 업로드한 원본 PDF를 두는 폴더. {PDF_STORAGE_DIR}/{doc_type}/{문서 id}.pdf 로 저장한다. 상대 경로는 저장소 루트 기준이다.
 # 서버를 다시 시작할 때 이 폴더가 지워지는 환경이면 원본 PDF가 사라진다. 컴퓨터마다 따로 저장된다.
-PDF_STORAGE_DIR = _env_path("PDF_STORAGE_DIR", REPO_ROOT / "mansa" / "data" / "documents")
-
+PDF_STORAGE_DIR = _env_path(
+    "PDF_STORAGE_DIR", REPO_ROOT / "mansa" / "data" / "documents"
+)

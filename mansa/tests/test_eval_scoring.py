@@ -124,6 +124,16 @@ class ScoreCaseTest(unittest.TestCase):
         self.assertTrue(score.numeric_ok)
         self.assertTrue(score.consistent)
 
+    def test_retrieval_recall_threshold(self):
+        def hit(expected, retrieved):
+            case = TestCase("T1", "q", "L2", [], expected)
+            return score_case(case, AnswerRecord("T1", "a", retrieved_ids=retrieved), OK).retrieval_hit
+
+        self.assertTrue(hit(["a#p1"], ["a#p1", "b#p2"]))
+        self.assertTrue(hit(["a#p1", "b#p2", "c#p3"], ["a#p1", "c#p3"]))
+        self.assertFalse(hit(["a#p1", "b#p2"], ["a#p1"]))
+        self.assertFalse(hit(["a#p1", "b#p2", "c#p3"], ["a#p1"]))
+
     def test_error_fails_computable_metrics(self):
         score = score_case(L2, AnswerRecord("T1", error="timeout"), None)
         self.assertEqual(

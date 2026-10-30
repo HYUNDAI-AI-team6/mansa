@@ -13,7 +13,7 @@ from features.master.taxonomy import TaxonomyService
 from features.qa.answer_generator import AnswerGenerator
 from features.qa.question_analyzer import QuestionAnalyzer
 from features.qa.clarify_policy import RuleClarifyPolicy
-from features.qa.service import QAService
+from features.qa.service import QAService, Retriever
 from features.qa.source_service import SourceService
 from features.retrieval.retriever import (
     ChunkGetter,
@@ -25,10 +25,27 @@ from features.retrieval.retriever import (
 )
 from util.rag_query import get_chunks, search_chunks
 
+def build_retriever(search: VectorSearch = search_chunks) -> Retriever:
+    """QAService의 Retriever 규격(search_manual·search_safety)을 실제 검색 함수로 채운다.
+
+    평가처럼 검색 결과를 기록해야 할 때 이 retriever를 감싸 build_qa_service에 넘긴다.
+    """
+    taxonomy = TaxonomyService.from_directory()
+    # 안전 문서 검색어에 관계표의 작업 위치·위험 유형 단어를 더한다
+    expand_terms = partial(default_safety_terms, lookup=taxonomy.expand_query_terms)
+    # QAService의 Retriever 규격(search_manual·search_safety)을 클래스 대신 함수 묶음으로 채운다.
+    # SimpleNamespace라 타입 검사기는 규격을 확인하지 못하므로 메소드 이름을 service.Retriever와 맞춰 둔다
+    return SimpleNamespace(
+        search_manual=partial(search_manual, search=search),
+        search_safety=partial(search_safety, search=search, expand_terms=expand_terms),
+    )
+
+
 def build_qa_service(
         search: VectorSearch = search_chunks,
         complete: Callable[..., dict] = llm.complete,
         history: HistoryService | None = None,
+        retriever: Retriever | None = None,
 ) -> QAService:
     """실제 부품으로 QAService를 만든다. 앱을 시작할 때 한 번만 부른다.
 
@@ -37,20 +54,13 @@ def build_qa_service(
     그때 예외가 전달된다(화면은 답변 불가로 바꿔 보여준다).
     search는 보통 util.rag_query.search_chunks를 쓰고, 확인용으로 로컬 Chroma 함수를 넣을 수 있다.
     대화 기록은 메모리에 저장하므로 앱을 다시 켜면 사라진다.
+    retriever를 주면 search 대신 그것으로 검색한다(평가의 검색 결과 기록용).
     """
     taxonomy = TaxonomyService.from_directory()
-    # 안전 문서 검색어에 관계표의 작업 위치·위험 유형 단어를 더한다
-    expand_terms = partial(default_safety_terms, lookup=taxonomy.expand_query_terms)
-    # QAService의 Retriever 규격(search_manual·search_safety)을 클래스 대신 함수 묶음으로 채운다.
-    # SimpleNamespace라 타입 검사기는 규격을 확인하지 못하므로 메소드 이름을 service.Retriever와 맞춰 둔다
-    retriever = SimpleNamespace(
-        search_manual=partial(search_manual, search=search),
-        search_safety=partial(search_safety, search=search, expand_terms=expand_terms),
-    )
     return QAService(
         analyzer=QuestionAnalyzer(EquipmentModelService(), taxonomy, complete),
         clarify_policy=RuleClarifyPolicy(taxonomy),
-        retriever=retriever,
+        retriever=retriever or build_retriever(search),
         generator=AnswerGenerator(complete),
         history=history or HistoryService(MemoryHistoryStore()),
     )

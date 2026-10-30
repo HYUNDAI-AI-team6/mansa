@@ -1,12 +1,15 @@
 """테스트셋 JSON 파일을 읽고 형식을 검증한다."""
 
 import json
+import re
 from pathlib import Path
 from typing import Any, get_args
 
 from features.evaluation.models import TestCase, TestSet, Workflow
 
 _REQUIRED = ("id", "question", "workflow", "expected_numbers", "expected_sources")
+# 정답 근거 페이지 키 "파일명#p페이지". 페이지는 PDF 첫 페이지를 1로 센 번호다.
+_SOURCE_KEY = re.compile(r".+#p[1-9]\d*")
 
 
 class TestSetError(ValueError):
@@ -39,7 +42,10 @@ def load_testset(path: Path) -> TestSet:
 
 
 def _parse_case(item: Any, index: int) -> TestCase:
-    """문항 하나를 검증해 TestCase로 바꾼다. index는 오류 메시지용 1부터 시작하는 순번이다."""
+    """문항 하나를 검증해 TestCase로 바꾼다. index는 오류 메시지용 1부터 시작하는 순번이다.
+
+    expected_sources는 "파일명#p페이지" 형식(페이지 1 이상)만 받는다.
+    """
     label = f"case #{index}"
     if not isinstance(item, dict):
         raise TestSetError(f"{label}: must be an object")
@@ -58,6 +64,10 @@ def _parse_case(item: Any, index: int) -> TestCase:
         values = item[key]
         if not isinstance(values, list) or not all(isinstance(v, str) for v in values):
             raise TestSetError(f"{label}: '{key}' must be a list of strings")
+    # 파일명이 실제 색인 문서인지는 보지 않는다(Chroma 없이 읽게). 오타는 검색 적중률 0%로 드러난다.
+    for source in item["expected_sources"]:
+        if not _SOURCE_KEY.fullmatch(source):
+            raise TestSetError(f"{label}: expected_sources {source!r} must be 'file#p<page>'")
     return TestCase(
         id=item["id"],
         question=item["question"],

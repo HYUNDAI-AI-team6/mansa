@@ -21,7 +21,7 @@ class TestCase:
     """테스트셋 문항 하나.
 
     expected_numbers는 답변에 그대로 나와야 하는 수치·단위 문자열(예: "5.6절", "10 mm")이고,
-    expected_sources는 정답 근거 ID 목록이다. 근거 ID 형식은 응답기가 돌려주는 ID와 같아야 한다.
+    expected_sources는 정답 근거 페이지 키 목록이다(예: "안전기준.pdf#p9"). 응답기도 같은 형식으로 돌려준다.
     """
 
     __test__ = False  # unittest/pytest가 이름 때문에 테스트 클래스로 오인하지 않게 한다.
@@ -48,6 +48,7 @@ class TestSet:
 class AnswerRecord:
     """응답기가 문항 하나에 답한 결과.
 
+    cited_ids·retrieved_ids는 근거 페이지 키("파일명#p페이지") 목록이다. 이름은 저장 파일 호환을 위해 유지한다.
     None은 "응답기가 이 값을 제공하지 않음"이고 빈 리스트는 "제공했지만 0개"다.
     채점은 이 차이로 지표를 "값 없음"으로 둘지 판단한다. error가 있으면 호출이 실패한 문항이다.
     """

@@ -1,6 +1,7 @@
 import unittest
+from types import SimpleNamespace
 
-from core.schemas import Answer, Clarify, NoAnswer
+from core.schemas import Answer, Clarify, NoAnswer, ScoredChunk
 from features.qa.answer_generator import SAFETY_NOTICE
 from features.qa.clarify_policy import PART_QUESTION
 from features.qa.factory import build_qa_service
@@ -82,6 +83,25 @@ class BuildQaServiceTest(unittest.TestCase):
         result = self.build(intent="out_of_scope").answer("오늘 날씨 어때?", None, 1)
         self.assertIsInstance(result, NoAnswer)
         self.assertEqual(result.reason, "out_of_scope")
+
+
+class InjectedRetrieverTest(unittest.TestCase):
+    def test_given_retriever_is_used_instead_of_search(self):
+        def chunks(chunk_id, doc_type):
+            return lambda question, intent: [ScoredChunk(chunk_id, "본문 10%", 0.9, doc_type)]
+
+        def no_search(*args, **kwargs):
+            raise AssertionError("search must not be called")
+
+        retriever = SimpleNamespace(search_manual=chunks("m1", "tech"), search_safety=chunks("s1", "secure"))
+        qa = build_qa_service(
+            search=no_search,
+            complete=fake_complete({"intent": "procedure", "task": "메인 로프 점검"}),
+            retriever=retriever,
+        )
+        result = qa.answer("메인 로프 점검 방법", None, 1)
+        self.assertIsInstance(result, Answer)
+        self.assertEqual(result.spec.source_ids, ["m1"])
 
 
 if __name__ == "__main__":
