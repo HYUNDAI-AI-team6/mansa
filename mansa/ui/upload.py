@@ -20,7 +20,7 @@ from ui import mock_data as mock
 from ui.page import PageView
 from ui.theme import BRAND, TEXT3
 
-MAX_MB = 50
+MAX_MB = 100
 SUBMIT_CLASSES = ["btn-primary", "sm-btn"]
 CANCEL_CLASSES = ["btn-secondary", "sm-btn"]
 TYPE_ICON = {"기술 문서": ("file", "blue", "#2F54EB"), "안전 문서": ("shield", "orange", "#C2410C")}

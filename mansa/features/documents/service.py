@@ -37,7 +37,7 @@ from features.documents.storage import PdfStorage
 logger = logging.getLogger(__name__)
 
 # 화면(ui/upload.py의 MAX_MB)과 같은 한도다. 화면 값을 바꾸면 여기도 같이 바꾼다.
-MAX_PDF_BYTES = 50 * 1024 * 1024
+MAX_PDF_BYTES = 100 * 1024 * 1024
 MAX_FILENAME_CHARS = 255  # documents_info.filename은 varchar(255)다
 MAX_ERROR_CHARS = 1000  # 실패 사유의 최대 길이(error_message는 varchar(1000)이다)
 PDF_HEADER = b"%PDF-"
