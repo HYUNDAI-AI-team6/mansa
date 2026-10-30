@@ -32,14 +32,22 @@ class LayerHtmlTest(unittest.TestCase):
         svg = busy._loop_svg()
         self.assertEqual(svg.count(f"stroke-width:{busy.STROKE};"), busy.TAIL_LAYERS)
 
-    def test_only_the_head_edge_gets_a_white_gradient_under_the_tail(self):
+    def test_only_the_head_gets_a_white_light_under_the_tail(self):
         svg = busy._loop_svg()
-        rim = svg[svg.index('<g class="busy-rim">'):svg.index("</g>")]
+        rim = svg[svg.index('<g class="busy-rim"'):svg.index("</g>")]
         self.assertEqual(rim.count("stroke:#ffffff"), len(busy.HEAD_RIM))
         self.assertEqual(svg.count("stroke:#ffffff"), len(busy.HEAD_RIM))  # 꼬리 쪽에는 흰색이 없다
         self.assertEqual(svg.count("<g "), 1)
         # 꼬리 선보다 먼저 그려야 가운데는 파랗게 덮이고 가장자리로만 하얗게 비친다
         self.assertLess(svg.index('class="busy-rim"'), svg.index("stroke-dasharray:40"))
+
+    def test_the_white_light_sits_on_the_lower_edge_wherever_the_head_is(self):
+        svg = busy._loop_svg()
+        self.assertGreater(busy.RIM_SHIFT, 0)  # 아래(+y)로 밀어 둔다
+        self.assertIn(f'<g class="busy-rim" transform="translate(0 {busy.RIM_SHIFT})">', svg)
+        # 밀어 낸 거리는 흰 선이 파란 선보다 굵어서 생기는 여분보다 커서 위쪽 가장자리에는 흰색이 남지 않는다
+        for _, width, _ in busy.HEAD_RIM:
+            self.assertGreaterEqual(busy.RIM_SHIFT, (width - busy.STROKE) / 2)
 
     def test_the_rim_is_wider_than_the_tail_and_shorter_than_it_and_grows_toward_the_tip(self):
         lengths = [length for length, _, _ in busy.HEAD_RIM]

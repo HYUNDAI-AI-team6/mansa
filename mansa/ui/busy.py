@@ -33,9 +33,11 @@ TAIL_LONGEST = 40  # 가장 긴 꼬리(전체 길이를 100으로 본 값)
 TAIL_SHORTEST = 3
 STROKE = 7
 LAYER_OPACITY = 0.13
-# 머리 쪽 테두리에만 하얗게 번지는 그라데이션: 꼬리 선보다 조금 굵은 흰 선을 아래에 깔아 가장자리로만 비친다.
-# (길이, 굵기, 불투명도): 짧을수록 머리 끝에 가깝고 겹쳐서 진해진다.
-HEAD_RIM = ((16, 9.4, 0.18), (11, 9.4, 0.22), (7, 9.8, 0.3), (4, 10.2, 0.45), (1.6, 10.6, 0.7))
+# 머리에서 바닥 쪽(화면 아래쪽) 가장자리만 하얗게 번지는 빛: 꼬리 선보다 조금 굵은 흰 선을 아래로 살짝 밀어 깔아 두면
+# 선 위쪽은 파란 선에 가려지고 아래쪽 가장자리로만 비친다. 머리가 어디에 있든 항상 화면 아래쪽에 생긴다.
+# (길이, 굵기, 불투명도): 머리 끝으로 갈수록 짧고 진하게 겹쳐 꼬리 쪽으로 스무스하게 옅어진다.
+HEAD_RIM = ((22, 8.2, 0.12), (16, 8.4, 0.16), (11, 8.6, 0.22), (7, 8.8, 0.3), (4, 9, 0.42), (1.6, 9.2, 0.6))
+RIM_SHIFT = 1.6  # viewBox 단위(화면에서는 1.5배)로 아래쪽으로 미는 거리
 
 
 def _mix(a: tuple, b: tuple, t: float) -> str:
@@ -54,14 +56,14 @@ def _tail_color(t: float) -> str:
 
 @cache
 def _loop_svg() -> str:
-    """8자 선과 그 위를 달리는 빛 하나(길이가 다른 선 26겹, 그 아래에 머리 쪽 테두리용 흰 선)."""
+    """8자 선과 그 위를 달리는 빛 하나(길이가 다른 선 26겹, 그 아래에 머리 쪽 아래 가장자리용 흰 선)."""
     rim = "".join(
         f'<path class="seg" pathLength="100" d="{LOOP_PATH}" '
         f'style="--len:{length};stroke:#ffffff;stroke-width:{width};'
         f'stroke-dasharray:{length} {round(100 - length, 2)};opacity:{opacity}"/>'
         for length, width, opacity in HEAD_RIM
     )
-    paths = [f'<path class="track" d="{LOOP_PATH}"/>', f'<g class="busy-rim">{rim}</g>']
+    paths = [f'<path class="track" d="{LOOP_PATH}"/>', f'<g class="busy-rim" transform="translate(0 {RIM_SHIFT})">{rim}</g>']
     for i in range(TAIL_LAYERS):
         t = i / (TAIL_LAYERS - 1)
         length = round(TAIL_LONGEST - t * (TAIL_LONGEST - TAIL_SHORTEST), 2)

@@ -173,6 +173,10 @@
   stroke: #e3e8ff;
   stroke-width: 7;
 }
+/* 머리 아래쪽 가장자리의 흰 빛을 부드럽게 번지게 한다 */
+.busy-rim {
+  filter: blur(0.5px);
+}
 /* 길이가 다른 선들이 같은 속도로 같은 곳을 앞서 달려 꼬리가 이어진다 */
 .busy-loop .seg {
   animation: busy-run 1.9s linear infinite;
