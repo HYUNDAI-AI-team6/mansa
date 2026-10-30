@@ -28,10 +28,11 @@ SOURCE_KINDS = {"tech": "매뉴얼", "secure": "안전 조항"} # 근거 원문 
 KIND_COLOR = {"매뉴얼": "blue", "안전 조항": "orange"}
 QUIET = {"show_progress": "hidden"}  # 로딩은 우리가 그린 '찾는 중' 표시로 보여 준다
 THINKING_TEXT = "문서에서 답을 찾고 있어요"
-OUTPUT_COUNT = 15  # _render() 가 돌려주는 값 개수 = build() 의 outs 개수
+OUTPUT_COUNT = 16  # _render() 가 돌려주는 값 개수 = build() 의 outs 개수
 DISCLAIMER = '<p class="disclaimer">참고용 안내이며 법적 판단이 아닙니다.</p>'
 # shortcut: 로그인 기능이 없어 모든 질문을 회원 1로 저장한다, features/auth 가 생기면 로그인 계정 ID로 바꾼다.
 MEMBER_ID = 1
+RECENT_LIMIT = 3 # 질문 전 화면 '최근 질문' 카드에 보여 줄 대화 수
 RULES = [
     ("chat", "모델·부위가 비었거나 후보가 여럿", "실제 등록된 후보로 선택지를 보여 줘요"),
     ("search", "근거 점수가 낮을 때", "찾을 수 없다고 답하고 확인할 부서를 안내해요"),
@@ -61,13 +62,7 @@ class QAView:
         
         앱을 다시 켜 기록이 사라진 대화처럼 찾을 수 없으면 질문 전 화면을 보여 준다.
         """
-        try:
-            conversation = history_service().get_conversation(MEMBER_ID, conversation_id)
-        except LookupError:
-            return self.reset()
-        turns = [{"q": t.question, "kind": "answer", "answer": t.answer} for t in conversation.turns]
-        state = {**_empty_state(), "turns": turns, "conversation_id" :conversation.id}
-        return (*_render(state), "")
+        return (*_open(conversation_id), "")
 
 
 # ------------------------------------------------------------------ HTML 조각
@@ -93,12 +88,12 @@ def recent_changes_html() -> str:
 
 
 def recent_questions_html() -> str:
-    """'최근 질문' 카드(3개). 줄을 누르면 그 질문을 다시 보낸다."""
+    """'최근 질문' 카드(최근 대화 3개). data-i 는 대화 ID라 누르면 그 대화가 열린다."""
     rows = "".join(
-        f'<button type="button" class="list-row click" data-i="{i}"><b>{escape(q["title"])}</b>'
-        f"<span>{escape(q['meta'])}</span></button>"
-        for i, q in enumerate(mock.RECENT_QUESTIONS)
-    )
+        f'<button type="button" class="list-row click" data-i="{c.id}"><b>{escape(c.title)}</b>'
+        f"<span>{c.updated_at:%m/%d %H:%M} · 질문 {c.question_count}개</span></button>"
+        for c in history_service().list_conversations(MEMBER_ID, RECENT_LIMIT)
+    ) or '<p class="note">아직 질문한 기록이 없어요</p>'
     return (
         f'<div class="card list-card"><div class="card-head"><h3>최근 질문</h3></div>{rows}</div>'
     )
@@ -279,6 +274,7 @@ def _render(state: dict, thinking: str = "") -> tuple:
         clarify_head_html(pending["ask"]) if pending else "",
         gr.Radio(choices=pending["options"] if pending else [], value=None), # 서비스가 준 후보로 매번 새로 고른다
         gr.Button(interactive=False),  # 고르기 전에는 '선택하고 계속'을 막는다
+        recent_questions_html(), # 방금 한 질문도 보이게 그릴 때마다 기록에서 다시 읽는다
     )
 
 
@@ -407,9 +403,19 @@ def _pick_source(state: dict, evt: gr.SelectData) -> tuple:
     return source_html(src), _kind(src)
 
 
-def _pick_recent(state: dict, evt: gr.SelectData):
-    """최근 질문 줄을 누르면 그 질문을 다시 보낸다(목데이터)."""
-    yield from _ask(mock.RECENT_QUESTIONS[evt.index]["title"], "", state)
+def _open(conversation_id: int) -> tuple:
+    """저장된 대화를 질문·답변 그대로 펼친 화면 값. 찾을 수 없으면 질문 전 화면이다."""
+    try:
+        conversation = history_service().get_conversation(MEMBER_ID, conversation_id)
+    except LookupError:
+        return _render(_empty_state())
+    turns = [{"q": t.question, "kind": "answer", "answer": t.answer} for t in conversation.turns]
+    return _render({**_empty_state(), "turns": turns, "conversation_id": conversation.id})
+
+
+def _pick_recent(evt: gr.SelectData) -> tuple:
+    """최근 질문 줄을 누르면 그 대화를 연다. 이어서 질문하면 같은 대화에 저장한다."""
+    return _open(evt.index)
 
 
 def _model_classes(model: str) -> gr.Dropdown:
@@ -436,6 +442,8 @@ def _build_ask(test_mode: bool) -> dict:
                 if not test_mode:
                     gr.HTML(ui.section_title("자주 찾는 작업"), padding=False)
                     gr.HTML(task_cards_html(), padding=False)
+                else:
+                    c["recent"] = ui.click_list(visible=False) # 출력 개수를 맞추려고 숨겨 둔다
             if not test_mode:
                 with gr.Column(elem_classes=["right-panel"]):
                     c["recent"] = ui.click_list(recent_questions_html())
@@ -562,7 +570,7 @@ def build(test_mode: bool = False) -> QAView:
     outs = [state, ask["view"], conv["view"], conv["turns"], conv["clarify"]]
     outs += [conv["src_panel"], conv["src_list"], conv["rules"], conv["viewer"], conv["src_tab"]]
     outs += [ask["text"], conv["follow"]]
-    outs += [conv["clar_head"], conv["clar_pick"], conv["cont"]]
+    outs += [conv["clar_head"], conv["clar_pick"], conv["cont"], ask["recent"]]
     ask_fn = partial(_ask, test_mode=test_mode) # 질문 테스트 화면은 질문 기록에 남지 않는 서비스로 묻는다
     ask["ask"].click(ask_fn, [ask["text"], ask["model"], state], outs, **QUIET)
     ask["text"].submit(ask_fn, [ask["text"], ask["model"], state], outs, **QUIET)
@@ -570,8 +578,8 @@ def build(test_mode: bool = False) -> QAView:
     conv["follow"].submit(ask_fn, [conv["follow"], ask["model"], state], outs, **QUIET)
     for btn, text in zip(ask["examples"], mock.EXAMPLE_QUESTIONS, strict=True):
         btn.click(lambda t=text: t, None, ask["text"])
-    if "recent" in ask:
-        ask["recent"].select(_pick_recent, state, outs, **QUIET)
+    if not test_mode:
+        ask["recent"].select(_pick_recent, None, outs, **QUIET)
     ui.enable_when_filled(ask["text"], ask["ask"])
     ui.enable_when_filled(conv["follow"], conv["send"])
     ui.enable_when_chosen([conv["clar_pick"]], conv["cont"])
