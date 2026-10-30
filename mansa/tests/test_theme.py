@@ -51,6 +51,14 @@ class BuildCssTest(unittest.TestCase):
         self.assertIn(".type-card:hover {\n  border-color: var(--brand);\n}", css)
         self.assertNotIn(".type-card:hover b", css)
 
+    def test_the_failure_tooltip_shows_on_hover_only_and_is_translucent(self):
+        css = theme.build_css()
+        self.assertIn(".fail-info:hover .fail-tip", css)
+        self.assertIn(".fail-tip > span:empty", css)
+        self.assertNotIn(".fail-info:focus", css)
+        tip = css[css.index(".fail-tip {"):]
+        self.assertIn("rgba(26, 29, 35, 0.82)", tip.split("}")[0])
+
     def test_pill_choices_turn_blue_on_hover(self):
         css = theme.build_css()
         self.assertIn(".chip-radio label:not(.selected):not(:has(input:checked)):hover", css)

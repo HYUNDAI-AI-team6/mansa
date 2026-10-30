@@ -196,6 +196,73 @@
   font-size: 13px;
   color: var(--text2);
 }
+/* 문서 관리의 실패 표시: 이름 옆 ⓧ 에 마우스를 올리면 사유와 안내가 반투명 말풍선으로 보인다.
+   누르거나 키보드로 갈 수 있는 요소가 아니라서 올렸을 때만 보이고, 벗어나면 사라진다 */
+.fail-info {
+  position: relative;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #fdecec;
+  cursor: default;
+}
+.fail-info:hover {
+  background: #fbd5d5;
+}
+.fail-tip {
+  display: none;
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-24px);
+  z-index: 20;
+  width: max-content;
+  max-width: 300px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(26, 29, 35, 0.82);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.16);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  text-align: left;
+  pointer-events: none;
+}
+/* 말풍선 꼬리: 같은 반투명 색이 겹쳐 진해지지 않도록 회전한 네모 대신 삼각형으로 자른다 */
+.fail-tip::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 18px;
+  width: 12px;
+  height: 6px;
+  background: rgba(26, 29, 35, 0.82);
+  clip-path: polygon(50% 0, 0 100%, 100% 100%);
+}
+.fail-tip > span {
+  display: block;
+}
+.fail-tip > span:empty {
+  display: none;
+}
+.fail-tip > .hint {
+  color: rgba(255, 255, 255, 0.7);
+}
+.fail-tip > span + .hint {
+  margin-top: 4px;
+}
+.fail-info:hover .fail-tip {
+  display: block;
+}
 .pdf {
   display: inline-flex;
   align-items: center;
