@@ -39,7 +39,7 @@ def mock_login(user_id: str, password: str, role: str) -> tuple[dict | None, str
 
 
 # ---------------------------------------------------------------- 기술 Q&A
-EXAMPLE_QUESTIONS = ["메인 로프 점검", "브레이크 라이닝 교체", "도어 센서 조정"]
+EXAMPLE_QUESTIONS = ["정격하중이 얼마야?", "최대 정원은 몇 명이야?", "전동기 용량 알려줘"]
 
 FREQUENT_TASKS = [
     {"place": "카 상부 · 기계실", "title": "메인 로프 점검", "meta": "문서 6개 · 3개 부서"},
