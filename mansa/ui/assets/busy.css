@@ -14,8 +14,8 @@
   min-width: 0 !important;
   background: radial-gradient(
     circle at 50% 50%,
-    rgba(238, 242, 255, 0.9),
-    rgba(244, 245, 247, 0.78) 60%
+    rgba(238, 242, 255, 0.77),
+    rgba(244, 245, 247, 0.66) 60%
   ) !important;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
