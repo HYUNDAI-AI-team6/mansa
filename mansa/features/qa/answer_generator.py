@@ -1,3 +1,4 @@
+import logging
 import re
 from collections.abc import Callable
 from dataclasses import replace
@@ -7,6 +8,9 @@ from pydantic import BaseModel
 from core import llm
 from core.schemas import Answer, AnswerDraft, AnswerSection, Evidence
 from features.evaluation.scoring import contains_number
+from features.qa.diff_checker import build_comparison, format_comparison
+
+logger = logging.getLogger(__name__)
 
 SAFETY_NOTICE = "AI가 문서에서 찾은 참고 정보이며 최종 판단은 안전관리자 확인이 필요합니다."
 DOC_TYPE_LABELS = {"tech": "매뉴얼", "secure": "안전 문서"}
@@ -18,17 +22,47 @@ PROMPT = """너는 장비 유지보수 기술 문서 Q&A 도우미다. 아래 [�
 - 근거에 없는 내용은 쓰지 않는다. 쓸 내용이 없는 영역은 text를 빈 문자열, source_ids를 빈 목록으로 둔다.
 - 수치와 단위는 근거에 적힌 그대로 쓴다.
 - 안전 참고 문구는 쓰지 않는다. 시스템이 따로 붙인다.
+- [코드로 비교한 결과]가 있으면 diff 영역은 그 결과를 바탕으로 쓴다. 값·단위·판정(충족·미충족·동일·다름·비교 불가)을 바꾸지 않고, 환산한 값은 새로 쓰지 않으며, 그 줄의 [근거 ID]를 diff 영역의 source_ids에 넣는다. "비교 불가"는 그 이유와 함께 그대로 알린다. 결과가 "없음"이면 [근거]만 보고 쓴다.
 
 [질문]
 {question}
 
 [근거]
-{evidence}"""
+{evidence}
+
+[코드로 비교한 결과]
+{comparison}"""
 
 # 근거 원문과 대조할 "숫자+단위". 예: "0.5mm", "10%", "40 N·m"
 # shortcut: 한글 단위(회·개·초 등)와 단위 없는 숫자는 단계 번호와 구분하기 어려워 검사하지 않는다, 오답이 보이면 범위를 넓힌다
 # 앞에 영문·숫자가 붙은 값(모델 번호 HC20022US1 등)은 수치가 아니라서 뺀다
 _UNIT_NUMBER = re.compile(r"(?<![A-Za-z\d.,])\d+(?:[.,]\d+)*\s*[a-zA-Zµ%°][a-zA-Zµ%°·/²³]*")
+
+
+def _comparison_text(question: str, evidence: Evidence) -> str:
+    """근거 청크의 수치를 코드로 비교한 결과 글. 비교에 실패해도 답변 생성은 막지 않으므로 오류는 로그만 남기고 빈 글을 돌려준다."""
+    try:
+        return format_comparison(build_comparison(evidence, question))
+    except Exception:
+        logger.exception("diff comparison failed")
+        return ""
+
+
+def _assumed_values(question: str, evidence: Evidence) -> dict[str, list[str]]:
+    """근거 청크 ID별로, 표에 단위가 적혀 있지 않아 코드가 단위를 붙여 읽은 값("PIT: 1250" → "1250 mm")을 돌려준다.
+
+    답변에 "1250 mm"라고 쓰면 원문에는 "1250"뿐이라 근거 검사가 거절하므로, 그 영역이 인용한 청크에서
+    읽은 값은 원문에 있는 것으로 인정한다. 환산한 값(1.25 m)은 여기에 없어서 여전히 거절된다.
+    """
+    try:
+        items = build_comparison(evidence, question)
+    except Exception:
+        logger.exception("diff comparison failed")
+        return {}
+    assumed: dict[str, list[str]] = {}
+    for item in items:
+        assumed.setdefault(item.tech.source_id, []).append(f"{item.tech.value:g} {item.tech.unit}")
+    return assumed
 
 
 class _SectionOutput(BaseModel):
@@ -66,7 +100,9 @@ class AnswerGenerator:
             f"[ID: {c.chunk_id}] ({DOC_TYPE_LABELS.get(c.doc_type, c.doc_type)})\n{c.text}"
             for c in evidence.chunks
         )
-        result = self._complete("L2", PROMPT.format(question=question, evidence=evidence_text), _DraftOutput)
+        comparison = _comparison_text(question, evidence)
+        prompt = PROMPT.format(question=question, evidence=evidence_text, comparison=comparison or "없음")
+        result = self._complete("L2", prompt, _DraftOutput)
         return AnswerDraft(**{name: AnswerSection(**section) for name, section in result.items()})
 
     def verify_sources(self, draft: AnswerDraft, evidence: Evidence, question: str = "") -> AnswerDraft | None:
@@ -77,6 +113,7 @@ class AnswerGenerator:
         질문에 있던 숫자+단위(예: "1000kg 모델")는 답에 되풀이해도 새로 지어낸 값이 아니므로 통과시킨다.
         """
         texts = {c.chunk_id: c.text for c in evidence.chunks}
+        assumed = _assumed_values(question, evidence)
         sections = [draft.procedure, draft.spec, draft.safety, draft.diff]
         if not any(s.text.strip() for s in sections):
             return None
@@ -85,7 +122,8 @@ class AnswerGenerator:
                 continue
             if not section.source_ids or any(i not in texts for i in section.source_ids):
                 return None
-            cited = "\n".join([question, *(texts[i] for i in section.source_ids)])
+            extra = [text for i in section.source_ids for text in assumed.get(i, [])]
+            cited = "\n".join([question, *(texts[i] for i in section.source_ids), *extra])
             if not all(contains_number(cited, n.strip()) for n in _UNIT_NUMBER.findall(section.text)):
                 return None
         return draft

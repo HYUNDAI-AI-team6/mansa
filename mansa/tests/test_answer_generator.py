@@ -1,5 +1,6 @@
 import unittest
 from types import SimpleNamespace
+from unittest import mock
 
 from core.exceptions import LlmError
 from core.schemas import Answer, AnswerDraft, AnswerSection, Evidence, Intent, NoAnswer, ScoredChunk
@@ -135,6 +136,66 @@ class QAServiceWithGeneratorTest(unittest.TestCase):
         result = self.build(LlmError("timeout")).answer("브레이크 갭 기준은?", None, 1)
         self.assertIsInstance(result, NoAnswer)
         self.assertEqual(result.reason, "llm_failure")
+
+
+class DiffComparisonTest(unittest.TestCase):
+    """#53 기준 차이: 코드가 비교한 결과를 답변 프롬프트에 넣고, 그 값을 근거 검사가 인정한다."""
+
+    QUESTION = "HYDRO 501 자동차용 HC20022US1의 PIT 깊이와 피트 안전기준을 알려줘"
+    EVIDENCE = Evidence(chunks=[
+        ScoredChunk("t1", "Model No: HC20022US1 | Capacity: 2000 | PIT: 1250", 0.9, "tech"),
+        ScoredChunk("s1", "피트의 깊이가 2.5 m 이하인 경우 사다리를 둘 수 있다.", 0.8, "secure"),
+    ])
+
+    def test_prompt_carries_the_code_comparison_with_original_numbers_and_source_ids(self):
+        fake = FakeComplete(llm_output())
+        AnswerGenerator(fake).generate(self.QUESTION, self.EVIDENCE)
+        prompt = fake.calls[0]["prompt"]
+        self.assertIn("[코드로 비교한 결과]", prompt)
+        self.assertIn("피트 깊이 (HC20022US1): 매뉴얼 1250 (단위 mm) [근거 ID: t1]", prompt)
+        self.assertIn("안전 문서 2.5 m 이하 [근거 ID: s1] → 충족", prompt)
+        self.assertNotIn("2500", prompt)  # 환산한 값은 프롬프트에 넣지 않는다
+
+    def test_prompt_says_none_when_nothing_could_be_compared(self):
+        fake = FakeComplete(llm_output())
+        AnswerGenerator(fake).generate("브레이크 갭 기준은?", EVIDENCE)
+        self.assertTrue(fake.calls[0]["prompt"].endswith("[코드로 비교한 결과]\n없음"))
+
+    def test_a_failing_comparison_does_not_stop_the_answer(self):
+        fake = FakeComplete(llm_output(spec=("0.5 mm 이하", ["m1"])))
+        with mock.patch("features.qa.answer_generator.build_comparison", side_effect=RuntimeError("boom")):
+            with self.assertLogs("features.qa.answer_generator", level="ERROR"):  # 오류는 로그로 남긴다
+                result = AnswerGenerator(fake).generate("브레이크 갭 기준은?", EVIDENCE)
+        self.assertEqual(result.spec.text, "0.5 mm 이하")
+        self.assertTrue(fake.calls[0]["prompt"].endswith("없음"))
+
+    def test_a_unit_the_code_attached_to_a_manual_value_passes_the_source_check(self):
+        diff = ("HC20022US1의 PIT는 1250 mm이고 안전 문서 기준 2.5 m 이하에 맞아요.", ["t1", "s1"])
+        draft = AnswerGenerator().verify_sources(
+            AnswerDraft(section(), section(), section(), AnswerSection(*diff)), self.EVIDENCE, self.QUESTION
+        )
+        self.assertIsNotNone(draft)
+
+    def test_a_converted_value_is_still_rejected(self):
+        diff = ("HC20022US1의 PIT는 1.25 m이고 안전 문서 기준 2.5 m 이하에 맞아요.", ["t1", "s1"])
+        draft = AnswerGenerator().verify_sources(
+            AnswerDraft(section(), section(), section(), AnswerSection(*diff)), self.EVIDENCE, self.QUESTION
+        )
+        self.assertIsNone(draft)
+
+    def test_the_assumed_unit_only_counts_for_the_chunk_it_came_from(self):
+        spec = ("HC20022US1의 PIT는 1250 mm예요.", ["s1"])  # 1250이 있는 t1을 인용하지 않았다
+        draft = AnswerGenerator().verify_sources(
+            AnswerDraft(section(), AnswerSection(*spec), section(), section()), self.EVIDENCE, self.QUESTION
+        )
+        self.assertIsNone(draft)
+
+    def test_without_the_question_nothing_extra_is_allowed(self):
+        diff = ("PIT는 1250 mm이에요.", ["t1"])
+        draft = AnswerGenerator().verify_sources(
+            AnswerDraft(section(), section(), section(), AnswerSection(*diff)), self.EVIDENCE
+        )
+        self.assertIsNone(draft)
 
 
 if __name__ == "__main__":
