@@ -39,6 +39,18 @@ class BuildCssTest(unittest.TestCase):
                      "button.btn-secondary:not(:disabled):hover", "button.soft-btn:not(:disabled):hover"):
             self.assertIn(rule, css)
 
+    def test_inputs_and_dropdowns_get_a_blue_border_while_active(self):
+        css = theme.build_css()
+        for rule in (".field input:focus", ".search input:focus", ".select .wrap:focus-within",
+                     ".model-select .wrap:focus-within", ".chat-input:focus-within",
+                     ".question-box:focus-within", ".admin-card .field input:focus"):
+            self.assertIn(rule, css)
+
+    def test_type_card_hover_changes_only_the_border(self):
+        css = theme.build_css()
+        self.assertIn(".type-card:hover {\n  border-color: var(--brand);\n}", css)
+        self.assertNotIn(".type-card:hover b", css)
+
     def test_pill_choices_turn_blue_on_hover(self):
         css = theme.build_css()
         self.assertIn(".chip-radio label:not(.selected):not(:has(input:checked)):hover", css)

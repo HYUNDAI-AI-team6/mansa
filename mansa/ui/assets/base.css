@@ -202,6 +202,32 @@ footer {
   padding: 0 14px !important;
   box-shadow: none !important;
 }
+/* ---------- 입력 활성화: 입력칸을 눌러 글자를 쓸 수 있게 되면 테두리가 파랗게 된다 ----------
+   드롭다운은 목록이 열려 있는 동안, 채팅 입력줄과 질문 상자는 안의 입력칸에 커서가 있는 동안 파랗다.
+   포커스를 잃으면 원래 테두리로 돌아온다. 파란 바탕의 관리자 로그인 카드는 흰 테두리가 된다. */
+.field input,
+.field textarea,
+.search input,
+.select .wrap,
+.model-select .wrap,
+.question-box,
+.chat-input {
+  transition: border-color 0.15s ease;
+}
+.field input:focus,
+.field textarea:focus,
+.search input:focus,
+.select .wrap:focus-within,
+.model-select .wrap:focus-within {
+  border-color: var(--brand) !important;
+}
+.question-box:focus-within,
+.chat-input:focus-within {
+  border-color: var(--brand) !important;
+}
+.admin-card .field input:focus {
+  border-color: #fff !important;
+}
 .field label > span,
 .field [data-testid="block-info"] {
   font-size: 13px !important;

@@ -570,9 +570,6 @@
 .type-card:hover {
   border-color: var(--brand);
 }
-.type-card:hover b {
-  color: var(--brand);
-}
 .type-card:active {
   background: var(--brand-weak);
 }
