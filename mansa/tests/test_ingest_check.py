@@ -8,6 +8,13 @@ from tests.fake_chroma import FakeChroma
 from tests.test_ingest_factory import TECH_PAGE, fake_embed, make_pdf
 
 
+def tag_all(chunks, vocabulary):
+    """모든 청크에 같은 태그를 붙이는 가짜 태그 함수."""
+    from dataclasses import replace
+
+    return [replace(c, metadata={**c.metadata, "part": ["machine room"]}) for c in chunks]
+
+
 class IngestCheckTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -16,7 +23,8 @@ class IngestCheckTest(unittest.TestCase):
         self.pdf = make_pdf(Path(self.tmp.name) / "LUXEN 사양서.pdf", [TECH_PAGE])
 
     def check(self, **kwargs):
-        options = {"model_names": lambda: ["LUXEN"], "embed": fake_embed, "indexer": self.chroma.indexer()}
+        options = {"model_names": lambda: ["LUXEN"], "embed": fake_embed, "indexer": self.chroma.indexer(),
+                   "tagger": lambda chunks, vocabulary: list(chunks)}
         options.update(kwargs)
         return run(self.pdf, "tech", **options)
 
@@ -44,6 +52,22 @@ class IngestCheckTest(unittest.TestCase):
         self.assertEqual(lines[-1], "removed test chunks")
         self.assertEqual(self.chroma.uploads, 1)
         self.assertEqual(self.chroma.stored, {})
+
+    def test_apply_reports_how_many_chunks_got_tags(self):
+        lines = self.check(apply=True, tagger=tag_all)
+        tag_line = next(line for line in lines if line.startswith("tags:"))
+        self.assertRegex(tag_line, r"part on (\d+) of \1 chunks, task on 0")
+
+    def test_apply_says_tagging_failed_instead_of_zero_chunks(self):
+        def tagger(chunks, vocabulary):
+            raise RuntimeError("llm is down")
+
+        with self.assertLogs("features.processing.pipeline", level="WARNING"):
+            lines = self.check(apply=True, tagger=tagger)
+        self.assertIn("pipeline status: COMPLETED", "\n".join(lines))
+        tag_line = next(line for line in lines if line.startswith("tags:"))
+        self.assertIn("실패했거나 건너뛰었어요", tag_line)
+        self.assertNotIn("0 of 0", tag_line)
 
     def test_apply_with_keep_leaves_the_chunks(self):
         lines = self.check(apply=True, keep=True)

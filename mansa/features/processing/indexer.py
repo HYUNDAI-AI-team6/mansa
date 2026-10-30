@@ -9,6 +9,9 @@ COLLECTIONS = {"tech": "tech_docs", "secure": "safety_docs"}
 # 질의응답팀의 util/rag_query.py가 (source, page, chunk)로 정렬하고 출처를 만든다.
 REQUIRED_KEYS = ("source", "page", "chunk", "document_id", "document_type")
 SCALAR_TYPES = (str, int, float, bool)
+# 부위·작업 태그는 문자열 목록으로 저장한다. QA의 util/tag_search.py가 $contains로 목록 원소를 찾는다.
+# config.TAG_KEYS(검색이 읽는 태그 키)와 같은 값이어야 한다. config는 환경 변수가 있어야 불러올 수 있어 여기서는 따로 두었다. 한쪽을 바꾸면 같이 바꾼다.
+TAG_KEYS = ("part", "task")
 
 Upload = Callable[[str, str, list[str], list[list[float]], list[str], list[dict]], int]
 CountStored = Callable[[str, int], int]
@@ -82,18 +85,31 @@ def _check_required(meta: dict[str, Any], document_id: int, doc_type: str, label
         raise ValueError(f"{label}: document_id/document_type does not match the document")
 
 
+def _clean_tags(tags: Any, key: str, label: str) -> list[str]:
+    """태그 목록에서 공백뿐인 원소를 빼고 새 목록으로 돌려준다. 문자열이 아닌 원소가 있으면 ValueError를 발생시킨다."""
+    if not all(isinstance(tag, str) for tag in tags):
+        raise ValueError(f"{label}: metadata {key!r} must be a list of str")
+    return [tag for tag in tags if tag.strip()]
+
+
 def _clean_metadata(meta: dict[str, Any], document_id: int, doc_type: str, label: str) -> dict:
     """청크 메타데이터를 검사하고 ChromaDB가 받는 값만 남겨 새 dict로 반환한다.
 
     None과 빈 문자열(공백뿐인 문자열 포함)은 값이 없는 것이므로 키를 뺀다. 나머지 값은
     str·int·float·bool만 허용하며 리스트·dict 같은 다른 형식은 ValueError를 발생시킨다.
-    부위·작업 태그(part, task)는 쉼표로 이은 문자열이라 값이 있으면 그대로 통과한다.
+    예외로 부위·작업 태그(part, task)는 문자열 목록도 허용한다. 공백뿐인 원소는 빼고, 남은 원소가
+    없으면(빈 목록 포함) 키를 뺀다. ChromaDB가 빈 목록을 저장하지 못하기 때문이다. 문자열이 아닌
+    원소가 있으면 ValueError다. 쉼표로 이은 문자열(옛 방식)은 그대로 통과한다.
     필수 키는 먼저 검사하므로 비어 있으면 뺄 수 없고 오류가 난다. 입력 dict는 바꾸지 않는다.
     """
     _check_required(meta, document_id, doc_type, label)
     cleaned: dict[str, Any] = {}
     for key, value in meta.items():
-        if value is None or (isinstance(value, str) and not value.strip()):
+        if key in TAG_KEYS and isinstance(value, (list, tuple)):
+            tags = _clean_tags(value, key, label)
+            if tags:
+                cleaned[key] = tags
+        elif value is None or (isinstance(value, str) and not value.strip()):
             continue
         elif isinstance(value, SCALAR_TYPES):
             cleaned[key] = value
