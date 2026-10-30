@@ -2,7 +2,7 @@
 
 소속 부서 목록은 DB(기준정보)에서 읽는다. 문서 기록(documents_info.department_id)은 NULL을 허용하지만
 앱에서는 기술·안전 문서 모두 부서를 꼭 골라야 한다.
-업로드하면 문서를 등록하고(DocumentService) 처리(추출·청킹·태그·임베딩·저장)를 백그라운드에서 시작한다.
+파일·문서 유형·소속 부서를 모두 정해야 업로드 버튼이 켜진다. 업로드하면 문서를 등록하고(DocumentService) 처리(추출·청킹·태그·임베딩·저장)를 백그라운드에서 시작한다.
 처리 결과는 기다리지 않고, 문서 관리 목록의 처리 상태로 확인한다.
 """
 
@@ -141,6 +141,11 @@ def _reset() -> tuple:
     return _empty(), None, _dept_box(), type_cards_html(""), ""
 
 
+def _clear_form() -> tuple:
+    """취소·메뉴 재진입: 입력을 비우고 업로드 버튼도 다시 잠근다."""
+    return (*_reset(), _waiting_button())
+
+
 def upload_error_message(exc: Exception) -> str:
     """등록하지 못한 이유를 사용자가 이해할 수 있는 문구로 바꾼다. 내부 오류 문구는 화면에 보이지 않는다."""
     if isinstance(exc, DuplicateDocumentError):
@@ -160,6 +165,21 @@ def _department_id(name: str) -> int:
     raise ValueError(f"unknown department: {name!r}")
 
 
+def _is_ready(state: dict, dept: str) -> bool:
+    """파일·문서 유형·소속 부서를 모두 정했는지."""
+    return bool(state["file"] and state["type"] and dept)
+
+
+def _sync_submit(state: dict, dept: str) -> gr.Button:
+    """셋을 모두 정했을 때만 업로드 버튼을 켠다. 하나라도 비면 회색으로 눌리지 않는다."""
+    return gr.Button(interactive=_is_ready(state, dept))
+
+
+def _waiting_button() -> gr.Button:
+    """업로드를 마치고 입력이 비워졌을 때의 버튼: 원래 모습이지만 다시 정하기 전까지 누를 수 없다."""
+    return gr.Button(value="업로드", interactive=False, elem_classes=SUBMIT_CLASSES)
+
+
 def _register(state: dict, dept: str) -> None:
     """고른 파일을 등록하고 처리를 시작한다. 오류는 그대로 전달한다."""
     from features.processing.workflow import default_workflow  # DB·외부 서비스 설정은 처음 쓸 때 읽는다
@@ -177,6 +197,7 @@ def _upload(state: dict, dept: str, store: dict):
     끝나고 처리는 백그라운드로 돌아가므로 처리 결과는 기다리지 않는다. 등록이 아무리 빨리 끝나도 로딩 레이어는
     최소 busy.MIN_SECONDS 동안 보여 준다. 등록하지 못하면 입력을 그대로 두고 이유를 알려 준다.
     """
+    # 버튼은 셋을 모두 정해야 켜지므로 보통 여기서 걸리지 않는다. 입력이 바뀌는 사이에 눌린 경우를 위한 확인이다
     required = [("파일", state["file"]), ("문서 유형", state["type"]), ("소속 부서", dept)]
     missing = [name for name, ok in required if not ok]
     if missing:
@@ -211,7 +232,7 @@ def _upload(state: dict, dept: str, store: dict):
     yield (
         gr.skip(),
         *_reset(),
-        ui.idle_button("업로드", SUBMIT_CLASSES),
+        _waiting_button(),
         gr.Button(interactive=True),
         busy.hide(),
     )
@@ -238,15 +259,17 @@ def build(store: gr.State) -> PageView:
         dept = ui.select_box([], DEPT_PLACEHOLDER, classes=["w-320"])  # 메뉴로 들어올 때 DB 에서 채운다
         with gr.Row(elem_classes=["form-actions"]):
             cancel = gr.Button("취소", elem_classes=CANCEL_CLASSES, scale=0, min_width=0)
-            submit = gr.Button("업로드", elem_classes=SUBMIT_CLASSES, scale=0, min_width=0)
+            submit = gr.Button("업로드", elem_classes=SUBMIT_CLASSES, scale=0, min_width=0, interactive=False)
     layer = busy.component()  # 업로드하는 동안 위 내용을 덮는다
 
     form = [state, file, dept, types, file_row]
     file.upload(_pick_file, [file, state], [state, file, file_row])
     file_row.select(_clear_file, state, [state, file_row])
     types.select(_pick_type, state, [state, types])
-    cancel.click(_reset, None, form)
+    for changed in (state.change, dept.change):
+        changed(_sync_submit, [state, dept], submit, show_progress="hidden", queue=False)
+    cancel.click(_clear_form, None, [*form, submit])
     submit.click(
         _upload, [state, dept, store], [store, *form, submit, cancel, layer], show_progress="hidden"
     )
-    return PageView(_reset, [], form)
+    return PageView(_clear_form, [], [*form, submit])
