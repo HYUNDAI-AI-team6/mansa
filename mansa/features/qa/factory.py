@@ -4,7 +4,12 @@ from collections.abc import Callable
 from functools import partial
 from types import SimpleNamespace
 
-from config import MANUAL_COLLECTION, MANUAL_DOC_TYPE, SAFETY_COLLECTION, SAFETY_DOC_TYPE
+from config import (
+    MANUAL_COLLECTION,
+    MANUAL_DOC_TYPE,
+    SAFETY_COLLECTION,
+    SAFETY_DOC_TYPE,
+)
 from core import llm
 from features.history.service import HistoryService
 from features.history.store import MemoryHistoryStore
@@ -21,9 +26,10 @@ from features.retrieval.retriever import (
     default_safety_terms,
     load_corpus,
     search_manual,
-    search_safety
+    search_safety,
 )
 from util.rag_query import get_chunks, search_chunks
+
 
 def build_retriever(search: VectorSearch = search_chunks) -> Retriever:
     """QAService의 Retriever 규격(search_manual·search_safety)을 실제 검색 함수로 채운다.
@@ -42,10 +48,10 @@ def build_retriever(search: VectorSearch = search_chunks) -> Retriever:
 
 
 def build_qa_service(
-        search: VectorSearch = search_chunks,
-        complete: Callable[..., dict] = llm.complete,
-        history: HistoryService | None = None,
-        retriever: Retriever | None = None,
+    search: VectorSearch = search_chunks,
+    complete: Callable[..., dict] = llm.complete,
+    history: HistoryService | None = None,
+    retriever: Retriever | None = None,
 ) -> QAService:
     """실제 부품으로 QAService를 만든다. 앱을 시작할 때 한 번만 부른다.
 
@@ -59,7 +65,7 @@ def build_qa_service(
     taxonomy = TaxonomyService.from_directory()
     return QAService(
         analyzer=QuestionAnalyzer(EquipmentModelService(), taxonomy, complete),
-        clarify_policy=RuleClarifyPolicy(taxonomy),
+        clarify_policy=RuleClarifyPolicy(taxonomy, EquipmentModelService()),
         retriever=retriever or build_retriever(search),
         generator=AnswerGenerator(complete),
         history=history or HistoryService(MemoryHistoryStore()),
@@ -68,12 +74,12 @@ def build_qa_service(
 
 def build_source_service(get: ChunkGetter = get_chunks) -> SourceService:
     """근거 원문 창용 SourceService를 만든다. 매뉴얼·안전 문서 청크를 Chroma에서 모두 읽는다.
-    
+
     컬렉션이 없거나 서버에 접속할 수 없으면 예외가 그대로 전달된다.
     """
     # shortcut: 근거 원문 창을 위해 Chroma 청크를 모두 읽는다, 청크가 많아져 시작이 느려지면 get(ids=...)로 필요한 청크만 읽는다
     chunks = [
         *load_corpus(get, MANUAL_DOC_TYPE, MANUAL_COLLECTION),
-        *load_corpus(get, SAFETY_DOC_TYPE, SAFETY_COLLECTION)
+        *load_corpus(get, SAFETY_DOC_TYPE, SAFETY_COLLECTION),
     ]
     return SourceService(chunks)

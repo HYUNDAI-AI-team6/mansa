@@ -60,6 +60,9 @@ class PipelineWithDocumentServiceTest(unittest.TestCase):
         self.assertEqual(self.service.get_status(document_id).status, "COMPLETED")
         stored = self.chroma.chunks_of("tech", document_id)
         self.assertGreater(len(stored), 0)
+        recorded = self.service.get_status(document_id)
+        self.assertEqual(recorded.chunk_count, len(stored))  # 파이프라인이 넘긴 청크 수가 문서에 남는다
+        self.assertIsNone(recorded.error_message)
         first = next(iter(stored.values()))["meta"]
         self.assertEqual((first["source"], first["doc_name"], first["model"]), ("엘트론.pdf", "엘트론", "ELVRO 3000"))
 
@@ -71,8 +74,11 @@ class PipelineWithDocumentServiceTest(unittest.TestCase):
         with self.assertLogs("features.processing.pipeline", level="ERROR"):  # 실패 로그는 예상된 것이다
             self.pipeline().run(document_id)
 
-        self.assertEqual(self.service.get_status(document_id).status, "FAILED")
+        failed = self.service.get_status(document_id)
+        self.assertEqual(failed.status, "FAILED")
         self.assertEqual(self.chroma.chunks_of("tech", document_id), {})
+        self.assertEqual(failed.error_message, "PDF를 열 수 없어요")  # 사용자에게 보여도 되는 문구가 남는다
+        self.assertIsNone(failed.chunk_count)
 
     def test_a_missing_pdf_file_is_recorded_as_failed(self) -> None:
         upload = self.root / "upload.pdf"
@@ -83,7 +89,9 @@ class PipelineWithDocumentServiceTest(unittest.TestCase):
         with self.assertLogs("features.processing.pipeline", level="ERROR"):
             self.pipeline().run(document_id)
 
-        self.assertEqual(self.service.get_status(document_id).status, "FAILED")
+        failed = self.service.get_status(document_id)
+        self.assertEqual(failed.status, "FAILED")
+        self.assertEqual(failed.error_message, "PDF를 열 수 없어요")
 
     def test_the_document_has_everything_the_pipeline_reads(self) -> None:
         upload = self.root / "upload.pdf"

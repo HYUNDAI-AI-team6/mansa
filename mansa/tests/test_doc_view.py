@@ -27,6 +27,14 @@ class LoadCompletedTest(unittest.TestCase):
         self.assertIn("조건에 맞는 문서가 없어요", html)
 
 
+class TitleTest(unittest.TestCase):
+    def test_titles_are_plain_text_without_a_sample_pdf(self):
+        html = doc_view.table(load_completed(), "전체", "", "")
+        self.assertIn("모델 A 매뉴얼", html)
+        self.assertNotIn("data-pdf", html)
+        self.assertNotIn("doc-open", html)
+
+
 class ChoicesTest(unittest.TestCase):
     def test_dept_choices_come_from_documents_without_dash(self):
         self.assertEqual(

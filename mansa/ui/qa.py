@@ -385,8 +385,14 @@ def _continue(choice: str, state: dict, test_mode: bool = False):
     is_model = pending["ask"] == MODEL_QUESTION
     state = {**state, "pending": None, "model": choice if is_model else state["model"]}
     part = "" if is_model else choice
+    question = pending["q"]
+    if is_model:
+        # 고르지 않은 모델 이름이 질문에 남으면 다시 모델 두 개로 읽혀 같은 되묻기가 반복된다
+        for name in pending["options"]:
+            if name != choice:
+                question = question.replace(name, "")
     yield _thinking(state, pending["q"])
-    yield _render(_apply(state, pending["q"], _query(pending["q"], state, state["model"], part, test_mode=test_mode)))
+    yield _render(_apply(state, pending["q"], _query(question, state, state["model"], part, test_mode=test_mode)))
 
 
 def _cancel(state: dict) -> tuple:

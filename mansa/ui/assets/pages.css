@@ -471,9 +471,24 @@
   background: var(--subtle) !important;
   overflow: hidden;
 }
+.dropzone {
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
 .dropzone:hover {
   border-color: var(--brand) !important;
-  background: #f5f7ff !important;
+  background: #e9edff !important;
+}
+/* 파일을 끌어 올 때(assets/drop_hover.js 가 .drop-wrap 에 붙인다)는 :hover 가 적용되지 않으므로 같은 모양에 더 진한 바탕과 테두리 링을 준다 */
+.drop-wrap.dragover .dropzone {
+  border-color: var(--brand) !important;
+  background: #dfe6ff !important;
+  box-shadow: 0 0 0 4px rgba(59, 91, 246, 0.14);
+}
+.drop-wrap.dragover .drop-face b {
+  color: var(--brand);
 }
 /* gr.File 기본 안내 문구는 감추고 그 위에 Figma 안내(drop-face)를 겹쳐 그린다 */
 .dropzone [data-testid="upload-text"] {
@@ -548,6 +563,15 @@
   background: #fff;
   font-family: inherit;
   cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+.type-card:hover {
+  border-color: var(--brand);
+}
+.type-card:active {
+  background: var(--brand-weak);
 }
 .type-card .tile {
   margin-bottom: 6px;
@@ -564,6 +588,13 @@
 .type-card.on {
   background: #f5f7ff;
   border: 1.5px solid var(--brand);
+}
+.type-card.on:hover {
+  border-color: var(--brand);
+  background: #e4eaff;
+}
+.type-card.on:active {
+  background: #d6dfff;
 }
 
 /* ---------- 기준정보 (Figma A3) ---------- */
@@ -837,29 +868,4 @@
 }
 .page .column > .column.chat-scroll > * {
   flex-shrink: 0 !important;
-}
-
-/* 문서 조회: 제목을 누르면 PDF 열기 */
-.doc-open {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-  font-family: inherit;
-  font-size: inherit;
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-}
-.doc-open:hover b {
-  color: var(--brand);
-  text-decoration: underline;
-}
-.doc-open:focus-visible {
-  outline: 2px solid var(--brand);
-  outline-offset: 2px;
-  border-radius: 4px;
 }

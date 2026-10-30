@@ -12,6 +12,7 @@ from features.documents.models import (
     STATUSES,
     Document,
     DocumentRow,
+    DocumentStatus,
     DocumentSummary,
     title_of,
 )
@@ -53,6 +54,34 @@ class DocumentTest(unittest.TestCase):
     def test_values_cannot_be_changed(self) -> None:
         with self.assertRaises(FrozenInstanceError):
             DocumentRow(**row_values()).status = "COMPLETED"
+
+
+class ErrorMessageFieldTest(unittest.TestCase):
+    def test_error_message_defaults_to_none_so_existing_callers_keep_working(self) -> None:
+        self.assertIsNone(DocumentRow(**row_values()).error_message)
+        self.assertIsNone(Document(**row_values(), file_path="/x/1.pdf").error_message)
+        self.assertIsNone(DocumentStatus("PROCESSING", None, NOW).error_message)
+
+    def test_row_and_document_carry_the_message(self) -> None:
+        row = DocumentRow(**row_values(), error_message="PDF를 열 수 없어요")
+        document = Document(**row_values(), file_path="/x/1.pdf", error_message="PDF를 열 수 없어요")
+
+        self.assertEqual(row.error_message, "PDF를 열 수 없어요")
+        self.assertEqual(document.error_message, "PDF를 열 수 없어요")
+        self.assertEqual(document.file_path, "/x/1.pdf")
+
+    def test_status_carries_the_message(self) -> None:
+        status = DocumentStatus("FAILED", None, NOW, "스캔 PDF는 지원하지 않아요")
+
+        self.assertEqual((status.status, status.chunk_count, status.error_message), ("FAILED", None, "스캔 PDF는 지원하지 않아요"))
+
+    def test_error_message_on_the_row_must_be_given_by_keyword(self) -> None:
+        values = row_values()
+        positional = [values[k] for k in ("id", "title", "filename", "doc_type", "department_id", "department_name",
+                                          "status", "chunk_count", "upload_at", "updated_at")]
+
+        with self.assertRaises(TypeError):
+            DocumentRow(*positional, "사유")
 
 
 class SummaryTest(unittest.TestCase):

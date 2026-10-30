@@ -80,6 +80,8 @@ class FakeDb:
             for row in self.rows:
                 if row["id"] == params["id"] and row["status"] == params["current"]:
                     row["status"] = params["status"]
+                    row["chunk_count"] = params.get("chunk_count")
+                    row["error_message"] = params.get("error_message")
                     changed += 1
             return changed
         raise AssertionError(f"unexpected SQL: {sql}")
@@ -327,6 +329,68 @@ class QueryTest(ServiceTestCase):
             self.service.get_status(5)
 
 
+class RecordedResultQueryTest(ServiceTestCase):
+    """DB에 기록된 청크 수와 실패 사유가 조회 결과에 나온다."""
+
+    def add_row(self, document_id: int, **extra) -> None:
+        self.db.rows.append({
+            "id": document_id, "filename": f"{document_id}.pdf", "document_type": "tech", "department_id": 3,
+            "status": "COMPLETED", "upload_at": NOW, "updated_at": NOW, **extra,
+        })
+
+    def test_the_select_reads_both_columns(self) -> None:
+        self.add_row(1, chunk_count=27)
+
+        self.service.get_document(1)
+        self.service.list_documents()
+
+        for sql, _ in self.db.calls:
+            self.assertIn("d.chunk_count", sql)
+            self.assertIn("d.error_message", sql)
+
+    def test_get_document_returns_the_recorded_count(self) -> None:
+        self.add_row(1, chunk_count=27)
+
+        document = self.service.get_document(1)
+
+        self.assertEqual(document.chunk_count, 27)
+        self.assertIsNone(document.error_message)
+
+    def test_get_document_returns_the_recorded_reason(self) -> None:
+        self.add_row(2, status="FAILED", chunk_count=None, error_message="PDF를 열 수 없어요")
+
+        document = self.service.get_document(2)
+
+        self.assertIsNone(document.chunk_count)
+        self.assertEqual(document.error_message, "PDF를 열 수 없어요")
+
+    def test_get_status_returns_count_and_reason(self) -> None:
+        self.add_row(1, chunk_count=349)
+        self.add_row(2, status="FAILED", error_message="스캔 PDF는 지원하지 않아요")
+
+        done, failed = self.service.get_status(1), self.service.get_status(2)
+
+        self.assertEqual((done.status, done.chunk_count, done.error_message), ("COMPLETED", 349, None))
+        self.assertEqual((failed.status, failed.chunk_count, failed.error_message), ("FAILED", None, "스캔 PDF는 지원하지 않아요"))
+
+    def test_list_rows_carry_count_and_reason(self) -> None:
+        self.add_row(1, chunk_count=5)
+        self.add_row(2, status="FAILED", error_message="사유")
+
+        rows = {row.id: row for row in self.service.list_documents()}
+
+        self.assertEqual((rows[1].chunk_count, rows[1].error_message), (5, None))
+        self.assertEqual((rows[2].chunk_count, rows[2].error_message), (None, "사유"))
+
+    def test_null_columns_become_none(self) -> None:
+        self.add_row(1, chunk_count=None, error_message=None)
+
+        document = self.service.get_document(1)
+
+        self.assertIsNone(document.chunk_count)
+        self.assertIsNone(document.error_message)
+
+
 class ListTest(ServiceTestCase):
     def last_query(self) -> tuple[str, dict]:
         sql, params = self.db.calls[-1]
@@ -421,13 +485,14 @@ class SetStatusTest(ServiceTestCase):
 
         self.assertEqual(self.status(), "FAILED")
 
-    def test_chunk_count_and_error_are_only_logged_until_the_columns_exist(self) -> None:
+    def test_the_result_is_written_together_with_the_status_and_also_logged(self) -> None:
         with self.assertLogs("features.documents.service", level="INFO") as logs:
             self.service.set_status(self.document_id, "COMPLETED", chunk_count=349)
 
         update = self.db.sql_with("UPDATE")[0][0]
-        self.assertNotIn("chunk_count", update)
-        self.assertNotIn("error_message", update)
+        self.assertIn("chunk_count = :chunk_count", update)
+        self.assertIn("error_message = :error_message", update)
+        self.assertEqual(self.db.rows[0]["chunk_count"], 349)
         self.assertIn("chunk_count=349", logs.output[0])
 
     def test_a_long_error_is_cut_in_the_log(self) -> None:
@@ -473,7 +538,8 @@ class SetStatusTest(ServiceTestCase):
 
         sql, params = self.db.sql_with("UPDATE")[0]
         self.assertIn("AND status = :current", sql)
-        self.assertEqual(params, {"status": "COMPLETED", "id": self.document_id, "current": "PROCESSING"})
+        self.assertEqual(params, {"status": "COMPLETED", "chunk_count": None, "error_message": None,
+                                  "id": self.document_id, "current": "PROCESSING"})
 
     def test_another_worker_finishing_first_with_a_different_status_is_reported(self) -> None:
         def other_worker(db: FakeDb) -> None:
@@ -529,6 +595,107 @@ class SetStatusTest(ServiceTestCase):
         self.service.set_status(self.document_id, "COMPLETED", chunk_count=0)
 
         self.assertEqual(self.status(), "COMPLETED")
+        self.assertEqual(self.db.rows[0]["chunk_count"], 0)  # 0개는 NULL이 아니라 0으로 남는다
+
+
+class RecordedResultTest(ServiceTestCase):
+    """완료·실패 때 DB에 쓰는 값."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.document_id = self.register()
+
+    def row(self) -> dict:
+        return self.db.rows[0]
+
+    def test_completion_records_the_count_and_leaves_the_reason_empty(self) -> None:
+        self.service.set_status(self.document_id, "COMPLETED", chunk_count=349)
+
+        self.assertEqual((self.row()["chunk_count"], self.row()["error_message"]), (349, None))
+
+    def test_completion_without_a_count_stores_null(self) -> None:
+        self.service.set_status(self.document_id, "COMPLETED")
+
+        self.assertIsNone(self.row()["chunk_count"])
+
+    def test_completion_ignores_a_reason_that_was_passed(self) -> None:
+        self.service.set_status(self.document_id, "COMPLETED", error="무시되는 사유", chunk_count=3)
+
+        self.assertEqual((self.row()["chunk_count"], self.row()["error_message"]), (3, None))
+
+    def test_failure_records_the_reason_and_leaves_the_count_empty(self) -> None:
+        self.service.set_status(self.document_id, "FAILED", error="PDF를 열 수 없어요")
+
+        self.assertEqual((self.row()["chunk_count"], self.row()["error_message"]), (None, "PDF를 열 수 없어요"))
+
+    def test_failure_ignores_a_count_that_was_passed(self) -> None:
+        self.service.set_status(self.document_id, "FAILED", error="사유", chunk_count=10)
+
+        self.assertIsNone(self.row()["chunk_count"])
+
+    def test_a_long_reason_is_cut_to_the_column_length(self) -> None:
+        self.service.set_status(self.document_id, "FAILED", error="가" * 1500)
+
+        self.assertEqual(self.row()["error_message"], "가" * 1000)
+
+    def test_the_reason_is_trimmed_before_and_after_cutting(self) -> None:
+        self.service.set_status(self.document_id, "FAILED", error="  앞뒤 공백  ")
+        self.assertEqual(self.row()["error_message"], "앞뒤 공백")
+
+    def test_a_cut_that_ends_in_a_space_is_trimmed_too(self) -> None:
+        other = self.register("두번째.pdf")
+        self.service.set_status(other, "FAILED", error="a" * 999 + " bbb")
+
+        self.assertEqual(self.db.rows[1]["error_message"], "a" * 999)
+
+    def test_an_empty_or_missing_reason_stores_null(self) -> None:
+        for index, error in enumerate((None, "", "   \n ")):
+            document_id = self.document_id if index == 0 else self.register(f"사유없음{index}.pdf")
+            self.service.set_status(document_id, "FAILED", error=error)
+
+        self.assertTrue(all(row["error_message"] is None for row in self.db.rows))
+
+    def test_the_recorded_values_come_back_from_the_queries(self) -> None:
+        self.service.set_status(self.document_id, "COMPLETED", chunk_count=27)
+
+        status = self.service.get_status(self.document_id)
+        document = self.service.get_document(self.document_id)
+
+        self.assertEqual((status.chunk_count, status.error_message), (27, None))
+        self.assertEqual((document.chunk_count, document.error_message), (27, None))
+
+    def test_a_failed_documents_reason_comes_back_from_the_queries(self) -> None:
+        self.service.set_status(self.document_id, "FAILED", error="스캔 PDF는 지원하지 않아요")
+
+        self.assertEqual(self.service.get_status(self.document_id).error_message, "스캔 PDF는 지원하지 않아요")
+        self.assertEqual(self.service.list_documents()[0].error_message, "스캔 PDF는 지원하지 않아요")
+
+    def test_a_repeated_call_does_not_overwrite_the_recorded_result(self) -> None:
+        self.service.set_status(self.document_id, "COMPLETED", chunk_count=5)
+
+        self.service.set_status(self.document_id, "COMPLETED", chunk_count=9)
+
+        self.assertEqual(self.row()["chunk_count"], 5)
+
+    def test_a_late_result_does_not_overwrite_what_another_worker_recorded(self) -> None:
+        def other_worker(db: FakeDb) -> None:
+            db.rows[0].update(status="FAILED", error_message="먼저 끝난 사유", chunk_count=None)
+
+        self.db.before_update = other_worker
+
+        with self.assertRaises(InvalidStatusTransition):
+            self.service.set_status(self.document_id, "COMPLETED", chunk_count=99)
+
+        self.assertEqual((self.row()["status"], self.row()["chunk_count"], self.row()["error_message"]),
+                         ("FAILED", None, "먼저 끝난 사유"))
+
+    def test_a_rejected_value_writes_nothing(self) -> None:
+        for kwargs in ({"chunk_count": -1}, {"chunk_count": True}, {"chunk_count": "3"}, {"error": 123}):
+            with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
+                self.service.set_status(self.document_id, "COMPLETED", **kwargs)
+
+        self.assertEqual(self.row()["status"], "PROCESSING")
+        self.assertEqual(self.db.sql_with("UPDATE"), [])
 
 
 class DeleteTest(ServiceTestCase):
