@@ -124,8 +124,9 @@ def _delete(keyword: str, evt: gr.SelectData) -> tuple:
     from features.processing.workflow import default_workflow
 
     try:
-        default_workflow().delete(int(evt.index))
-        ui.notify("문서를 삭제했어요")
+        result = default_workflow().delete(int(evt.index))
+        # 다른 컴퓨터에서 올렸거나 앞선 시도에서 이미 지워진 경우 원본 파일이 없을 수 있다.
+        ui.notify("문서를 삭제했어요" if result.pdf_existed else "문서를 삭제했어요. 원본 파일은 이미 없었어요")
     except DocumentNotFoundError:
         ui.notify("이미 삭제된 문서예요")
     except DeletionError as exc:  # 처리 중·단계별 실패. 메시지는 사용자에게 보여도 되는 문구다.

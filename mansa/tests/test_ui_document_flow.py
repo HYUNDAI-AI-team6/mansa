@@ -126,6 +126,11 @@ class DeleteTest(unittest.TestCase):
         self.notify.assert_called_once_with("문서를 삭제했어요")
         self.assertIn("stats", stats)
 
+    def test_a_missing_original_file_is_mentioned(self):
+        self.flow.delete.return_value = SimpleNamespace(pdf_existed=False, record_existed=True)
+        self.delete()
+        self.notify.assert_called_once_with("문서를 삭제했어요. 원본 파일은 이미 없었어요")
+
     def test_an_already_deleted_document_is_just_reported(self):
         self.flow.delete.side_effect = DocumentNotFoundError(7)
         self.delete()
