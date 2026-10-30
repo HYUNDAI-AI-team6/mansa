@@ -78,22 +78,22 @@
 }
 .login::before {
   animation-name: login-drift-a;
-  animation-duration: 34s;
+  animation-duration: 22.67s;
 }
 .login::after {
   animation-name: login-drift-b;
-  animation-duration: 40s;
-  animation-delay: -12s;
+  animation-duration: 26.67s;
+  animation-delay: -8s;
 }
 .login-row::before {
   animation-name: login-drift-c;
-  animation-duration: 37s;
-  animation-delay: -20s;
+  animation-duration: 24.67s;
+  animation-delay: -13.33s;
 }
 .login-row::after {
   animation-name: login-drift-d;
-  animation-duration: 43s;
-  animation-delay: -7s;
+  animation-duration: 28.67s;
+  animation-delay: -4.67s;
 }
 @keyframes login-drift-a {
   0% { transform: translate3d(0, 0, 0); }
