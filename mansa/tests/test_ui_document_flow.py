@@ -10,7 +10,7 @@ from unittest import mock
 
 from features.documents.errors import DocumentNotFoundError, DocumentStorageError, DuplicateDocumentError
 from features.processing.deletion import DeletionError, DocumentBusyError
-from ui import documents, upload
+from ui import busy, documents, upload
 
 
 def collect(generator) -> list:
@@ -62,12 +62,13 @@ class UploadTest(unittest.TestCase):
         self.reset = mock.patch.object(upload, "_reset", return_value=("e", "f", "d", "t", "r")).start()
         self.register_patch = mock.patch.object(upload, "_register")
         self.register = self.register_patch.start()
+        self.hold = mock.patch.object(upload.busy, "hold").start()  # 최소 노출 시간은 기다리지 않는다
         self.addCleanup(mock.patch.stopall)
 
     def test_missing_values_are_reported_and_nothing_is_registered(self):
         steps = collect(upload._upload({"file": None, "type": ""}, "", {}))
         self.assertEqual(len(steps), 1)
-        self.assertEqual(len(steps[0]), 8)
+        self.assertEqual(len(steps[0]), 9)
         self.warn.assert_called_once_with("아직 정하지 않았어요: 파일 · 문서 유형 · 소속 부서")
         self.register.assert_not_called()
 
@@ -75,9 +76,39 @@ class UploadTest(unittest.TestCase):
         steps = collect(upload._upload(file_state(), "유지보수팀", {}))
         self.register.assert_called_once_with(file_state(), "유지보수팀")
         self.notify.assert_called_once()
-        self.assertEqual([len(step) for step in steps], [8, 8])  # 업로드 중 → 완료
+        self.assertEqual([len(step) for step in steps], [9, 9])  # 업로드 중 → 완료
         self.reset.assert_called_once()
         self.warn.assert_not_called()
+
+    def test_the_loading_layer_covers_the_page_while_uploading_and_goes_away_when_done(self):
+        steps = collect(upload._upload(file_state(), "유지보수팀", {}))
+        shown, done = steps[0][-1], steps[-1][-1]
+        self.assertTrue(shown.visible)
+        self.assertIn(upload.BUSY_TITLE, shown.value)
+        self.assertIn(upload.BUSY_SUB, shown.value)
+        self.assertFalse(done.visible)
+
+    def test_missing_values_never_show_the_loading_layer(self):
+        with mock.patch.object(upload.busy, "show") as show:
+            collect(upload._upload({"file": None, "type": ""}, "", {}))
+        show.assert_not_called()
+        self.hold.assert_not_called()
+
+    def test_the_layer_stays_for_the_minimum_time_before_the_result_is_announced(self):
+        calls = []
+        self.hold.side_effect = lambda started: calls.append("hold")
+        self.notify.side_effect = lambda *a: calls.append("notify")
+        collect(upload._upload(file_state(), "유지보수팀", {}))
+        self.assertEqual(calls, ["hold", "notify"])
+        self.assertIsInstance(self.hold.call_args.args[0], float)
+
+    def test_a_failed_upload_also_keeps_the_layer_for_the_minimum_time_then_removes_it(self):
+        self.register.side_effect = DuplicateDocumentError(5)
+        steps = collect(upload._upload(file_state(), "유지보수팀", {}))
+        self.hold.assert_called_once()
+        self.assertTrue(steps[0][-1].visible)
+        self.assertFalse(steps[-1][-1].visible)
+        self.assertEqual([len(step) for step in steps], [9, 9])
 
     def test_a_duplicate_is_explained_and_the_form_is_kept(self):
         self.register.side_effect = DuplicateDocumentError(5)

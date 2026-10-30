@@ -1,0 +1,275 @@
+/* 로딩 레이어: 오래 걸리는 작업 동안 화면 내용만 덮는다(사이드바·머리글은 그대로). */
+.page {
+  position: relative;
+}
+.block.busy-layer {
+  position: absolute !important;
+  inset: 0;
+  z-index: 4; /* 위에 붙어 있는 머리글(z-index 5)과 사이드바(10)는 가리지 않는다 */
+  min-width: 0 !important;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(238, 242, 255, 0.9),
+    rgba(244, 245, 247, 0.78) 60%
+  ) !important;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: busy-fade 0.25s ease-out;
+}
+/* Gradio 가 감싼 안쪽 상자들도 레이어 높이를 가득 채워야 아래 .busy-box 가 sticky 로 따라온다 */
+.block.busy-layer .html-container,
+.block.busy-layer .html-container > * {
+  height: 100%;
+}
+@keyframes busy-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.busy-body {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  height: 100%;
+  overflow: clip; /* hidden 은 스크롤 영역이 되어 sticky 가 창 스크롤을 따라가지 못한다 */
+}
+/* 화면을 아래로 내려도 빛과 문구가 보이는 자리에 머문다 */
+.busy-box {
+  position: sticky;
+  top: 30vh;
+  margin-top: clamp(40px, 22vh, 200px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.busy-stage {
+  position: relative;
+  width: 240px;
+  height: 150px;
+  display: grid;
+  place-items: center;
+}
+.busy-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 150px;
+  height: 150px;
+  margin: -75px 0 0 -75px;
+  border-radius: 50%;
+  border: 1px solid rgba(59, 91, 246, 0.16);
+  opacity: 0;
+  animation: busy-ripple 6s ease-out infinite;
+}
+.busy-ring:nth-of-type(3) {
+  animation-delay: 2s;
+}
+.busy-ring:nth-of-type(4) {
+  animation-delay: 4s;
+}
+@keyframes busy-ripple {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+.busy-halo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 200px;
+  height: 120px;
+  margin: -60px 0 0 -100px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(99, 102, 241, 0.22), rgba(99, 102, 241, 0));
+  animation: busy-breathe 2.4s ease-in-out infinite;
+}
+@keyframes busy-breathe {
+  0%,
+  100% {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+}
+.busy-spark {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--brand);
+  opacity: 0;
+  animation: busy-rise 3s ease-in infinite;
+}
+.busy-spark.a {
+  left: 38%;
+  top: 60%;
+}
+.busy-spark.b {
+  left: 62%;
+  top: 64%;
+  background: #7c3aed;
+  animation-delay: 0.9s;
+}
+.busy-spark.c {
+  left: 50%;
+  top: 70%;
+  width: 4px;
+  height: 4px;
+  background: #7dd3fc;
+  animation-delay: 1.7s;
+}
+.busy-spark.d {
+  left: 28%;
+  top: 52%;
+  width: 3px;
+  height: 3px;
+  animation-delay: 2.3s;
+}
+.busy-spark.e {
+  left: 72%;
+  top: 54%;
+  width: 3px;
+  height: 3px;
+  background: #7c3aed;
+  animation-delay: 0.4s;
+}
+@keyframes busy-rise {
+  0% {
+    transform: translateY(0) scale(0.6);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(-52px) scale(1.1);
+    opacity: 0;
+  }
+}
+.busy-loop {
+  position: relative;
+  width: 180px;
+  height: 90px;
+  overflow: visible;
+}
+.busy-loop path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.busy-loop .track {
+  stroke: #e3e8ff;
+  stroke-width: 7;
+}
+/* 길이가 다른 선들이 같은 속도로 같은 곳을 앞서 달려 꼬리가 이어진다 */
+.busy-loop .seg {
+  animation: busy-run 1.9s linear infinite;
+}
+@keyframes busy-run {
+  from {
+    stroke-dashoffset: calc(var(--len) * 1px);
+  }
+  to {
+    stroke-dashoffset: calc(var(--len) * 1px - 100px);
+  }
+}
+.busy-title {
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.busy-title > span:first-child {
+  background: linear-gradient(
+    90deg,
+    #1a1d23 0%,
+    #1a1d23 35%,
+    #3b5bf6 50%,
+    #1a1d23 65%,
+    #1a1d23 100%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: busy-shine 2.6s linear infinite;
+}
+@keyframes busy-shine {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}
+.busy-dots {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 5px;
+}
+.busy-dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--brand);
+  animation: busy-dot 1.2s ease-in-out infinite;
+}
+.busy-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.busy-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes busy-dot {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  40% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+.busy-sub {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text2);
+}
+/* 움직임 줄이기를 켠 사용자: 움직임 없이 문구만 */
+@media (prefers-reduced-motion: reduce) {
+  .block.busy-layer,
+  .busy-ring,
+  .busy-halo,
+  .busy-spark,
+  .busy-loop .seg,
+  .busy-title > span:first-child,
+  .busy-dots i {
+    animation: none;
+  }
+  .busy-ring,
+  .busy-spark,
+  .busy-loop .seg {
+    display: none;
+  }
+  .busy-title > span:first-child {
+    background: none;
+    color: var(--text);
+  }
+}

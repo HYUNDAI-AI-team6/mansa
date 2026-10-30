@@ -17,7 +17,7 @@ class BuildHeadTest(unittest.TestCase):
 class DropHoverTest(unittest.TestCase):
     def test_head_carries_the_drag_over_script_as_its_own_tag(self):
         head = theme.build_head()
-        self.assertEqual(head.count("<script>"), 2)
+        self.assertEqual(head.count("<script>"), 3)  # chat_keys, drop_hover, busy_layer
         self.assertIn('".drop-wrap"', head)
         self.assertIn("dragover", head)
 
