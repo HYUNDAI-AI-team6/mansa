@@ -10,6 +10,7 @@ COLLECTIONS = {"tech": "tech_docs", "secure": "safety_docs"}
 REQUIRED_KEYS = ("source", "page", "chunk", "document_id", "document_type")
 SCALAR_TYPES = (str, int, float, bool)
 # 부위·작업 태그는 문자열 목록으로 저장한다. QA의 util/tag_search.py가 $contains로 목록 원소를 찾는다.
+# config.TAG_KEYS(검색이 읽는 태그 키)와 같은 값이어야 한다. config는 환경 변수가 있어야 불러올 수 있어 여기서는 따로 두었다. 한쪽을 바꾸면 같이 바꾼다.
 TAG_KEYS = ("part", "task")
 
 Upload = Callable[[str, str, list[str], list[list[float]], list[str], list[dict]], int]

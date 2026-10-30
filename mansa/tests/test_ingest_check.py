@@ -58,14 +58,16 @@ class IngestCheckTest(unittest.TestCase):
         tag_line = next(line for line in lines if line.startswith("tags:"))
         self.assertRegex(tag_line, r"part on (\d+) of \1 chunks, task on 0")
 
-    def test_apply_reports_zero_tags_when_tagging_fails(self):
+    def test_apply_says_tagging_failed_instead_of_zero_chunks(self):
         def tagger(chunks, vocabulary):
             raise RuntimeError("llm is down")
 
         with self.assertLogs("features.processing.pipeline", level="WARNING"):
             lines = self.check(apply=True, tagger=tagger)
         self.assertIn("pipeline status: COMPLETED", "\n".join(lines))
-        self.assertTrue(any(line.startswith("tags: part on 0 of") for line in lines))
+        tag_line = next(line for line in lines if line.startswith("tags:"))
+        self.assertIn("실패했거나 건너뛰었어요", tag_line)
+        self.assertNotIn("0 of 0", tag_line)
 
     def test_apply_with_keep_leaves_the_chunks(self):
         lines = self.check(apply=True, keep=True)

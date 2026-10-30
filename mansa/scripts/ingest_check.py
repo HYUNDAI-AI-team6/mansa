@@ -2,7 +2,8 @@
 
 사용: cd mansa && PYTHONPATH=. uv run --locked python -m scripts.ingest_check <pdf 경로> --type tech|secure [--apply] [--keep]
 
---apply를 주면 임베딩 API(유료)를 호출하고 실제 ChromaDB에 임시 문서 ID로 저장해 개수를 확인한 뒤 지운다.
+--apply를 주면 임베딩 API와 태그용 LLM(둘 다 유료)을 호출하고 실제 ChromaDB에 임시 문서 ID로 저장해 개수를 확인한 뒤 지운다.
+태그는 청크 5개마다 LLM을 한 번 부른다. 큰 문서(안전기준 약 350청크)는 호출이 약 55번이고 2분 안팎 걸린다.
 --keep을 같이 주면 지우지 않는다. 임시 문서 ID(--document-id)에 이미 청크가 있으면 아무것도 하지 않고 멈춘다.
 """
 
@@ -123,7 +124,12 @@ def run(
 
 
 def _tag_summary(chunks: list) -> str:
-    """태그가 붙은 청크 수를 한 줄로 만든다. 태그는 일부 청크에만 붙는 것이 정상이다."""
+    """태그가 붙은 청크 수를 한 줄로 만든다. 태그는 일부 청크에만 붙는 것이 정상이다.
+
+    청크 목록이 비어 있으면 태그 단계가 실패했거나 건너뛴 것이다(파이프라인은 태그 없이 저장을 계속한다).
+    """
+    if not chunks:
+        return "tags: 태그 단계가 실패했거나 건너뛰었어요. 청크는 태그 없이 저장돼요"
     parts = sum(1 for chunk in chunks if chunk.metadata.get("part"))
     tasks = sum(1 for chunk in chunks if chunk.metadata.get("task"))
     return f"tags: part on {parts} of {len(chunks)} chunks, task on {tasks}"
