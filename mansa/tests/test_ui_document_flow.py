@@ -10,7 +10,7 @@ from unittest import mock
 
 from features.documents.errors import DocumentNotFoundError, DocumentStorageError, DuplicateDocumentError
 from features.processing.deletion import DeletionError, DocumentBusyError
-from ui import documents, upload
+from ui import busy, documents, upload
 
 
 def collect(generator) -> list:
@@ -62,22 +62,106 @@ class UploadTest(unittest.TestCase):
         self.reset = mock.patch.object(upload, "_reset", return_value=("e", "f", "d", "t", "r")).start()
         self.register_patch = mock.patch.object(upload, "_register")
         self.register = self.register_patch.start()
+        self.hold = mock.patch.object(upload.busy, "hold").start()  # 최소 노출 시간은 기다리지 않는다
         self.addCleanup(mock.patch.stopall)
 
     def test_missing_values_are_reported_and_nothing_is_registered(self):
         steps = collect(upload._upload({"file": None, "type": ""}, "", {}))
         self.assertEqual(len(steps), 1)
-        self.assertEqual(len(steps[0]), 8)
+        self.assertEqual(len(steps[0]), 9)
         self.warn.assert_called_once_with("아직 정하지 않았어요: 파일 · 문서 유형 · 소속 부서")
         self.register.assert_not_called()
+
+    def test_the_button_turns_on_only_when_file_type_and_department_are_all_chosen(self):
+        ready = file_state()
+        for state, dept in (
+            (upload._empty(), ""),
+            ({**ready, "file": None}, "유지보수팀"),
+            ({**ready, "type": ""}, "유지보수팀"),
+            (ready, ""),
+            (ready, None),
+        ):
+            self.assertFalse(upload._sync_submit(state, dept).interactive, (state, dept))
+        self.assertTrue(upload._sync_submit(ready, "유지보수팀").interactive)
+
+    def test_the_form_starts_with_the_button_off_and_rechecks_whenever_the_inputs_change(self):
+        import gradio as gr
+
+        with gr.Blocks() as demo:
+            upload.build(gr.State({}))
+        submit = next(b for b in demo.blocks.values() if isinstance(b, gr.Button) and b.value == "업로드")
+        self.assertFalse(submit.interactive)
+        syncs = [fn for fn in demo.fns.values() if fn.fn is upload._sync_submit]
+        self.assertEqual(len(syncs), 2)  # 파일·유형을 담은 상태가 바뀔 때와 부서가 바뀔 때
+        for fn in syncs:
+            self.assertEqual({name for _, name in fn.targets}, {"change"})
+            self.assertEqual(len(fn.inputs), 2)
+            self.assertEqual([block._id for block in fn.outputs], [submit._id])
+
+    def test_cancel_and_entering_the_menu_clear_the_form_and_lock_the_button_again(self):
+        import gradio as gr
+
+        cleared = upload._clear_form()
+        self.assertEqual(cleared[:-1], ("e", "f", "d", "t", "r"))
+        self.assertFalse(cleared[-1].interactive)
+        with gr.Blocks() as demo:
+            view = upload.build(gr.State({}))
+        submit = next(b for b in demo.blocks.values() if isinstance(b, gr.Button) and b.value == "업로드")
+        self.assertIs(view.reset, upload._clear_form)
+        self.assertEqual(view.reset_outputs[-1]._id, submit._id)  # 메뉴로 들어올 때
+        cancels = [fn for fn in demo.fns.values() if fn.fn is upload._clear_form]
+        self.assertEqual(len(cancels), 1)  # 취소 버튼
+        self.assertEqual(cancels[0].outputs[-1]._id, submit._id)
+
+    def test_after_a_successful_upload_the_button_waits_until_everything_is_chosen_again(self):
+        steps = collect(upload._upload(file_state(), "유지보수팀", {}))
+        submit_during, submit_done = steps[0][-3], steps[-1][-3]
+        self.assertFalse(submit_during.interactive)  # 올리는 중
+        self.assertFalse(submit_done.interactive)  # 입력이 비워졌으니 다시 정할 때까지 꺼 둔다
+        self.assertEqual(submit_done.value, "업로드")
+
+    def test_after_a_failed_upload_the_button_comes_back_because_the_inputs_are_kept(self):
+        self.register.side_effect = DuplicateDocumentError(5)
+        steps = collect(upload._upload(file_state(), "유지보수팀", {}))
+        self.assertTrue(steps[-1][-3].interactive)
 
     def test_a_successful_upload_registers_notifies_and_resets_the_form(self):
         steps = collect(upload._upload(file_state(), "유지보수팀", {}))
         self.register.assert_called_once_with(file_state(), "유지보수팀")
         self.notify.assert_called_once()
-        self.assertEqual([len(step) for step in steps], [8, 8])  # 업로드 중 → 완료
+        self.assertEqual([len(step) for step in steps], [9, 9])  # 업로드 중 → 완료
         self.reset.assert_called_once()
         self.warn.assert_not_called()
+
+    def test_the_loading_layer_covers_the_page_while_uploading_and_goes_away_when_done(self):
+        steps = collect(upload._upload(file_state(), "유지보수팀", {}))
+        shown, done = steps[0][-1], steps[-1][-1]
+        self.assertTrue(shown.visible)
+        self.assertIn(upload.BUSY_TITLE, shown.value)
+        self.assertIn(upload.BUSY_SUB, shown.value)
+        self.assertFalse(done.visible)
+
+    def test_missing_values_never_show_the_loading_layer(self):
+        with mock.patch.object(upload.busy, "show") as show:
+            collect(upload._upload({"file": None, "type": ""}, "", {}))
+        show.assert_not_called()
+        self.hold.assert_not_called()
+
+    def test_the_layer_stays_for_the_minimum_time_before_the_result_is_announced(self):
+        calls = []
+        self.hold.side_effect = lambda started: calls.append("hold")
+        self.notify.side_effect = lambda *a: calls.append("notify")
+        collect(upload._upload(file_state(), "유지보수팀", {}))
+        self.assertEqual(calls, ["hold", "notify"])
+        self.assertIsInstance(self.hold.call_args.args[0], float)
+
+    def test_a_failed_upload_also_keeps_the_layer_for_the_minimum_time_then_removes_it(self):
+        self.register.side_effect = DuplicateDocumentError(5)
+        steps = collect(upload._upload(file_state(), "유지보수팀", {}))
+        self.hold.assert_called_once()
+        self.assertTrue(steps[0][-1].visible)
+        self.assertFalse(steps[-1][-1].visible)
+        self.assertEqual([len(step) for step in steps], [9, 9])
 
     def test_a_duplicate_is_explained_and_the_form_is_kept(self):
         self.register.side_effect = DuplicateDocumentError(5)

@@ -17,8 +17,8 @@ TEXT3 = "#9CA3AF"
 WHITE_SOFT = "rgba(255,255,255,0.78)"
 
 ASSETS = Path(__file__).parent / "assets"
-CSS_FILES = ["base.css", "shell.css", "login.css", "qa.css", "pages.css"]
-HEAD_SCRIPTS = ["chat_keys.js", "drop_hover.js"]
+CSS_FILES = ["base.css", "shell.css", "login.css", "qa.css", "pages.css", "busy.css"]
+HEAD_SCRIPTS = ["chat_keys.js", "drop_hover.js", "busy_layer.js"]
 
 TAG_COLORS = {
     "blue": ("#EAF0FF", "#2F54EB"),
@@ -82,7 +82,7 @@ def _tag_css() -> str:
 
 
 def build_head() -> str:
-    """페이지 <head>에 넣을 스크립트: 한글 조합 중 엔터 전송을 막는 chat_keys.js, 파일을 끌어 올 때 업로드 영역을 강조하는 drop_hover.js."""
+    """페이지 <head>에 넣을 스크립트: 한글 조합 중 엔터 전송을 막는 chat_keys.js, 파일을 끌어 올 때 업로드 영역을 강조하는 drop_hover.js, 로딩 레이어가 떠 있는 동안 화면 내용을 막는 busy_layer.js."""
     scripts = [(ASSETS / name).read_text(encoding="utf-8") for name in HEAD_SCRIPTS]
     return "".join(f"<script>{script}</script>" for script in scripts)
 

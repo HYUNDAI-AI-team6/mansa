@@ -2,7 +2,7 @@
 
 소속 부서 목록은 DB(기준정보)에서 읽는다. 문서 기록(documents_info.department_id)은 NULL을 허용하지만
 앱에서는 기술·안전 문서 모두 부서를 꼭 골라야 한다.
-업로드하면 문서를 등록하고(DocumentService) 처리(추출·청킹·태그·임베딩·저장)를 백그라운드에서 시작한다.
+파일·문서 유형·소속 부서를 모두 정해야 업로드 버튼이 켜진다. 업로드하면 문서를 등록하고(DocumentService) 처리(추출·청킹·태그·임베딩·저장)를 백그라운드에서 시작한다.
 처리 결과는 기다리지 않고, 문서 관리 목록의 처리 상태로 확인한다.
 """
 
@@ -15,6 +15,7 @@ import gradio as gr
 
 from features.documents.errors import DocumentStorageError, DuplicateDocumentError
 from features.master.departments import DepartmentService
+from ui import busy
 from ui import components as ui
 from ui import mock_data as mock
 from ui.page import PageView
@@ -26,6 +27,8 @@ CANCEL_CLASSES = ["btn-secondary", "sm-btn"]
 TYPE_ICON = {"기술 문서": ("file", "blue", "#2F54EB"), "안전 문서": ("shield", "orange", "#C2410C")}
 DEPT_BOX_CLASSES = ["select", "w-320"]
 DEPT_PLACEHOLDER = "부서 선택"
+BUSY_TITLE = "문서를 올리고 있어요"
+BUSY_SUB = "처리가 끝나면 문서 관리에서 확인할 수 있어요"
 # 화면의 문서 유형 이름 -> 서비스가 쓰는 값
 TYPE_CODE = {"기술 문서": "tech", "안전 문서": "secure"}
 logger = logging.getLogger(__name__)
@@ -138,6 +141,11 @@ def _reset() -> tuple:
     return _empty(), None, _dept_box(), type_cards_html(""), ""
 
 
+def _clear_form() -> tuple:
+    """취소·메뉴 재진입: 입력을 비우고 업로드 버튼도 다시 잠근다."""
+    return (*_reset(), _waiting_button())
+
+
 def upload_error_message(exc: Exception) -> str:
     """등록하지 못한 이유를 사용자가 이해할 수 있는 문구로 바꾼다. 내부 오류 문구는 화면에 보이지 않는다."""
     if isinstance(exc, DuplicateDocumentError):
@@ -157,6 +165,21 @@ def _department_id(name: str) -> int:
     raise ValueError(f"unknown department: {name!r}")
 
 
+def _is_ready(state: dict, dept: str) -> bool:
+    """파일·문서 유형·소속 부서를 모두 정했는지."""
+    return bool(state["file"] and state["type"] and dept)
+
+
+def _sync_submit(state: dict, dept: str) -> gr.Button:
+    """셋을 모두 정했을 때만 업로드 버튼을 켠다. 하나라도 비면 회색으로 눌리지 않는다."""
+    return gr.Button(interactive=_is_ready(state, dept))
+
+
+def _waiting_button() -> gr.Button:
+    """업로드를 마치고 입력이 비워졌을 때의 버튼: 원래 모습이지만 다시 정하기 전까지 누를 수 없다."""
+    return gr.Button(value="업로드", interactive=False, elem_classes=SUBMIT_CLASSES)
+
+
 def _register(state: dict, dept: str) -> None:
     """고른 파일을 등록하고 처리를 시작한다. 오류는 그대로 전달한다."""
     from features.processing.workflow import default_workflow  # DB·외부 서비스 설정은 처음 쓸 때 읽는다
@@ -168,20 +191,25 @@ def _register(state: dict, dept: str) -> None:
 def _upload(state: dict, dept: str, store: dict):
     """필수값을 확인하고 문서를 등록한 뒤 처리를 시작한다.
 
-    필수값은 파일·문서 유형·소속 부서이고, 문서 유형과 상관없이 모두 필요하다.
-    올리는 동안 버튼이 '업로드 중' 으로 바뀌고 취소와 함께 잠긴다. 등록은 바로 끝나고 처리는 백그라운드로
-    돌아가므로 결과는 기다리지 않는다. 등록하지 못하면 입력을 그대로 두고 이유를 알려 준다.
+    필수값은 파일·문서 유형·소속 부서이고, 문서 유형과 상관없이 모두 필요하다. 필수값이 빠졌으면 안내만 하고
+    로딩 레이어는 띄우지 않는다.
+    올리는 동안 화면 내용을 로딩 레이어가 덮고, 버튼은 '업로드 중' 으로 바뀌어 취소와 함께 잠긴다. 등록은 바로
+    끝나고 처리는 백그라운드로 돌아가므로 처리 결과는 기다리지 않는다. 등록이 아무리 빨리 끝나도 로딩 레이어는
+    최소 busy.MIN_SECONDS 동안 보여 준다. 등록하지 못하면 입력을 그대로 두고 이유를 알려 준다.
     """
+    # 버튼은 셋을 모두 정해야 켜지므로 보통 여기서 걸리지 않는다. 입력이 바뀌는 사이에 눌린 경우를 위한 확인이다
     required = [("파일", state["file"]), ("문서 유형", state["type"]), ("소속 부서", dept)]
     missing = [name for name, ok in required if not ok]
     if missing:
         ui.warn(f"아직 정하지 않았어요: {' · '.join(missing)}")
-        yield tuple(gr.skip() for _ in range(8))
+        yield tuple(gr.skip() for _ in range(9))
         return
+    started = busy.start()
     yield (
         *(gr.skip() for _ in range(6)),
         ui.loading_button("업로드 중", SUBMIT_CLASSES),
         gr.Button(interactive=False),
+        busy.show(BUSY_TITLE, BUSY_SUB),
     )
     try:
         _register(state, dept)
@@ -190,19 +218,23 @@ def _upload(state: dict, dept: str, store: dict):
             logger.info("duplicate upload rejected: existing document %s", exc.document_id)
         else:
             logger.exception("upload failed")
+        busy.hold(started)
         ui.warn(upload_error_message(exc))
         yield (
             *(gr.skip() for _ in range(6)),
             ui.idle_button("업로드", SUBMIT_CLASSES),
             gr.Button(interactive=True),
+            busy.hide(),
         )
         return
+    busy.hold(started)
     ui.notify("업로드했어요. 문서 관리에서 처리 상태를 확인할 수 있어요")
     yield (
         gr.skip(),
         *_reset(),
-        ui.idle_button("업로드", SUBMIT_CLASSES),
+        _waiting_button(),
         gr.Button(interactive=True),
+        busy.hide(),
     )
 
 
@@ -227,14 +259,17 @@ def build(store: gr.State) -> PageView:
         dept = ui.select_box([], DEPT_PLACEHOLDER, classes=["w-320"])  # 메뉴로 들어올 때 DB 에서 채운다
         with gr.Row(elem_classes=["form-actions"]):
             cancel = gr.Button("취소", elem_classes=CANCEL_CLASSES, scale=0, min_width=0)
-            submit = gr.Button("업로드", elem_classes=SUBMIT_CLASSES, scale=0, min_width=0)
+            submit = gr.Button("업로드", elem_classes=SUBMIT_CLASSES, scale=0, min_width=0, interactive=False)
+    layer = busy.component()  # 업로드하는 동안 위 내용을 덮는다
 
     form = [state, file, dept, types, file_row]
     file.upload(_pick_file, [file, state], [state, file, file_row])
     file_row.select(_clear_file, state, [state, file_row])
     types.select(_pick_type, state, [state, types])
-    cancel.click(_reset, None, form)
+    for changed in (state.change, dept.change):
+        changed(_sync_submit, [state, dept], submit, show_progress="hidden", queue=False)
+    cancel.click(_clear_form, None, [*form, submit])
     submit.click(
-        _upload, [state, dept, store], [store, *form, submit, cancel], show_progress="hidden"
+        _upload, [state, dept, store], [store, *form, submit, cancel, layer], show_progress="hidden"
     )
-    return PageView(_reset, [], form)
+    return PageView(_clear_form, [], [*form, submit])

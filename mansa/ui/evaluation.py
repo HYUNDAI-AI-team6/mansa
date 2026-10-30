@@ -19,6 +19,7 @@ from features.evaluation.models import (
 )
 from features.evaluation.runner import run_evaluation
 from features.evaluation.testset import TestSetError, load_testset
+from ui import busy
 from ui import components as ui
 from ui.page import PageView
 
@@ -40,6 +41,8 @@ FLOW_TAG = {"L2": "blue", "L3": "purple"}
 CAUSE_TAG = {"검색": "red", "조회": "orange", "생성": "red"}
 
 RUN_CLASSES = ["btn-primary", "sm-btn"]
+BUSY_TITLE = "평가를 실행하고 있어요"
+BUSY_SUB = "질문 수에 따라 시간이 걸릴 수 있어요"
 # shortcut: 목표값이 정해지지 않아 임시로 60% 이상(과잉 첨부율만 낮을수록 좋아 40% 이하). 기준이 정해지면 바꾼다.
 TARGET_PERCENT = 60
 LOWER_IS_BETTER = {"과잉 첨부율": 40}
@@ -222,18 +225,21 @@ def _run():
 
     유료 API를 문항마다 여러 번 호출한다: 질문 분석·답변 생성(근거 검사 실패 시 재생성)·채점 LLM과
     검색 임베딩. Chroma 검색도 문항마다 호출한다.
-    LLM 설정이 없거나 다른 평가가 실행 중이면 시작하지 않는다.
+    LLM 설정이 없거나 다른 평가가 실행 중이면 시작하지 않고, 로딩 레이어도 띄우지 않는다.
+    평가를 시작하면 화면 내용을 로딩 레이어가 덮고, 끝난 뒤에도 최소 busy.MIN_SECONDS 동안 보여 준다.
     """
     skip = (gr.skip(),) * 4
     if not LLM_API_KEY or not LLM_MODEL:
         ui.warn("LLM 설정(LLM_API_KEY, LLM_MODEL)이 없어 평가를 시작할 수 없어요")
-        yield gr.skip(), gr.skip(), *skip
+        yield (gr.skip(),) * 7
         return
     if not _RUN_LOCK.acquire(blocking=False):
         ui.warn("이미 평가가 실행 중이에요")
-        yield gr.skip(), gr.skip(), *skip
+        yield (gr.skip(),) * 7
         return
+    started = busy.start()
     try:
+        yield gr.skip(), ui.loading_button("실행 중", RUN_CLASSES), *skip, busy.show(BUSY_TITLE, BUSY_SUB)
         # QaAnswerer는 분류표를 읽으므로 앱 시작이 아니라 실행할 때 만든다
         # 문항마다 1초 쉰다. 연속 호출 중 "답변을 만들 수 없습니다"(llm_failure)가 섞여 나와서 둔다
         events = run_evaluation(QaAnswerer(), LlmJudge(), pause_sec=EVAL_PAUSE_SEC)
@@ -241,25 +247,28 @@ def _run():
             if isinstance(event, EvalProgress):
                 caption, percent = _progress(event)
                 card = run_card_html(caption=caption, percent=percent)
-                yield card, ui.loading_button("실행 중", RUN_CLASSES), *skip
+                yield card, ui.loading_button("실행 중", RUN_CLASSES), *skip, gr.skip()
             else:
+                busy.hold(started)
                 ui.notify(
                     f"평가를 마쳤어요 · 실패 {len(event.failures)}건 · LLM 오류 {len(event.llm_errors)}건"
                 )
                 card, *rest = _view(event)
-                yield card, ui.idle_button("평가 실행", RUN_CLASSES), *rest
+                yield card, ui.idle_button("평가 실행", RUN_CLASSES), *rest, busy.hide()
     except TestSetError as exc:
+        busy.hold(started)
         ui.warn(str(exc))
         yield run_card_html(storage.load_latest()), ui.idle_button(
             "평가 실행", RUN_CLASSES
-        ), *skip
+        ), *skip, busy.hide()
     except Exception:
         # 화면 경계: 버튼이 "실행 중"에 멈추지 않게 되돌리고 원인은 로그로 남긴다.
         logger.exception("evaluation run failed")
+        busy.hold(started)
         ui.warn("평가 중 오류가 났어요. 로그를 확인해 주세요")
         yield run_card_html(storage.load_latest()), ui.idle_button(
             "평가 실행", RUN_CLASSES
-        ), *skip
+        ), *skip, busy.hide()
     finally:
         _RUN_LOCK.release()
 
@@ -283,10 +292,11 @@ def build() -> PageView:
                 value=export_csv(),
                 elem_classes=["btn-secondary", "sm-btn", "full"],
             )
+    layer = busy.component()  # 평가하는 동안 위 내용을 덮는다
     run.click(
         _run,
         None,
-        [info, run, metrics, failures, latency, download],
+        [info, run, metrics, failures, latency, download, layer],
         show_progress="hidden",
     )
     download.click(_warn_if_no_result, None, None)
