@@ -26,25 +26,30 @@ class LayerHtmlTest(unittest.TestCase):
     def test_one_light_runs_along_a_single_figure_eight(self):
         html = busy.layer_html("제목", "설명")
         self.assertEqual(html.count('class="track"'), 1)
-        self.assertEqual(html.count('class="seg"'), busy.TAIL_LAYERS + len(busy.HEAD_GLOW))
+        self.assertEqual(html.count('class="seg"'), busy.TAIL_LAYERS + len(busy.HEAD_RIM))
 
     def test_the_line_keeps_the_same_width_from_tail_to_head(self):
         svg = busy._loop_svg()
         self.assertEqual(svg.count(f"stroke-width:{busy.STROKE};"), busy.TAIL_LAYERS)
 
-    def test_only_the_head_gets_a_white_glow_on_top_of_the_tail(self):
+    def test_only_the_head_edge_gets_a_white_gradient_under_the_tail(self):
         svg = busy._loop_svg()
-        glow = svg[svg.index('<g class="busy-glow">'):]
-        self.assertEqual(glow.count("stroke:#ffffff"), len(busy.HEAD_GLOW))
-        self.assertEqual(svg.count("stroke:#ffffff"), len(busy.HEAD_GLOW))  # 꼬리 쪽에는 흰색이 없다
+        rim = svg[svg.index('<g class="busy-rim">'):svg.index("</g>")]
+        self.assertEqual(rim.count("stroke:#ffffff"), len(busy.HEAD_RIM))
+        self.assertEqual(svg.count("stroke:#ffffff"), len(busy.HEAD_RIM))  # 꼬리 쪽에는 흰색이 없다
         self.assertEqual(svg.count("<g "), 1)
+        # 꼬리 선보다 먼저 그려야 가운데는 파랗게 덮이고 가장자리로만 하얗게 비친다
+        self.assertLess(svg.index('class="busy-rim"'), svg.index("stroke-dasharray:40"))
 
-    def test_the_glow_is_subtle_and_shorter_than_the_tail(self):
-        for length, width, opacity in busy.HEAD_GLOW:
+    def test_the_rim_is_wider_than_the_tail_and_shorter_than_it_and_grows_toward_the_tip(self):
+        lengths = [length for length, _, _ in busy.HEAD_RIM]
+        opacities = [opacity for _, _, opacity in busy.HEAD_RIM]
+        self.assertEqual(lengths, sorted(lengths, reverse=True))
+        self.assertEqual(opacities, sorted(opacities))  # 머리 끝으로 갈수록 진하다
+        for length, width, opacity in busy.HEAD_RIM:
             self.assertLess(length, busy.TAIL_LONGEST)
-            self.assertLess(width, busy.STROKE)  # 꼬리보다 가늘어 가운데 심지로만 보인다
+            self.assertGreater(width, busy.STROKE)  # 꼬리보다 조금 굵어 가장자리로만 보인다
             self.assertLessEqual(opacity, 1)
-        self.assertIn(".busy-glow", theme.build_css())
 
     def test_the_tail_fades_from_light_blue_through_the_brand_blue_to_violet(self):
         self.assertEqual(busy._tail_color(0), "#7dd3fc")

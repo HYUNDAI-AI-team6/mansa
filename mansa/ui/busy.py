@@ -33,8 +33,9 @@ TAIL_LONGEST = 40  # 가장 긴 꼬리(전체 길이를 100으로 본 값)
 TAIL_SHORTEST = 3
 STROKE = 7
 LAYER_OPACITY = 0.13
-# 머리 쪽만 하얗게 빛나도록 꼬리 끝 위에 얹는 흰 심지: (길이, 굵기, 불투명도). 짧을수록 굵기가 가늘고 진하다.
-HEAD_GLOW = ((10, 4.4, 0.22), (6, 3.8, 0.4), (3, 3.2, 0.7), (1, 2.6, 1))
+# 머리 쪽 테두리에만 하얗게 번지는 그라데이션: 꼬리 선보다 조금 굵은 흰 선을 아래에 깔아 가장자리로만 비친다.
+# (길이, 굵기, 불투명도): 짧을수록 머리 끝에 가깝고 겹쳐서 진해진다.
+HEAD_RIM = ((16, 9.4, 0.18), (11, 9.4, 0.22), (7, 9.8, 0.3), (4, 10.2, 0.45), (1.6, 10.6, 0.7))
 
 
 def _mix(a: tuple, b: tuple, t: float) -> str:
@@ -53,8 +54,14 @@ def _tail_color(t: float) -> str:
 
 @cache
 def _loop_svg() -> str:
-    """8자 선과 그 위를 달리는 빛 하나(길이가 다른 선 26겹 + 머리 쪽 흰 심지)."""
-    paths = [f'<path class="track" d="{LOOP_PATH}"/>']
+    """8자 선과 그 위를 달리는 빛 하나(길이가 다른 선 26겹, 그 아래에 머리 쪽 테두리용 흰 선)."""
+    rim = "".join(
+        f'<path class="seg" pathLength="100" d="{LOOP_PATH}" '
+        f'style="--len:{length};stroke:#ffffff;stroke-width:{width};'
+        f'stroke-dasharray:{length} {round(100 - length, 2)};opacity:{opacity}"/>'
+        for length, width, opacity in HEAD_RIM
+    )
+    paths = [f'<path class="track" d="{LOOP_PATH}"/>', f'<g class="busy-rim">{rim}</g>']
     for i in range(TAIL_LAYERS):
         t = i / (TAIL_LAYERS - 1)
         length = round(TAIL_LONGEST - t * (TAIL_LONGEST - TAIL_SHORTEST), 2)
@@ -63,13 +70,6 @@ def _loop_svg() -> str:
             f'style="--len:{length};stroke:{_tail_color(t)};stroke-width:{STROKE};'
             f'stroke-dasharray:{length} {round(100 - length, 2)};opacity:{LAYER_OPACITY}"/>'
         )
-    glow = "".join(
-        f'<path class="seg" pathLength="100" d="{LOOP_PATH}" '
-        f'style="--len:{length};stroke:#ffffff;stroke-width:{width};'
-        f'stroke-dasharray:{length} {100 - length};opacity:{opacity}"/>'
-        for length, width, opacity in HEAD_GLOW
-    )
-    paths.append(f'<g class="busy-glow">{glow}</g>')
     return f'<svg class="busy-loop" viewBox="0 0 120 60" aria-hidden="true">{"".join(paths)}</svg>'
 
 
