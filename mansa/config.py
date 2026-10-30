@@ -157,3 +157,6 @@ SAVE_DIR = _env_path("SAVE_DIR", EVAL_ROOT / "save")
 PDF_STORAGE_DIR = _env_path(
     "PDF_STORAGE_DIR", REPO_ROOT / "mansa" / "data" / "documents"
 )
+
+# 기술 Q&A 질문 기록 파일. 상대 경로는 저장소 루트 기준이다. 컴퓨터마다 따로 저장된다.
+HISTORY_PATH = _env_path("HISTORY_PATH", REPO_ROOT / "mansa" / "data" / "history.json")
