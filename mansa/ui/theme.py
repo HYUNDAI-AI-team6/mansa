@@ -18,6 +18,7 @@ WHITE_SOFT = "rgba(255,255,255,0.78)"
 
 ASSETS = Path(__file__).parent / "assets"
 CSS_FILES = ["base.css", "shell.css", "login.css", "qa.css", "pages.css"]
+HEAD_SCRIPTS = ["chat_keys.js", "drop_hover.js"]
 
 TAG_COLORS = {
     "blue": ("#EAF0FF", "#2F54EB"),
@@ -81,9 +82,9 @@ def _tag_css() -> str:
 
 
 def build_head() -> str:
-    """페이지 <head>에 넣을 스크립트. 한글 조합 중 엔터가 전송되지 않게 하는 chat_keys.js 를 싣는다."""
-    script = (ASSETS / "chat_keys.js").read_text(encoding="utf-8")
-    return f"<script>{script}</script>"
+    """페이지 <head>에 넣을 스크립트: 한글 조합 중 엔터 전송을 막는 chat_keys.js, 파일을 끌어 올 때 업로드 영역을 강조하는 drop_hover.js."""
+    scripts = [(ASSETS / name).read_text(encoding="utf-8") for name in HEAD_SCRIPTS]
+    return "".join(f"<script>{script}</script>" for script in scripts)
 
 
 def build_css() -> str:
