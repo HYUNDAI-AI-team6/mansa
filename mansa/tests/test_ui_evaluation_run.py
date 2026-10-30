@@ -25,7 +25,7 @@ class RunTest(unittest.TestCase):
     def setUp(self):
         mock.patch.object(evaluation, "LLM_API_KEY", "key").start()
         mock.patch.object(evaluation, "LLM_MODEL", "model").start()
-        mock.patch.object(evaluation, "LlmAnswerer").start()
+        mock.patch.object(evaluation, "QaAnswerer").start()
         mock.patch.object(evaluation, "LlmJudge").start()
         self.warn = mock.patch.object(evaluation.ui, "warn").start()
         self.notify = mock.patch.object(evaluation.ui, "notify").start()
