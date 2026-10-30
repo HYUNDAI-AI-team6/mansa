@@ -1,13 +1,25 @@
+import json
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import httpx
 import openai
 from langchain_core.messages import AIMessage
+from langchain_core.utils.function_calling import convert_to_openai_tool
+from pydantic import ValidationError
 
 from core.exceptions import LlmError
 from features.support import service
-from features.support.service import FALLBACK, GUIDES, GetGuide, answer, to_history
+from features.support.service import (
+    FALLBACK,
+    GUIDES,
+    GetGuide,
+    answer,
+    load_guides,
+    to_history,
+)
 
 
 def _tool_reply(topic, name="GetGuide", **extra):
@@ -157,6 +169,86 @@ class ToHistoryTest(unittest.TestCase):
 
     def test_empty_msgs(self):
         self.assertEqual(to_history([]), [])
+
+
+class LoadGuidesTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.path = Path(tmp.name) / "guides.json"
+
+    def load(self, data):
+        """data를 JSON으로 임시 파일에 쓰고 load_guides로 읽는다."""
+        self.path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        return load_guides(self.path)
+
+    def assert_rejected(self, data, *words):
+        """load_guides가 ValueError를 내고 메시지에 words가 모두 들어 있는지 확인한다."""
+        with self.assertRaises(ValueError) as ctx:
+            self.load(data)
+        for word in words:
+            self.assertIn(word, str(ctx.exception))
+
+    def test_valid_file_builds_guides_and_tool(self):
+        guides, model = self.load([
+            {"id": "b", "when": "둘째", "text": "문장"},
+            {"id": "a", "when": "첫째", "steps": ["하나", "둘"]},
+        ])
+        self.assertEqual(guides, {"b": "문장", "a": ["하나", "둘"]})
+        self.assertEqual(model.model_validate({"topic": "a"}).topic, "a")
+        with self.assertRaises(ValidationError):
+            model.model_validate({"topic": "c"})
+        function = convert_to_openai_tool(model)["function"]
+        self.assertEqual(function["name"], "GetGuide")
+        topic = function["parameters"]["properties"]["topic"]
+        self.assertEqual(topic["enum"], ["b", "a"])
+        self.assertEqual(topic["description"], "b: 둘째. a: 첫째.")
+
+    def test_duplicated_id_is_rejected(self):
+        self.assert_rejected(
+            [{"id": "a", "when": "x", "text": "y"}, {"id": "a", "when": "x", "text": "z"}],
+            "'a'", "duplicated",
+        )
+
+    def test_steps_and_text_must_be_exactly_one(self):
+        for item in ({"id": "a", "when": "x", "text": "y", "steps": ["z"]},
+                     {"id": "a", "when": "x"}):
+            with self.subTest(item=item):
+                self.assert_rejected([item], "'a'", "exactly one")
+
+    def test_empty_strings_are_rejected(self):
+        cases = {
+            "when": {"id": "a", "when": " ", "text": "y"},
+            "text": {"id": "a", "when": "x", "text": ""},
+            "steps": {"id": "a", "when": "x", "steps": ["ok", ""]},
+            "no steps": {"id": "a", "when": "x", "steps": []},
+        }
+        for name, item in cases.items():
+            with self.subTest(name):
+                self.assert_rejected([item], "'a'")
+
+    def test_missing_id_is_rejected(self):
+        self.assert_rejected([{"when": "x", "text": "y"}], "guides.json", "id")
+
+    def test_empty_list_is_rejected(self):
+        self.assert_rejected([], "guides.json")
+
+    def test_broken_json_is_rejected(self):
+        self.path.write_text("[{", encoding="utf-8")
+        with self.assertRaises(ValueError) as ctx:
+            load_guides(self.path)
+        self.assertIn("guides.json", str(ctx.exception))
+
+    def test_missing_file_is_rejected(self):
+        with self.assertRaises(ValueError) as ctx:
+            load_guides(self.path)
+        self.assertIn("guides.json", str(ctx.exception))
+
+    def test_real_data_file_loads(self):
+        guides, model = load_guides(service.GUIDES_PATH)
+        self.assertEqual(len(guides), 19)
+        self.assertEqual(guides, GUIDES)
+        self.assertEqual(model.__name__, "GetGuide")
 
 
 if __name__ == "__main__":
