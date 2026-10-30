@@ -1,4 +1,4 @@
-"""문서 처리 파이프라인 조립. IngestPipeline에 실제 단계 함수를 끼워 만든다. 앱과 확인 스크립트가 함께 쓴다."""
+"""문서 처리 파이프라인 조립. IngestPipeline에 실제 단계 함수(추출·청킹·태그·임베딩)를 끼워 만든다. 앱과 확인 스크립트가 함께 쓴다."""
 
 import logging
 from collections.abc import Callable, Sequence
@@ -12,6 +12,8 @@ from features.processing.pipeline import DocumentStore, IngestError, IngestPipel
 logger = logging.getLogger(__name__)
 
 ModelNames = Callable[[], Sequence[str]]
+Vocabularies = Callable[[], Any]
+Tagger = Callable[[Sequence[Any], Any], list]
 
 
 def registered_model_names() -> list[str]:
@@ -45,13 +47,38 @@ def make_chunk_step(model_names: ModelNames = registered_model_names) -> Callabl
     return chunk_step
 
 
-def keep_chunks(chunks: Sequence) -> list:
-    """태그를 붙이지 않고 청크를 그대로 돌려준다. 태그 생성 함수가 들어오면 이것을 바꿔 끼운다."""
-    return list(chunks)
+def build_vocabulary():
+    """태그로 쓸 수 있는 표준 이름 사전을 분류표 파일에서 새로 읽어 만든다. 분류표는 읽기만 한다."""
+    from features.master.taxonomy import TaxonomyService
+    from features.processing.tagger import Vocabulary
+
+    return Vocabulary.from_taxonomy(TaxonomyService.from_directory())
 
 
-def build_steps(model_names: ModelNames = registered_model_names, embed: Any = None) -> IngestSteps:
-    """실제 단계 함수 모음을 만든다. embed를 주지 않으면 core.llm.embed(OpenAI, 유료)를 쓴다."""
+def make_tag_step(vocabulary: Vocabularies = build_vocabulary, tagger: Tagger | None = None) -> Callable[[list], list]:
+    """청크 목록에 부위·작업 태그를 붙이는 단계를 만든다.
+
+    사전은 호출할 때마다 읽어서, 관리자가 분류표를 고치면 다음 업로드부터 반영된다. 사전을 읽지 못하거나
+    태그 생성이 실패하면 예외가 파이프라인에 전달되고, 파이프라인은 태그 없이 계속 진행한다.
+    tagger는 테스트에서 바꿔 끼우며, 기본은 features.processing.tagger.tag(LLM을 부르는 유료 호출)이다.
+    """
+
+    def tag_step(chunks: list) -> list:
+        run = tagger
+        if run is None:
+            from features.processing.tagger import tag as run
+        return run(chunks, vocabulary())
+
+    return tag_step
+
+
+def build_steps(
+    model_names: ModelNames = registered_model_names,
+    embed=None,
+    vocabulary: Vocabularies = build_vocabulary,
+    tagger: Tagger | None = None,
+) -> IngestSteps:
+    """실제 단계 함수를 모은 IngestSteps를 만든다. embed를 주지 않으면 core.llm.embed를 쓴다."""
     if embed is None:
         from core import llm
 
@@ -59,7 +86,7 @@ def build_steps(model_names: ModelNames = registered_model_names, embed: Any = N
     return IngestSteps(
         extract=extract_content,
         chunk=make_chunk_step(model_names),
-        tag=keep_chunks,
+        tag=make_tag_step(vocabulary, tagger),
         embed=embed,
     )
 
