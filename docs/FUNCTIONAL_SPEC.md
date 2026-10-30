@@ -65,7 +65,7 @@ Gradio 화면 연결과 ChromaDB 저장 파이프라인은 장영균 담당이 �
 - 상태는 DB의 `documents_info.status`(ENUM)를 그대로 쓴다: `PROCESSING`, `COMPLETED`, `FAILED`. `PENDING`은 쓰지 않고, 문서는 등록할 때 이미 `PROCESSING`이다. 화면은 이 값을 `처리 중`·`완료`·`실패`로 바꿔 보여준다.
 - 허용 전이: `PROCESSING` → `COMPLETED`|`FAILED`. 끝난 상태에서 다른 상태로 바꾸면 `InvalidStatusTransition`이다. 이미 같은 상태이면 아무것도 바꾸지 않고 끝난다(결과를 다시 알려도 안전하다). 바꿀 때는 `UPDATE`에 현재 상태 조건을 걸어서, 동시에 두 곳에서 바꿔도 먼저 끝난 상태가 덮어써지지 않는다.
 - `set_status(document_id, status, error=None, chunk_count=None)`: 완료할 때 `chunk_count`(저장한 청크 수)를, 실패할 때 `error`(사유)를 넘긴다.
-- **`chunk_count`·`error_message` 컬럼:** 지금 `documents_info`에는 이 컬럼이 없다. 추가하는 마이그레이션 `0002`는 작성해 두었고 공용 DB 적용은 DB 담당이 한다(§8). 컬럼이 없을 때 `UPDATE`에 쓰면 SQL 오류로 모든 문서가 실패 처리되므로, **적용된 것을 확인하기 전에는 두 값을 DB에 쓰지 않고 서버 로그에만 남긴다.** 적용을 확인한 뒤 기록을 켜는 코드는 별도 커밋으로 병합한다. `error`는 1,000자까지만 남기고 API 키나 스택 트레이스는 담지 않는다(파이프라인이 안전한 문구만 넘긴다).
+- **결과 기록:** 상태를 바꾸는 같은 `UPDATE`가 `documents_info`의 `chunk_count`·`error_message`도 쓴다. 완료이면 `chunk_count`를 쓰고 `error_message`는 비운다. 실패이면 `error`를 앞뒤 공백을 정리해 1,000자까지 `error_message`에 쓰고 `chunk_count`는 비운다(실패하면 저장한 청크를 지우므로). 값을 넘기지 않았거나 사유가 비어 있으면 `NULL`이다. 완료에 넘긴 `error`나 실패에 넘긴 `chunk_count`는 저장하지 않고, 같은 상태를 다시 알리면 기록된 값을 바꾸지 않는다. 이 컬럼은 마이그레이션 `0002`로 공용 DB에 적용돼 있다(2026-10-30 읽기 전용으로 확인). **컬럼이 없는 DB에서는 SQL 오류가 나서 문서가 모두 실패 처리되므로**, 다른 환경(로컬·배포 DB)에도 `0002`를 적용한 뒤에 이 코드를 쓴다. API 키나 스택 트레이스는 담지 않는다(파이프라인이 안전한 문구만 넘긴다). 이 기록이 병합되기 전에 처리한 문서의 `chunk_count`는 `NULL`이다.
 
 ### 3.4 삭제
 
@@ -182,7 +182,7 @@ uv run --locked python -B -m unittest discover -s tests -v
 | 기술사양서 청킹 | 완료 | `chunker_tech.py`. 모델 이름 목록(`models`)이 있어야 `model`이 채워짐 |
 | 태그 생성 (`part`, `task`) | 완료 | `tagger.py`. 실제 LLM(`gpt-4o-mini`)으로 PDF 3개를 태깅해 확인했다. 배치 5개 기준 안전기준 호출 대상 274개 중 150개에 부위, 13개에 작업 태그가 붙었다 |
 | 임베딩 생성 (`core.llm.embed`) | 구현됨 | `core/llm.py`. 실제 API 호출로 차원을 확인하지 않았고, 빈 문자열·차원 검사는 없다 |
-| 문서 등록·중복 확인, 목록·상태·삭제 서비스 | 구현됨 | `features/documents/`. 단위 테스트와 실제 DB 확인(읽기 전용 조회, 임시 행 하나의 등록·`UNIQUE` 위반·없는 부서 거절·완료로 변경·삭제)으로 확인했다. `chunk_count`·`error_message` 기록은 대기 중이다(§3.3, §8) |
+| 문서 등록·중복 확인, 목록·상태·삭제 서비스 | 구현됨 | `features/documents/`. 단위 테스트와 실제 DB 확인(읽기 전용 조회, 임시 행 하나의 등록·`UNIQUE` 위반·없는 부서 거절·완료로 변경·삭제)으로 확인했다. `chunk_count`·`error_message`를 DB에 기록하고 조회한다. 실제 서버로도 확인했다(성공 경로에서 `chunk_count`가 저장한 청크 수 27과 같고, 깨진 PDF는 `FAILED`와 `error_message`가 남으며 1,500자 사유는 1,000자로 저장됨, 확인용 문서는 모두 삭제) |
 
 ### 5.1 데이터 구조 (실제 코드 기준)
 
@@ -269,14 +269,14 @@ OCR과 Vision LLM 기반 도면·이미지 해석은 구현 범위에서 제외�
 register_document(source_path, filename, doc_type, department_id) -> int        # 새 문서 ID
 list_documents(doc_type=None, department_id=None, status=None, keyword=None) -> list[DocumentRow]
 get_document(document_id) -> Document
-get_status(document_id) -> DocumentStatus        # status, chunk_count, updated_at
+get_status(document_id) -> DocumentStatus        # status, chunk_count, updated_at, error_message
 set_status(document_id, status, error=None, chunk_count=None) -> None
 summary() -> DocumentSummary                     # total, by_status, by_type{tech,secure}
 delete_pdf(document_id) -> bool                  # 파일이 이미 없으면 False. 재시도 가능
 delete_document_record(document_id) -> bool      # MySQL 행만 삭제. 반드시 마지막에 호출
 ```
 
-- `Document`: `id`, `title`(= `doc_name`, 확장자를 뺀 이름), `filename`(확장자 포함, `source`용), `doc_type`, `department_id`, `department_name`, `status`, `chunk_count`, `upload_at`, `updated_at`, `file_path`. 날짜는 DB 컬럼과 같은 `upload_at`이다. `file_path`는 컬럼이 아니라 서비스가 문서 ID로 계산한 **문자열**이고(파이프라인 어댑터의 타입 표기가 `str`), 파일이 없을 수도 있다. 화면에 노출하지 않는다. `DocumentRow`는 `file_path`를 뺀 것이다. `chunk_count`는 컬럼이 생기기 전에는 `None`이다.
+- `Document`: `id`, `title`(= `doc_name`, 확장자를 뺀 이름), `filename`(확장자 포함, `source`용), `doc_type`, `department_id`, `department_name`, `status`, `chunk_count`, `error_message`, `upload_at`, `updated_at`, `file_path`. 날짜는 DB 컬럼과 같은 `upload_at`이다. `file_path`는 컬럼이 아니라 서비스가 문서 ID로 계산한 **문자열**이고(파이프라인 어댑터의 타입 표기가 `str`), 파일이 없을 수도 있다. 화면에 노출하지 않는다. `DocumentRow`는 `file_path`를 뺀 것이다. `chunk_count`는 완료 때 저장한 청크 수이고 완료 전이거나 실패한 문서는 `None`이다. `error_message`는 실패한 문서의 사유이고 그 밖에는 `None`이다(키워드 전용 필드라 기존 호출 코드는 그대로 동작한다).
 - `department_id`는 등록할 때 앱에서 필수로 받는다(1 이상의 정수). DB 컬럼은 NULL을 허용하고, 화면은 NULL이면 `-`로 보여준다.
 - 예외: `DuplicateDocumentError`(`.document_id`에 기존 문서 ID), `DocumentNotFoundError`, `DocumentStorageError`, `InvalidStatusTransition`, `ValueError`(유형·파일 형식·파일명·부서 오류, 없는 부서는 FK 위반을 `ValueError`로 바꾼다). 예외는 `features/documents/errors.py`에 있다.
 - 등록 순서: 입력 검증(유형, 파일명 정규화, 부서, `%PDF-` 헤더, 50MB — 화면 `ui/upload.py`의 `MAX_MB`와 같은 한도) → `(filename, document_type)`으로 중복 조회(중복이면 거절) → 임시 파일로 저장 → `INSERT`(상태 `PROCESSING`) → 새 ID 조회 → 임시 파일을 `{저장소}/{doc_type}/{id}.pdf`로 이름 변경. 실패하면 행과 파일을 정리한다. `execute`가 `lastrowid`를 주지 않고 문장마다 트랜잭션이 따로라서 새 ID는 `(filename, document_type)`으로 다시 조회하고, 중간에 실패하면 직접 지운다. 사용자 파일명은 경로에 쓰지 않는다.
@@ -306,7 +306,7 @@ DB 담당이 `documents_info`가 최종이라고 확인했다(`documents`는 DB�
 
 - `util/mysql_connection.py`의 `fetch_all(sql, params)`, `execute(sql, params)`로 SQL을 직접 보낸다. 값은 `:이름` 자리표시자로 넘기고 SQL 문자열에 이어 붙이지 않는다. `execute`는 영향 행 수만 반환하고 `lastrowid`는 주지 않는다. 자세한 사용법은 `docs/MySqlConnector.md`를 따른다.
 - `core/models/`는 비어 있고 ORM 모델은 쓰지 않는다. raw SQL 방식을 따른다.
-- 마이그레이션은 `mansa/migrations/`에 번호 순서 파일로 둔다(수동 실행, 공용 DB 적용은 DB 담당. 이후 변경은 기존 파일을 고치지 않고 새 번호 파일로 추가). `0001_create_documents_info.sql`은 현재 DB 정의와 줄 단위로 일치함을 확인했고, `0002_add_chunk_count_error_message.sql`은 작성만 했다.
+- 마이그레이션은 `mansa/migrations/`에 번호 순서 파일로 둔다(수동 실행, 공용 DB 적용은 DB 담당. 이후 변경은 기존 파일을 고치지 않고 새 번호 파일로 추가). `0001_create_documents_info.sql`은 현재 DB 정의와 줄 단위로 일치함을 확인했고, `0002_add_chunk_count_error_message.sql`은 공용 DB에 적용됐다(DB 담당이 적용, 읽기 전용으로 컬럼 확인).
 
 | 컬럼 | 타입 | 비고 |
 |---|---|---|
@@ -317,8 +317,8 @@ DB 담당이 `documents_info`가 최종이라고 확인했다(`documents`는 DB�
 | `status` | ENUM('PROCESSING','COMPLETED','FAILED') NOT NULL DEFAULT 'PROCESSING' | |
 | `upload_at` | DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP | |
 | `updated_at` | DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | |
-| `chunk_count` | INT NULL | **`0002` 적용 후.** 완료할 때만 기록 |
-| `error_message` | VARCHAR(1000) NULL | **`0002` 적용 후.** 실패할 때만 기록 |
+| `chunk_count` | INT NULL | 완료할 때만 기록(`0002`) |
+| `error_message` | VARCHAR(1000) NULL | 실패할 때만 기록(`0002`) |
 
 - 키: `UNIQUE uk_documents_filename_type (filename, document_type)`, `idx_documents_status_upload (status, upload_at)`. 인덱스 이름은 DB 담당이 `created_at` 오류를 고치며 정한 이름이다.
 - 이 테이블에는 **원본 PDF 경로 컬럼이 없다.** 경로는 문서 ID로 계산한다(§7.2).
@@ -341,7 +341,8 @@ DB 담당이 `documents_info`가 최종이라고 확인했다(`documents`는 DB�
 
 | 항목 | 확인할 곳 |
 |---|---|
-| `documents_info`에 `chunk_count`·`error_message` 컬럼 추가(마이그레이션 `0002`)에 대한 DB 담당의 최종 동의(받은 답변의 동의 문구는 작성한 쪽 초안이라 확정으로 보지 않는다), 공용 DB에 적용할 담당과 시점. **적용되기 전에는 `set_status`가 두 값을 로그에만 남긴다.** 적용을 읽기 전용으로 확인한 뒤 기록을 켜는 코드를 별도 커밋으로 병합한다 | DB 담당 |
+| `documents_info`의 `chunk_count`·`error_message`(`0002`)를 쓰는 코드를 다른 환경(로컬·배포 DB)에서도 쓰려면 그 DB에도 `0002`가 적용돼 있어야 한다. 컬럼이 없으면 SQL 오류로 문서가 모두 실패 처리된다. 환경별 적용 여부 | DB 담당·박정환 |
+| 앱이 처리 도중 꺼져 `PROCESSING`으로 남은 문서를 앱을 켤 때 `FAILED`로 정리하고 `error_message`에 사유를 남기는 일(PR #148 리뷰에서 제안). 이제 `error_message` 기록이 가능하다. 이 기록이 병합되기 전에 처리한 문서의 `chunk_count`는 `NULL`이다 | 박정환 |
 | 원본 PDF 저장소 영속 볼륨 여부. 기준 폴더 환경변수 `PDF_STORAGE_DIR`(기본 `mansa/data/documents`)는 구현했다. 서버를 다시 시작할 때 디스크가 지워지면 원본 PDF가 사라져 재처리·삭제가 안 된다 | DB 담당·박정환 |
 | 남아 있는 ChromaDB 테스트 데이터의 차원(1536 vs 3072) 정리 | DB 담당 |
 | 분류표를 실제 PDF 3개 용어 기준으로 확장했다(부위 37개, 작업 49개, 작업 위치 7개). 엘트론 용어로 부위 2개(적재하중 검출 모니터링 장치, 안전봉)와 동의어 `Car Door → 카문`을 더하고, `가버너 → 과속조절기`로 고쳤다. 관계표(`task_relations.json`)에는 새 작업 33개를 같은 청크에서 함께 나온 작업 위치·위험 유형 횟수로 채웠다(근거가 4개 미만인 작업과 `권상기` 계열은 비어 있다). 태그는 이 목록 안에서만 고른다. 확정 여부와 어색한 조합 정리, `task`를 **부위+동작 합친 이름**으로 유지하는 것(명세 예시의 동사 단위 `점검`과 다름) | QA·기준정보 담당 |
