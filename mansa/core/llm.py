@@ -31,16 +31,67 @@ def _get_embeddings() -> OpenAIEmbeddings: #임베딩 모델 객체를 꺼내 �
         _embeddings = OpenAIEmbeddings(model=EMBEDDING_MODEL, api_key=LLM_API_KEY)
     return _embeddings
 
+# 임베딩 모델별 벡터 차원. 표에 없는 모델은 벡터 길이가 서로 같은지만 확인한다.
+# EMBEDDING_MODEL을 환경변수로 바꿔도 검사가 틀리지 않게 모델별로 둔다.
+_EMBEDDING_DIMENSIONS = {
+    "text-embedding-3-large": 3072,
+    "text-embedding-3-small": 1536,
+    "text-embedding-ada-002": 1536,
+}
+
+def _is_number(value: object) -> bool:
+    """정수나 실수이면 True다. bool은 숫자로 보지 않는다."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+def _check_vectors(texts: list[str], vectors: object) -> None:
+    """임베딩 API가 돌려준 값이 쓸 수 있는지 확인한다. 어긋나면 LlmError를 발생시킨다.
+
+    벡터 개수가 입력과 같고, 모든 벡터가 비어 있지 않은 숫자 목록이며 길이가 서로 같아야 한다.
+    EMBEDDING_MODEL이 _EMBEDDING_DIMENSIONS에 있으면 그 차원과도 같아야 한다.
+    차원이 다른 벡터를 벡터 DB에 올리면 컬렉션에 저장되지 않거나 검색이 틀어지므로 올리기 전에 막는다.
+    오류 메시지에는 개수와 길이만 넣고 입력 본문이나 벡터 값은 넣지 않는다.
+    """
+    if not isinstance(vectors, list) or len(vectors) != len(texts):
+        count = len(vectors) if isinstance(vectors, list) else "no list"
+        raise LlmError(f"embedding API returned {count} vectors for {len(texts)} texts")
+    sizes = set()
+    for index, vector in enumerate(vectors):
+        if not isinstance(vector, (list, tuple)) or not vector or not all(_is_number(v) for v in vector):
+            raise LlmError(f"embedding {index} is empty or not a list of numbers")
+        sizes.add(len(vector))
+    if len(sizes) > 1:
+        raise LlmError(f"embedding vectors have different lengths: {sorted(sizes)}")
+    expected = _EMBEDDING_DIMENSIONS.get(EMBEDDING_MODEL)
+    if expected is not None and sizes != {expected}:
+        raise LlmError(f"embedding dimension {sizes.pop()} does not match {expected} expected for {EMBEDDING_MODEL}")
+
+def _check_texts(texts: list[str]) -> None:
+    """embed에 넣을 값을 API를 부르기 전에 확인한다.
+
+    문자열 목록이 아니거나 빈·공백 문자열이 있으면 ValueError를 발생시킨다.
+    오류 메시지에는 몇 번째 값인지만 넣고 본문은 넣지 않는다.
+    """
+    if not isinstance(texts, (list, tuple)):
+        raise ValueError("texts must be a list of str")
+    for index, text in enumerate(texts):
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError(f"texts[{index}] must be a non-empty str")
+
 def embed(texts: list[str]) -> list[list[float]]:
     """텍스트 목록을 임베딩 벡터 목록으로 바꾼다. 결과는 입력과 같은 순서다.
 
-    빈 목록이면 API를 부르지 않고 빈 목록을 반환한다. 유료 외부 API(OpenAI)를 호출한다.
+    빈 목록이면 API를 부르지 않고 빈 목록을 반환한다. 문자열 목록이 아니거나 빈·공백 문자열이 있으면
+    API를 부르기 전에 ValueError를 발생시킨다. 유료 외부 API(OpenAI)를 호출한다.
+    돌려받은 벡터의 개수·길이·모델별 차원이 맞지 않으면 LlmError를 발생시킨다.
     벡터 DB에 올린 문서와 같은 모델이어야 검색이 맞는다. 모델을 바꾸면 문서를 다시 임베딩해야 한다.
     인증 실패·네트워크 오류는 openai 예외로 그대로 전달된다. texts는 변경하지 않는다.
     """
+    _check_texts(texts)
     if not texts: #보낼 문장이 없으면 돈 드는 호출을 하지 않는다.
         return []
-    return _get_embeddings().embed_documents(texts)
+    vectors = _get_embeddings().embed_documents(list(texts))
+    _check_vectors(texts, vectors)
+    return vectors
 
 # 다시 시도하면 나아질 수 있는 오류. pydantic ValidationError(응답이 형식과 다름)도 ValueError의 한 종류다.
 _RETRYABLE_ERRORS = (ValueError, openai.LengthFinishReasonError, openai.APITimeoutError)
