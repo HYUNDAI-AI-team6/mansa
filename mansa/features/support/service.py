@@ -1,12 +1,18 @@
-"""고객센터(L3) 사용법 안내 챗봇. LLM이 안내 주제를 고르면 미리 정해 둔 안내를 원문 그대로 돌려준다."""
+"""고객센터(L3) 사용법 안내 챗봇. LLM이 안내 주제를 고르면 미리 정해 둔 안내를 원문 그대로 돌려준다.
 
+안내 주제(id, LLM이 고를 때 읽는 설명, 안내 원문)는 data/support/guides.json 에서 읽는다.
+주제를 추가하거나 고치려면 이 파일만 수정하고 앱을 다시 시작한다.
+"""
+
+import json
 import logging
 from collections.abc import Callable
-from typing import Literal
+from pathlib import Path
+from typing import Any, Literal
 
 import openai
 from langchain_core.messages import AIMessage
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, create_model
 
 from config import LLM_API_KEY, LLM_MODEL
 from core.exceptions import LlmError
@@ -14,22 +20,8 @@ from core.llm import choose_tool
 
 logger = logging.getLogger(__name__)
 
-# 주제별 안내. 목록이면 번호 단계, 문자열이면 말풍선 하나로 화면에 그대로 표시된다.
-GUIDES: dict[str, list[str] | str] = {
-    "upload": [
-        "관리자 메뉴에서 문서 업로드로 들어갑니다.",
-        "PDF를 고르고 문서 유형과 소속 부서를 정합니다.",
-        "업로드를 누르면 추출 → 청킹 → 색인까지 자동으로 처리돼요.",
-    ],
-    "history": "왼쪽 메뉴의 질문 기록에서 지난 기술 Q&A 대화를 다시 볼 수 있어요. "
-    "항목을 누르면 그때 대화가 그대로 열려요.",
-    "model_choice": "모델을 고르지 않아도 질문할 수 있어요. "
-    "답을 찾는 데 모델이 필요하면 후보를 보여 드리고 다시 물어봐요.",
-    "safety_notice": "③ 안전 요건은 AI가 문서에서 찾은 참고 정보예요. "
-    "실제 작업 전 최종 판단은 안전관리자 확인이 필요해요.",
-    "odd_answer": "근거 원문 창에서 출처를 먼저 확인해 주세요. 그래도 이상하면 "
-    "위의 관리자 연결을 눌러 알려 주세요.",
-}
+GUIDES_PATH = Path(__file__).resolve().parents[2] / "data" / "support" / "guides.json"
+GET_GUIDE_DOC = "MANSA 사용법 안내 하나를 꺼내 사용자에게 그대로 보여 준다."
 
 FALLBACK = (
     "가이드에서 답을 찾지 못했어요. 위의 관리자 연결을 누르면 "
@@ -47,20 +39,70 @@ SYSTEM_PROMPT = """너는 MANSA(설비 매뉴얼·안전 문서 질의응답 서
 - 직접 답할 때는 한국어 존댓말 평문으로 한두 문장만 쓴다. 굵게, 목록 기호, 제목, 코드 같은 마크다운을 쓰지 않는다."""
 
 
-class GetGuide(BaseModel):
-    """MANSA 사용법 안내 하나를 꺼내 사용자에게 그대로 보여 준다."""
+def _read_json(path: Path) -> Any:
+    """JSON 파일을 읽는다. 파일이 없거나 형식이 틀리면 파일 이름을 담아 ValueError를 발생시킨다."""
+    try:
+        return json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"cannot read {path.name}: {exc}") from exc
 
-    topic: Literal[
-        "upload", "history", "model_choice", "safety_notice", "odd_answer"
-    ] = Field(
-        description=(
-            "upload: 문서(PDF) 업로드·등록 방법. "
-            "history: 지난 질문 기록 보기. "
-            "model_choice: 설비 모델을 고르지 않고 질문하면 어떻게 되는지. "
-            "safety_notice: 답변의 안전 요건 안내 문구가 무슨 뜻인지. "
-            "odd_answer: 답변이 이상하거나 틀린 것 같을 때 할 일."
-        )
+
+def _is_text(value: Any) -> bool:
+    """공백만 있지 않은 문자열이면 True다."""
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _guide_content(item: dict[str, Any], guide_id: str) -> list[str] | str:
+    """주제 하나의 안내 원문을 꺼낸다. steps(비어 있지 않은 문자열 목록)와 text(문자열) 중 정확히 하나여야 한다.
+
+    조건에 맞지 않으면 주제 id를 담아 ValueError를 발생시킨다. steps는 새 리스트로 복사해 반환한다.
+    """
+    if ("steps" in item) == ("text" in item):
+        raise ValueError(f"guide {guide_id!r} must have exactly one of steps or text")
+    if "text" in item:
+        if not _is_text(item["text"]):
+            raise ValueError(f"guide {guide_id!r} text must be a non-empty string")
+        return item["text"]
+    steps = item["steps"]
+    if not isinstance(steps, list) or not steps or not all(_is_text(s) for s in steps):
+        raise ValueError(f"guide {guide_id!r} steps must be a list of non-empty strings")
+    return list(steps)
+
+
+def load_guides(path: Path) -> tuple[dict[str, list[str] | str], type[BaseModel]]:
+    """안내 데이터 파일을 읽어 (주제 id -> 안내 원문, 도구 schema GetGuide)를 반환한다.
+
+    파일은 {"id", "when", "steps" 또는 "text"} 객체의 배열이다. 배열 순서가 도구 설명과 enum 순서가 된다.
+    GetGuide는 topic 하나를 받는 pydantic 모델이며, topic은 파일의 id만 허용하고 설명은 "id: when." 을 이어 붙인다.
+    파일이 없거나, JSON이 깨졌거나, 빈 배열이거나, id·when이 비었거나 겹치거나, 안내 원문 형식이 틀리면
+    ValueError를 발생시킨다. 형식만 검사하며 문구가 실제 화면과 맞는지는 확인하지 않는다.
+    """
+    data = _read_json(path)
+    if not isinstance(data, list) or not data:
+        raise ValueError(f"{path.name} must be a non-empty list of guides")
+    guides: dict[str, list[str] | str] = {}
+    labels: list[str] = []
+    for item in data:
+        guide_id = item.get("id") if isinstance(item, dict) else None
+        if not _is_text(guide_id):
+            raise ValueError(f"{path.name} has a guide without a non-empty id")
+        if guide_id in guides:
+            raise ValueError(f"guide {guide_id!r} is duplicated")
+        if not _is_text(item.get("when")):
+            raise ValueError(f"guide {guide_id!r} when must be a non-empty string")
+        guides[guide_id] = _guide_content(item, guide_id)
+        labels.append(f"{guide_id}: {item['when']}.")
+    model = create_model(
+        "GetGuide",
+        __doc__=GET_GUIDE_DOC,
+        topic=(Literal[tuple(guides)], Field(description=" ".join(labels))),
     )
+    return guides, model
+
+
+# 앱을 시작할 때(이 모듈을 import할 때) 한 번 읽는다. 파일이 잘못되면 여기서 ValueError로 멈춘다.
+# 주제별 안내 값은 목록이면 번호 단계, 문자열이면 말풍선 하나로 화면에 그대로 표시된다.
+GUIDES, GetGuide = load_guides(GUIDES_PATH)
 
 
 def _bot_text(msg: dict) -> str:
