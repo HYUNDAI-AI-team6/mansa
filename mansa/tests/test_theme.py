@@ -57,7 +57,9 @@ class BuildCssTest(unittest.TestCase):
         self.assertIn(".fail-tip > span:empty", css)
         self.assertNotIn(".fail-info:focus", css)
         tip = css[css.index(".fail-tip {"):]
-        self.assertIn("rgba(26, 29, 35, 0.82)", tip.split("}")[0])
+        body = tip.split("}")[0]
+        self.assertIn("rgba(238, 240, 244, 0.94)", body)  # 검정이 아닌 연한 회색 바탕
+        self.assertIn("color: #1a1d23;", body)  # 바탕이 밝으니 글자는 진하게
 
     def test_pill_choices_turn_blue_on_hover(self):
         css = theme.build_css()
