@@ -1,5 +1,9 @@
-"""문서 관리(A1): documents_info 테이블의 문서 현황 + 목록(처리 상태: 처리 중 · 완료 · 실패)."""
+"""문서 관리(A1): documents_info 테이블의 문서 현황 + 목록(처리 상태: 처리 중 · 완료 · 실패).
 
+삭제는 검색 데이터(ChromaDB 청크) → 원본 PDF → 문서 기록 순서로 지운다(features.processing.workflow).
+"""
+
+import logging
 from html import escape
 
 import gradio as gr
@@ -8,6 +12,8 @@ from ui import components as ui
 from ui.doc_view import OPEN_PDF_JS, title_button
 from ui.page import PageView
 from ui.theme import TEXT3
+
+logger = logging.getLogger(__name__)
 
 COLUMNS = [
     ("문서", "1fr"),
@@ -108,11 +114,25 @@ def _busy(docs: list[dict]) -> bool:
 
 
 def _delete(keyword: str, evt: gr.SelectData) -> tuple:
-    """휴지통을 누른 문서의 documents_info 행을 id 로 지운다. 벡터DB 청크는 지우지 않는다."""
-    from util.mysql_connection import execute
+    """휴지통을 누른 문서를 지우고 목록을 다시 그린다. evt.index 는 documents_info 의 id 다.
 
-    execute("DELETE FROM documents_info WHERE id = :id", {"id": evt.index})
-    ui.notify("문서를 삭제했어요")
+    검색 데이터 → 원본 PDF → 문서 기록 순서로 지운다. 이 프로세스에서 처리 중인 문서는 지우지 않는다.
+    지우지 못하면 이유를 알리고, 문서 기록이 남아 있어 목록에서 다시 지울 수 있다.
+    """
+    from features.documents.errors import DocumentNotFoundError
+    from features.processing.deletion import DeletionError
+    from features.processing.workflow import default_workflow
+
+    try:
+        default_workflow().delete(int(evt.index))
+        ui.notify("문서를 삭제했어요")
+    except DocumentNotFoundError:
+        ui.notify("이미 삭제된 문서예요")
+    except DeletionError as exc:  # 처리 중·단계별 실패. 메시지는 사용자에게 보여도 되는 문구다.
+        ui.warn(str(exc))
+    except Exception:
+        logger.exception("delete failed: document_id=%s", evt.index)
+        ui.warn("문서를 삭제하지 못했어요. 잠시 후 다시 시도해 주세요")
     docs = load_docs()
     return stats_html(docs), table(docs, keyword)
 
