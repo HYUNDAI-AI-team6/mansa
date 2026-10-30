@@ -203,23 +203,28 @@ class TableTest(unittest.TestCase):
     def test_a_failed_row_has_an_info_mark_whose_tooltip_shows_the_reason_and_the_retry_hint(self):
         html = documents.table([self.doc("실패", error="PDF를 열 수 없어요")])
         self.assertIn('class="fail-info"', html)
-        self.assertIn('<span class="fail-tip" role="tooltip"><span>PDF를 열 수 없어요</span>', html)
+        self.assertIn('<span class="fail-tip" aria-hidden="true"><span>PDF를 열 수 없어요</span>', html)
         self.assertIn('<span class="hint">삭제한 뒤 다시 올려 주세요</span>', html)
 
-    def test_the_info_mark_can_be_reached_with_the_keyboard(self):
+    def test_the_info_mark_is_not_focusable_so_the_tooltip_never_sticks(self):
         html = documents.table([self.doc("실패", error="사유")])
-        self.assertIn('tabindex="0"', html)
-        self.assertIn('aria-label="실패 사유 보기"', html)
+        self.assertNotIn("tabindex", html)
+        self.assertNotIn("<button", html.split("fail-info")[1].split("fail-tip")[0])
+
+    def test_screen_readers_get_the_reason_and_the_hint_from_the_label(self):
+        html = documents.table([self.doc("실패", error="PDF를 열 수 없어요")])
+        self.assertIn('aria-label="실패 사유: PDF를 열 수 없어요. 삭제한 뒤 다시 올려 주세요"', html)
+        self.assertIn('class="fail-tip" aria-hidden="true"', html)
 
     def test_the_reason_is_not_printed_next_to_the_title(self):
         # 사유는 말풍선 안에만 있고 이름 옆에 글자로 붙지 않는다
         html = documents.table([self.doc("실패", error="PDF를 열 수 없어요")])
-        self.assertEqual(html.count("PDF를 열 수 없어요"), 1)
+        self.assertEqual(html.count("PDF를 열 수 없어요"), 2)  # 말풍선과 화면 낭독기용 라벨 하나씩
 
     def test_a_failed_row_without_a_reason_only_shows_the_retry_hint_in_the_tooltip(self):
         html = documents.table([self.doc("실패")])
         self.assertIn('class="fail-info"', html)
-        self.assertIn('<span class="fail-tip" role="tooltip"><span class="hint">', html)
+        self.assertIn('<span class="fail-tip" aria-hidden="true"><span class="hint">', html)
 
     def test_the_reason_is_escaped(self):
         html = documents.table([self.doc("실패", error='<script>alert("x")</script>')])
