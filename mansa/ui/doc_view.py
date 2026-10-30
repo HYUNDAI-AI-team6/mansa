@@ -7,29 +7,14 @@ import gradio as gr
 from ui import components as ui
 from ui import mock_data as mock
 from ui.page import PageView
-from ui.sample_pdf import doc_pdf_base64
 
 COLUMNS = [("문서", "1fr"), ("유형", "136px"), ("부서", "148px"), ("등록일", "96px")]
 DEPT_PLACEHOLDER = "부서 전체"
 
-# 제목을 누르면 PDF 를 새 탭에서 연다 (브라우저 PDF 보기에서 내려받기도 할 수 있다).
-OPEN_PDF_JS = """element.addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-pdf]');
-  if (!btn) return;
-  const bytes = Uint8Array.from(atob(btn.dataset.pdf), (c) => c.charCodeAt(0));
-  const url = URL.createObjectURL(new Blob([bytes], {type: 'application/pdf'}));
-  window.open(url, '_blank');
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
-});"""
 
-
-def title_button(doc: dict) -> str:
-    """PDF 표시 + 문서 이름. 누르면 그 문서의 PDF 가 열린다(지금은 시연용 샘플)."""
-    label = f"{ui.pdf_badge()}<b>{escape(doc['title'])}</b>"
-    return (
-        f'<button type="button" class="doc-open" data-pdf="{doc_pdf_base64(doc)}" '
-        f'aria-label="{escape(doc["title"])} PDF 열기">{label}</button>'
-    )
+def title_label(doc: dict) -> str:
+    """PDF 표시 + 문서 이름. 원본 PDF 열기는 원본을 공용으로 보관하는 방법이 정해진 뒤에 연결한다."""
+    return f"{ui.pdf_badge()}<b>{escape(doc['title'])}</b>"
 
 
 def load_completed() -> list[dict]:
@@ -69,7 +54,7 @@ def table(docs: list[dict], doc_type: str, dept: str, keyword: str) -> str:
     ]
     rows = [
         [
-            ui.cell(title_button(d)),
+            ui.cell(title_label(d)),
             ui.cell(ui.tag(d["type"], ui.TYPE_TAG[d["type"]])),
             ui.cell(ui.dept_tag(d["dept"])),
             ui.cell(f"<em>{escape(d['date'])}</em>"),
@@ -87,7 +72,7 @@ def build() -> PageView:
             dept = ui.select_box([], DEPT_PLACEHOLDER, scale=0, min_width=240)
             keyword = ui.search_box("문서명 검색", scale=1)
     with gr.Column(elem_classes=["card"]):
-        result = gr.HTML(table([], "전체", "", ""), js_on_load=OPEN_PDF_JS, padding=False)
+        result = gr.HTML(table([], "전체", "", ""), padding=False)
 
     inputs = [doc_type, dept, keyword]
     for comp in (doc_type, dept, keyword):

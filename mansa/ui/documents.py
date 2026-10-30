@@ -9,7 +9,7 @@ from html import escape
 import gradio as gr
 
 from ui import components as ui
-from ui.doc_view import OPEN_PDF_JS, title_button
+from ui.doc_view import title_label
 from ui.page import PageView
 from ui.theme import TEXT3
 
@@ -77,11 +77,13 @@ def stats_html(docs: list[dict]) -> str:
     return f'<div class="stats">{"".join(cards)}</div>'
 
 
+FAILED_HINT = "삭제한 뒤 다시 올려 주세요"
+
+
 def _title(doc: dict) -> str:
-    """완료된 문서는 누르면 PDF 가 열린다. 처리 중·실패 문서는 열 PDF 가 없어 글자만 보인다."""
-    if doc["status"] == "완료":
-        return title_button(doc)
-    return f"{ui.pdf_badge()}<b>{escape(doc['title'])}</b>"
+    """문서 이름. 실패한 문서는 같은 이름으로 다시 올릴 수 없어서(같은 이름·유형은 한 건만 등록) 안내를 덧붙인다."""
+    label = title_label(doc)
+    return f"{label}<em>{FAILED_HINT}</em>" if doc["status"] == "실패" else label
 
 
 def table(docs: list[dict], keyword: str = "") -> str:
@@ -148,7 +150,7 @@ def build() -> PageView:
     stats = gr.HTML(stats_html([]), padding=False)
     with gr.Column(elem_classes=["card"]):
         keyword = ui.search_box("문서명 검색", ["w-280"])
-        result = gr.HTML(table([]), js_on_load=ui.CLICK_JS + "\n" + OPEN_PDF_JS, padding=False)
+        result = gr.HTML(table([]), js_on_load=ui.CLICK_JS, padding=False)
 
     keyword.change(lambda k: table(load_docs(), k), keyword, result)
     result.select(_delete, keyword, [stats, result])
