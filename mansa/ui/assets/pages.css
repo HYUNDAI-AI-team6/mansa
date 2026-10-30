@@ -227,7 +227,7 @@
   background: rgba(238, 240, 244, 0.94);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
-  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.16), 0 0 0 1px rgba(17, 24, 39, 0.06);
+  box-shadow: 0 6px 18px rgba(17, 24, 39, 0.1);
   color: #1a1d23;
   font-size: 12px;
   line-height: 1.5;
