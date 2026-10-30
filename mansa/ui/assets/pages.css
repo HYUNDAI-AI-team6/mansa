@@ -196,6 +196,14 @@
   font-size: 13px;
   color: var(--text2);
 }
+/* 문서 관리의 실패 사유: 한 줄로 줄여 보이고 전체는 마우스를 올리면 보인다 */
+.tbl em.fail-reason {
+  max-width: 100%;
+  color: #b91c1c;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .pdf {
   display: inline-flex;
   align-items: center;

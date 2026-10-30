@@ -20,6 +20,7 @@ COLUMNS = [
     ("유형", "116px"),
     ("부서", "128px"),
     ("처리 상태", "128px"),
+    ("청크 수", "72px"),
     ("등록일", "64px"),
     ("", "48px"),
 ]
@@ -39,7 +40,8 @@ STATUS_LABEL = {"PROCESSING": "처리 중", "COMPLETED": "완료", "FAILED": "�
 REFRESH_SECONDS = 5  # 처리 상태를 다시 읽는 간격
 
 SELECT_DOCS = (
-    "SELECT d.id, d.filename, d.document_type, d.status, d.upload_at, p.name AS dept "
+    "SELECT d.id, d.filename, d.document_type, d.status, d.chunk_count, d.error_message, d.upload_at, "
+    "p.name AS dept "
     "FROM documents_info d LEFT JOIN departments p ON p.id = d.department_id "
     "ORDER BY d.upload_at DESC, d.id DESC"
 )
@@ -56,6 +58,8 @@ def load_docs() -> list[dict]:
             "type": TYPE_LABEL[r["document_type"]],
             "dept": r["dept"] or "-",
             "status": STATUS_LABEL[r["status"]],
+            "chunks": r["chunk_count"],
+            "error": r["error_message"],
             "date": r["upload_at"].strftime("%m/%d"),
         }
         for r in fetch_all(SELECT_DOCS)
@@ -81,9 +85,23 @@ FAILED_HINT = "삭제한 뒤 다시 올려 주세요"
 
 
 def _title(doc: dict) -> str:
-    """문서 이름. 실패한 문서는 같은 이름으로 다시 올릴 수 없어서(같은 이름·유형은 한 건만 등록) 안내를 덧붙인다."""
+    """문서 이름. 실패한 문서는 실패 사유(있으면)와 다시 올리는 방법을 덧붙인다.
+
+    같은 이름·유형은 한 건만 등록할 수 있어서 실패한 문서는 삭제한 뒤 다시 올려야 한다.
+    사유는 한 줄로 줄여 보이고, 전체는 마우스를 올리면 보인다.
+    """
     label = title_label(doc)
-    return f"{label}<em>{FAILED_HINT}</em>" if doc["status"] == "실패" else label
+    if doc["status"] != "실패":
+        return label
+    reason = (doc.get("error") or "").strip()
+    reason_html = f'<em class="fail-reason" title="{escape(reason)}">{escape(reason)}</em>' if reason else ""
+    return f"{label}{reason_html}<em>{FAILED_HINT}</em>"
+
+
+def _chunks(doc: dict) -> str:
+    """완료된 문서가 저장한 청크 수. 값이 없으면(이전에 처리한 문서, 처리 중, 실패) '-'."""
+    count = doc.get("chunks")
+    return f"<em>{count}개</em>" if doc["status"] == "완료" and count is not None else "<em>-</em>"
 
 
 def table(docs: list[dict], keyword: str = "") -> str:
@@ -103,6 +121,7 @@ def table(docs: list[dict], keyword: str = "") -> str:
                 ui.cell(ui.tag(d["type"], ui.TYPE_TAG[d["type"]])),
                 ui.cell(ui.dept_tag(d["dept"])),
                 ui.cell(ui.tag(d["status"], ui.STATUS_TAG[d["status"]])),
+                ui.cell(_chunks(d)),
                 ui.cell(f"<em>{escape(d['date'])}</em>"),
                 ui.cell(trash),
             ]

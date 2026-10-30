@@ -1,7 +1,9 @@
 """업로드·삭제 화면의 동작(필수값 확인, 등록 호출, 오류 문구)을 확인한다. DB·ChromaDB·알림은 가짜로 바꾼다."""
 
+import sys
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -155,9 +157,67 @@ class DeleteTest(unittest.TestCase):
         self.notify.assert_not_called()
 
 
+class LoadDocsTest(unittest.TestCase):
+    def rows(self, **extra):
+        row = {"id": 5, "filename": "엘트론.pdf", "document_type": "tech", "status": "COMPLETED", "dept": "기술팀",
+               "chunk_count": 27, "error_message": None, "upload_at": datetime(2026, 10, 30, 9, 0)}
+        return [{**row, **extra}]
+
+    def load(self, rows):
+        fake = SimpleNamespace(fetch_all=lambda sql, params=None: rows)
+        with mock.patch.dict(sys.modules, {"util.mysql_connection": fake}):
+            return documents.load_docs()
+
+    def test_the_query_reads_the_chunk_count_and_the_failure_reason(self):
+        self.assertIn("d.chunk_count", documents.SELECT_DOCS)
+        self.assertIn("d.error_message", documents.SELECT_DOCS)
+
+    def test_results_carry_the_chunk_count_and_reason(self):
+        done = self.load(self.rows())[0]
+        failed = self.load(self.rows(status="FAILED", chunk_count=None, error_message="PDF를 열 수 없어요"))[0]
+        self.assertEqual((done["chunks"], done["error"]), (27, None))
+        self.assertEqual((failed["chunks"], failed["error"]), (None, "PDF를 열 수 없어요"))
+
+
 class TableTest(unittest.TestCase):
-    def doc(self, status: str, title: str = "엘트론.pdf") -> dict:
-        return {"id": 3, "title": title, "type": "기술 문서", "dept": "유지보수팀", "status": status, "date": "10/30"}
+    def doc(self, status: str, title: str = "엘트론.pdf", **extra) -> dict:
+        return {"id": 3, "title": title, "type": "기술 문서", "dept": "유지보수팀", "status": status,
+                "chunks": None, "error": None, "date": "10/30", **extra}
+
+    def test_a_completed_row_shows_the_chunk_count(self):
+        self.assertIn("<em>27개</em>", documents.table([self.doc("완료", chunks=27)]))
+
+    def test_a_row_without_a_chunk_count_shows_a_dash(self):
+        # 이전에 처리한 문서(NULL), 처리 중, 실패 문서
+        for doc in (self.doc("완료"), self.doc("처리 중"), self.doc("실패", chunks=5)):
+            with self.subTest(status=doc["status"]):
+                html = documents.table([doc])
+                self.assertIn("<em>-</em>", html)
+                self.assertNotIn("개</em>", html)
+
+    def test_the_chunk_count_column_lines_up_with_the_cells(self):
+        html = documents.table([self.doc("완료", chunks=1)])
+        self.assertEqual(html.count("grid-template-columns"), 2)  # 머리글과 한 줄
+        self.assertEqual(len(documents.COLUMNS), 7)
+
+    def test_a_failed_row_shows_the_reason_with_the_full_text_on_hover(self):
+        html = documents.table([self.doc("실패", error="PDF를 열 수 없어요")])
+        self.assertIn('class="fail-reason" title="PDF를 열 수 없어요">PDF를 열 수 없어요</em>', html)
+        self.assertIn("삭제한 뒤 다시 올려 주세요", html)
+
+    def test_a_failed_row_without_a_reason_only_shows_the_retry_hint(self):
+        html = documents.table([self.doc("실패")])
+        self.assertNotIn("fail-reason", html)
+        self.assertIn("삭제한 뒤 다시 올려 주세요", html)
+
+    def test_the_reason_is_escaped(self):
+        html = documents.table([self.doc("실패", error='<script>alert("x")</script>')])
+        self.assertNotIn("<script>", html)
+        self.assertIn("&lt;script&gt;", html)
+
+    def test_the_reason_is_only_shown_for_failed_rows(self):
+        html = documents.table([self.doc("완료", error="남아 있던 사유")])
+        self.assertNotIn("남아 있던 사유", html)
 
     def test_a_failed_row_says_to_delete_and_upload_again(self):
         html = documents.table([self.doc("실패")])
