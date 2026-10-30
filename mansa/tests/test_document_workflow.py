@@ -16,7 +16,7 @@ from features.documents.storage import PdfStorage
 from features.processing.deletion import DeletionSteps, DocumentBusyError, DocumentDeleter
 from features.processing.factory import build_ingest_pipeline, build_steps
 from features.processing.pipeline import IngestPipeline
-from features.processing.workflow import DocumentWorkflow, spawn_thread
+from features.processing.workflow import MAX_CONCURRENT_INGEST, DocumentWorkflow, PendingDocuments, spawn_thread
 from tests.fake_chroma import FakeChroma
 from tests.test_documents_pipeline import TEXT, fake_embed, make_pdf
 from tests.test_documents_service import FakeDb
@@ -33,16 +33,24 @@ class WorkflowTest(unittest.TestCase):
         self.pdf = self.root / "upload.pdf"
         make_pdf(self.pdf, TEXT)
 
-    def workflow(self, spawn=lambda task: task(), embed=fake_embed, is_processing=IngestPipeline.is_active):
+    def workflow(self, spawn=lambda task: task(), embed=fake_embed, max_concurrent=MAX_CONCURRENT_INGEST):
         # 태그 단계는 LLM을 부르므로 청크를 그대로 두는 함수로 바꿔 끼운다.
         steps = replace(build_steps(lambda: ["ELVRO 3000"], embed=embed), tag=lambda chunks: list(chunks))
         indexer = self.chroma.indexer()
+        pending = PendingDocuments()
         deleter = DocumentDeleter(
             self.service,
             DeletionSteps(indexer.remove_document, self.service.delete_pdf, self.service.delete_document_record),
-            is_processing=is_processing,
+            is_processing=lambda document_id: document_id in pending or IngestPipeline.is_active(document_id),
         )
-        return DocumentWorkflow(self.service, build_ingest_pipeline(self.service, indexer, steps), deleter, spawn)
+        return DocumentWorkflow(
+            self.service,
+            build_ingest_pipeline(self.service, indexer, steps),
+            deleter,
+            spawn,
+            pending=pending,
+            max_concurrent=max_concurrent,
+        )
 
     def status(self, document_id: int) -> str:
         return self.service.get_status(document_id).status
@@ -105,6 +113,80 @@ class WorkflowTest(unittest.TestCase):
         self.assertIsNot(seen[0], threading.current_thread())
         self.assertTrue(seen[0].daemon)
 
+    # ---- 처리 대기와 동시 처리 수
+    def test_a_document_waiting_to_start_cannot_be_deleted(self) -> None:
+        """업로드 직후 스레드가 파이프라인을 시작하기 전에도 삭제할 수 없다."""
+        tasks = []
+        flow = self.workflow(spawn=tasks.append)
+        document_id = flow.upload(self.pdf, "엘트론.pdf", "tech", 3)
+        self.assertFalse(IngestPipeline.is_active(document_id))  # 파이프라인은 아직 시작하지 않았다
+
+        with self.assertRaises(DocumentBusyError):
+            flow.delete(document_id)
+
+        tasks[0]()  # 처리가 끝나면 지울 수 있다
+        flow.delete(document_id)
+        with self.assertRaises(DocumentNotFoundError):
+            self.service.get_document(document_id)
+
+    def test_the_waiting_record_is_cleared_even_when_processing_fails(self) -> None:
+        broken = self.root / "broken.pdf"
+        broken.write_bytes(b"%PDF-1.7\nthis is not a real pdf\n")
+        flow = self.workflow()
+        with self.assertLogs("features.processing.pipeline", level="ERROR"):
+            document_id = flow.upload(broken, "엘트론.pdf", "tech", 3)
+
+        flow.delete(document_id)  # 실패한 문서는 바로 지울 수 있다
+
+    def test_the_waiting_record_is_cleared_when_the_thread_cannot_start(self) -> None:
+        def spawn(task):
+            raise RuntimeError("can't start new thread")
+
+        flow = self.workflow(spawn=spawn)
+        with self.assertRaises(RuntimeError):
+            flow.upload(self.pdf, "엘트론.pdf", "tech", 3)
+        document_id = self.service.list_documents()[0].id
+
+        flow.delete(document_id)  # 처리를 시작하지 못했으니 지울 수 있다
+
+    def test_at_most_the_limit_of_documents_are_processed_at_once(self) -> None:
+        running = 0
+        peak = 0
+        lock = threading.Lock()
+        release = threading.Event()
+        two_running = threading.Event()
+
+        def embed(texts):
+            nonlocal running, peak
+            with lock:
+                running += 1
+                peak = max(peak, running)
+                if running == 2:
+                    two_running.set()
+            release.wait(5)
+            with lock:
+                running -= 1
+            return fake_embed(texts)
+
+        flow = self.workflow(spawn=spawn_thread, embed=embed, max_concurrent=2)
+        ids = [flow.upload(self.pdf, f"문서{i}.pdf", "tech", 3) for i in range(4)]
+        self.assertTrue(two_running.wait(5))
+        threading.Event().wait(0.3)  # 나머지 둘이 끼어들 시간을 준다
+
+        self.assertEqual(peak, 2)
+        release.set()
+        for document_id in ids:
+            for _ in range(100):
+                if self.status(document_id) != "PROCESSING":
+                    break
+                threading.Event().wait(0.05)
+        self.assertEqual({self.status(i) for i in ids}, {"COMPLETED"})
+        self.assertEqual(peak, 2)
+
+    def test_the_limit_must_be_positive(self) -> None:
+        with self.assertRaises(ValueError):
+            self.workflow(max_concurrent=0)
+
     # ---- 삭제
     def test_delete_removes_chunks_pdf_and_record(self) -> None:
         flow = self.workflow()
@@ -141,8 +223,9 @@ class WorkflowTest(unittest.TestCase):
 
     def test_a_stale_processing_document_can_be_deleted(self) -> None:
         """앱이 처리 도중 꺼져 PROCESSING으로 남은 문서는 지금 실행 중이 아니므로 지울 수 있다."""
-        flow = self.workflow(spawn=lambda task: None)  # 처리가 시작되지 않은 상태
-        document_id = flow.upload(self.pdf, "엘트론.pdf", "tech", 3)
+        flow = self.workflow()
+        # 이전 실행에서 등록만 되고 처리되지 못한 문서처럼, 이 프로세스의 처리 기록에는 없다.
+        document_id = self.service.register_document(self.pdf, "엘트론.pdf", "tech", 3)
         self.assertEqual(self.status(document_id), "PROCESSING")
 
         flow.delete(document_id)

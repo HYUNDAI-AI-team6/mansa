@@ -155,5 +155,28 @@ class DeleteTest(unittest.TestCase):
         self.notify.assert_not_called()
 
 
+class TableTest(unittest.TestCase):
+    def doc(self, status: str, title: str = "엘트론.pdf") -> dict:
+        return {"id": 3, "title": title, "type": "기술 문서", "dept": "유지보수팀", "status": status, "date": "10/30"}
+
+    def test_a_failed_row_says_to_delete_and_upload_again(self):
+        html = documents.table([self.doc("실패")])
+        self.assertIn("삭제한 뒤 다시 올려 주세요", html)
+
+    def test_other_rows_have_no_retry_hint(self):
+        for status in ("완료", "처리 중"):
+            with self.subTest(status=status):
+                self.assertNotIn("다시 올려 주세요", documents.table([self.doc(status)]))
+
+    def test_titles_do_not_open_a_sample_pdf(self):
+        html = documents.table([self.doc("완료"), self.doc("처리 중", "b.pdf"), self.doc("실패", "c.pdf")])
+        self.assertNotIn("data-pdf", html)
+        self.assertNotIn("doc-open", html)
+        self.assertIn("엘트론.pdf", html)
+
+    def test_the_trash_button_still_carries_the_document_id(self):
+        self.assertIn('data-i="3"', documents.table([self.doc("완료")]))
+
+
 if __name__ == "__main__":
     unittest.main()

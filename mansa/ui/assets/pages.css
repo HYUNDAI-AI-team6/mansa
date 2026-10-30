@@ -838,28 +838,3 @@
 .page .column > .column.chat-scroll > * {
   flex-shrink: 0 !important;
 }
-
-/* 문서 조회: 제목을 누르면 PDF 열기 */
-.doc-open {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  max-width: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-  font-family: inherit;
-  font-size: inherit;
-  color: var(--text);
-  text-align: left;
-  cursor: pointer;
-}
-.doc-open:hover b {
-  color: var(--brand);
-  text-decoration: underline;
-}
-.doc-open:focus-visible {
-  outline: 2px solid var(--brand);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
