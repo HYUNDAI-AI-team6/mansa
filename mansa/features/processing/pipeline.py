@@ -77,6 +77,16 @@ class IngestPipeline:
         self.indexer = indexer or Indexer()
         self.batch_size = batch_size
 
+    @classmethod
+    def is_active(cls, document_id: int) -> bool:
+        """이 프로세스에서 지금 그 문서를 처리하고 있으면 True다. 삭제 전에 처리 중인지 확인하는 데 쓴다.
+
+        DB 상태(PROCESSING)가 아니라 실제 실행 여부다. 앱이 중간에 꺼져 상태만 PROCESSING으로 남은
+        문서는 False라서 지울 수 있다.
+        """
+        with cls._lock:
+            return document_id in cls._active
+
     def run(self, document_id: int) -> None:
         """문서를 처리하고 상태를 '완료'로 바꾼다. 문서는 등록할 때 이미 '처리 중'이다.
 

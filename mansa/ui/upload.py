@@ -1,18 +1,19 @@
 """문서 업로드(A2): PDF 한 개 + 문서 유형(기술/안전) + 소속 부서 → 업로드.
 
-소속 부서 목록은 DB(기준정보)에서 읽는다. 문서 기록(documents.dept_id)이 부서를 꼭 요구해서
-기술·안전 문서 모두 부서를 골라야 한다.
-업로드 처리는 아직 목데이터라 실제 처리는 하지 않고, 문서 관리 목록에 '처리 중' 으로 추가만 한다.
+소속 부서 목록은 DB(기준정보)에서 읽는다. 문서 기록(documents_info.department_id)은 NULL을 허용하지만
+앱에서는 기술·안전 문서 모두 부서를 꼭 골라야 한다.
+업로드하면 문서를 등록하고(DocumentService) 처리(추출·청킹·태그·임베딩·저장)를 백그라운드에서 시작한다.
+처리 결과는 기다리지 않고, 문서 관리 목록의 처리 상태로 확인한다.
 """
 
 import logging  # 부서 목록을 못 불러온 원인을 서버 로그에 남기려고 쓴다
 import os
-from datetime import datetime
 from functools import cache
 from html import escape
 
 import gradio as gr
 
+from features.documents.errors import DocumentStorageError, DuplicateDocumentError
 from features.master.departments import DepartmentService
 from ui import components as ui
 from ui import mock_data as mock
@@ -25,6 +26,9 @@ CANCEL_CLASSES = ["btn-secondary", "sm-btn"]
 TYPE_ICON = {"기술 문서": ("file", "blue", "#2F54EB"), "안전 문서": ("shield", "orange", "#C2410C")}
 DEPT_BOX_CLASSES = ["select", "w-320"]
 DEPT_PLACEHOLDER = "부서 선택"
+# 화면의 문서 유형 이름 -> 서비스가 쓰는 값
+TYPE_CODE = {"기술 문서": "tech", "안전 문서": "secure"}
+logger = logging.getLogger(__name__)
 
 
 @cache
@@ -38,7 +42,7 @@ def _load_department_names() -> list[str] | None:
     try:
         return [d.name for d in _departments().list_all()]
     except Exception:
-        logging.getLogger(__name__).exception("failed to load departments")
+        logger.exception("failed to load departments")
         ui.warn("부서 목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요")
         return None
 
@@ -114,7 +118,7 @@ def _pick_file(path: str | None, state: dict) -> tuple:
     if os.path.getsize(path) > MAX_MB * 1024 * 1024:
         ui.warn(f"{MAX_MB}MB 이하 파일만 올릴 수 있어요")
         return state, None, file_row_html(state["file"])
-    state = {**state, "file": {"name": name, "size": _size_text(path)}}
+    state = {**state, "file": {"name": name, "size": _size_text(path), "path": path}}
     return state, None, file_row_html(state["file"])
 
 
@@ -134,12 +138,39 @@ def _reset() -> tuple:
     return _empty(), None, _dept_box(), type_cards_html(""), ""
 
 
+def upload_error_message(exc: Exception) -> str:
+    """등록하지 못한 이유를 사용자가 이해할 수 있는 문구로 바꾼다. 내부 오류 문구는 화면에 보이지 않는다."""
+    if isinstance(exc, DuplicateDocumentError):
+        return "이미 등록된 문서예요. 문서 관리에서 삭제한 뒤 다시 올려 주세요"
+    if isinstance(exc, ValueError):
+        return "올린 내용을 확인해 주세요. PDF 파일인지, 부서를 제대로 골랐는지 확인하고 다시 시도해 주세요"
+    if isinstance(exc, DocumentStorageError):
+        return "파일을 저장하지 못했어요. 잠시 후 다시 시도해 주세요"
+    return "문서를 등록하지 못했어요. 잠시 후 다시 시도해 주세요"
+
+
+def _department_id(name: str) -> int:
+    """부서 이름으로 부서 ID를 찾는다. 없으면(그 사이에 지워졌으면) ValueError를 발생시킨다."""
+    for department in _departments().list_all():
+        if department.name == name:
+            return department.id
+    raise ValueError(f"unknown department: {name!r}")
+
+
+def _register(state: dict, dept: str) -> None:
+    """고른 파일을 등록하고 처리를 시작한다. 오류는 그대로 전달한다."""
+    from features.processing.workflow import default_workflow  # DB·외부 서비스 설정은 처음 쓸 때 읽는다
+
+    file = state["file"]
+    default_workflow().upload(file["path"], file["name"], TYPE_CODE[state["type"]], _department_id(dept))
+
+
 def _upload(state: dict, dept: str, store: dict):
-    """필수값을 확인하고 문서 목록에 '처리 중' 으로 추가한다(목데이터).
+    """필수값을 확인하고 문서를 등록한 뒤 처리를 시작한다.
 
     필수값은 파일·문서 유형·소속 부서이고, 문서 유형과 상관없이 모두 필요하다.
-    올리는 동안 버튼이 '업로드 중' 으로 바뀌고 취소와 함께 잠긴다.
-    문서 업로드 기능(features/documents)이 생기면 여기서 그 함수를 부른다.
+    올리는 동안 버튼이 '업로드 중' 으로 바뀌고 취소와 함께 잠긴다. 등록은 바로 끝나고 처리는 백그라운드로
+    돌아가므로 결과는 기다리지 않는다. 등록하지 못하면 입력을 그대로 두고 이유를 알려 준다.
     """
     required = [("파일", state["file"]), ("문서 유형", state["type"]), ("소속 부서", dept)]
     missing = [name for name, ok in required if not ok]
@@ -152,18 +183,23 @@ def _upload(state: dict, dept: str, store: dict):
         ui.loading_button("업로드 중", SUBMIT_CLASSES),
         gr.Button(interactive=False),
     )
-    mock.wait()
-    title = state["file"]["name"].rsplit(".", 1)[0]
-    doc = {
-        "title": title,
-        "type": state["type"],
-        "dept": dept,
-        "status": "처리 중",
-        "date": datetime.now().strftime("%m/%d"),
-    }
+    try:
+        _register(state, dept)
+    except Exception as exc:
+        if isinstance(exc, DuplicateDocumentError):
+            logger.info("duplicate upload rejected: existing document %s", exc.document_id)
+        else:
+            logger.exception("upload failed")
+        ui.warn(upload_error_message(exc))
+        yield (
+            *(gr.skip() for _ in range(6)),
+            ui.idle_button("업로드", SUBMIT_CLASSES),
+            gr.Button(interactive=True),
+        )
+        return
     ui.notify("업로드했어요. 문서 관리에서 처리 상태를 확인할 수 있어요")
     yield (
-        {**store, "docs": [*store["docs"], doc]},
+        gr.skip(),
         *_reset(),
         ui.idle_button("업로드", SUBMIT_CLASSES),
         gr.Button(interactive=True),
